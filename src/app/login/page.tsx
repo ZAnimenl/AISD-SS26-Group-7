@@ -3,16 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Code2, ShieldCheck, Sparkles } from "lucide-react";
-import { mockLogin } from "@/lib/mock-api";
+import { login } from "@/lib/api";
 import type { Role } from "@/lib/types";
 
 export default function LoginPage() {
   const [role, setRole] = useState<Role>("student");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  function handleLogin() {
-    const user = mockLogin(role);
-    router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
+  async function handleLogin() {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const user = await login(role);
+      router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Login failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -25,12 +35,12 @@ export default function LoginPage() {
             </span>
             <span>
               <span className="block text-sm font-semibold">AI Coding Assessment</span>
-              <span className="block text-xs text-white/45">Module 2 visual MVP</span>
+              <span className="block text-xs text-white/45">Module 2 backend connected</span>
             </span>
           </div>
           <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
-            Choose a mock role to preview student and administrator flows. This screen does not create real auth tokens or sessions.
+            Choose a demo role. The frontend signs in through the backend and stores the returned token for API calls.
           </p>
           <div className="mt-10 grid gap-3 sm:grid-cols-2">
             {(["student", "administrator"] as Role[]).map((item) => (
@@ -49,10 +59,11 @@ export default function LoginPage() {
               </button>
             ))}
           </div>
-          <button className="btn-primary mt-8" onClick={handleLogin}>
+          <button className="btn-primary mt-8" onClick={handleLogin} disabled={isSubmitting}>
             <Sparkles size={18} />
-            Continue in mock mode
+            {isSubmitting ? "Connecting..." : "Continue"}
           </button>
+          {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
         </div>
         <div className="border-t border-white/10 bg-black/20 p-8 lg:border-l lg:border-t-0 lg:p-12">
           <div className="rounded-3xl border border-white/10 bg-black/30 p-5 font-mono text-sm text-white/70">
@@ -62,17 +73,18 @@ export default function LoginPage() {
               <span className="h-3 w-3 rounded-full bg-cyanGlow" />
             </div>
             <pre className="whitespace-pre-wrap leading-7">
-{`// TODO(API): POST /api/v1/auth/login
-// TODO(API): GET /api/v1/auth/me
-// TODO(API): POST /api/v1/auth/logout
+{`POST http://localhost:5040/api/v1/auth/login
+GET  http://localhost:5040/api/v1/auth/me
+POST http://localhost:5040/api/v1/auth/logout
 
-auth.mode = "mock role selection";
-session_id = undefined;`}
+student = "student@example.com";
+administrator = "admin@example.com";
+password = "password";`}
             </pre>
           </div>
           <div className="mt-6 grid gap-3 text-sm text-white/55">
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">No real JWT handling in this frontend MVP.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Backend will later resolve identity and attempts from secure auth context.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">JWT is stored in local storage for this demo frontend.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Backend resolves identity, sessions, workspace saves, runs, and submissions.</p>
           </div>
         </div>
       </section>

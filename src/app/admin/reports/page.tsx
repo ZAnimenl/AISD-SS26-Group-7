@@ -1,10 +1,20 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getReportList } from "@/lib/mock-api";
+import { getReportList } from "@/lib/api";
+import type { ReportListItem } from "@/lib/types";
 
 export default function ReportsPage() {
-  const reports = getReportList();
+  const router = useRouter();
+  const [reports, setReports] = useState<ReportListItem[]>([]);
+
+  useEffect(() => {
+    getReportList().then(setReports).catch(() => router.replace("/login"));
+  }, [router]);
 
   return (
     <div>

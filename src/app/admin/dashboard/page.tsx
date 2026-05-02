@@ -1,13 +1,37 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3, Brain, FileText, Send, Users } from "lucide-react";
 import { AdminAssessmentTable } from "@/components/admin/AdminAssessmentTable";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getAdminAssessments, getAdminDashboard } from "@/lib/mock-api";
+import { getAdminAssessments, getAdminDashboard } from "@/lib/api";
+import type { AdminDashboard, Assessment } from "@/lib/types";
 
 export default function AdminDashboardPage() {
-  const dashboard = getAdminDashboard();
-  const assessments = getAdminAssessments();
+  const router = useRouter();
+  const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [nextDashboard, nextAssessments] = await Promise.all([getAdminDashboard(), getAdminAssessments()]);
+        setDashboard(nextDashboard);
+        setAssessments(nextAssessments);
+      } catch {
+        router.replace("/login");
+      }
+    }
+
+    load();
+  }, [router]);
+
+  if (!dashboard) {
+    return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
+  }
 
   return (
     <div>
@@ -18,7 +42,7 @@ export default function AdminDashboardPage() {
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard icon={FileText} label="Assessments" value={dashboard.summary.total_assessments} detail={`${dashboard.summary.active_assessments} active`} />
-        <MetricCard icon={Users} label="Students" value={dashboard.summary.total_students} detail="Mock cohort" />
+        <MetricCard icon={Users} label="Students" value={dashboard.summary.total_students} detail="Backend users" />
         <MetricCard icon={Send} label="Submissions" value={dashboard.summary.total_submissions} detail="All assessments" />
         <MetricCard icon={BarChart3} label="Average" value={`${dashboard.summary.average_score}%`} detail="Latest submissions" />
         <MetricCard icon={Brain} label="AI events" value={dashboard.summary.ai_interactions} detail="Usage summaries" />

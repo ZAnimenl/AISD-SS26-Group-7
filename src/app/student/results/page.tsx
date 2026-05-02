@@ -1,10 +1,20 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getStudentResults } from "@/lib/mock-api";
+import { getStudentResults } from "@/lib/api";
+import type { Assessment } from "@/lib/types";
 
 export default function StudentResultsPage() {
-  const results = getStudentResults();
+  const router = useRouter();
+  const [results, setResults] = useState<Assessment[]>([]);
+
+  useEffect(() => {
+    getStudentResults().then(setResults).catch(() => router.replace("/login"));
+  }, [router]);
 
   return (
     <div>

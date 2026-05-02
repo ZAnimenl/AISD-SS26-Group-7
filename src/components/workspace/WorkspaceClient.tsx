@@ -2,24 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Brain, CheckCircle2, Clock, Code2, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
-import { autosaveWorkspace, finalizeSubmissionMock, getAiResponse, runCodeMock } from "@/lib/mock-api";
+import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode } from "@/lib/api";
 import type { AiInteractionType, Assessment, Language, RunResult, SubmissionResult, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
   workspace: WorkspaceState;
+  sessionId: string;
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
 
-export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
+export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "q-two-sum");
+  const [questionStates, setQuestionStates] = useState(workspace.questions);
   const activeQuestion = useMemo(
     () => assessment.questions.find((question) => question.question_id === activeQuestionId) ?? assessment.questions[0],
     [assessment.questions, activeQuestionId]
   );
-  const initialState = workspace.questions[activeQuestionId] ?? Object.values(workspace.questions)[0];
+  const initialState = questionStates[activeQuestionId] ?? Object.values(questionStates)[0];
   const [language, setLanguage] = useState<Language>(initialState?.selected_language ?? "python");
   const [code, setCode] = useState(initialState?.files[initialState.active_file]?.content ?? activeQuestion?.starter_code.python ?? "");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -27,49 +29,94 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [submission, setSubmission] = useState<SubmissionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [aiMessage, setAiMessage] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "I can give hints, explain concepts, debug symptoms, or review your current approach without calling a real AI API." }
+    { role: "assistant", text: "I can give hints, explain concepts, debug symptoms, or review your current approach through the backend AI endpoint." }
   ]);
 
   useEffect(() => {
     setSaveState("unsaved");
     const saving = window.setTimeout(() => setSaveState("saving"), 450);
-    const saved = window.setTimeout(() => {
-      autosaveWorkspace();
-      setSaveState("saved");
+    const saved = window.setTimeout(async () => {
+      try {
+        const activeFile = language === "javascript" ? "main.js" : "main.py";
+        const savedWorkspace = await autosaveWorkspace(
+          sessionId,
+          activeQuestionId,
+          language,
+          activeFile,
+          code
+        );
+        setQuestionStates(savedWorkspace.questions);
+        setSaveState("saved");
+      } catch (exception) {
+        setError(exception instanceof Error ? exception.message : "Autosave failed.");
+        setSaveState("unsaved");
+      }
     }, 1300);
     return () => {
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [code, language]);
+  }, [activeQuestionId, code, language, sessionId]);
 
   function switchLanguage(nextLanguage: Language) {
     setLanguage(nextLanguage);
     setCode(activeQuestion?.starter_code[nextLanguage] ?? "");
   }
 
-  function handleRun() {
+  async function handleRun() {
     setRunState("running");
     setRunResult(null);
-    window.setTimeout(() => {
-      setRunResult(runCodeMock());
+    setError(null);
+    try {
+      setRunResult(await runCode({
+        session_id: sessionId,
+        assessment_id: assessment.assessment_id,
+        question_id: activeQuestionId,
+        selected_language: language,
+        active_file_content: code
+      }));
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Run failed.");
+    } finally {
       setRunState("idle");
-    }, 800);
+    }
   }
 
-  function sendAi(type: AiInteractionType) {
-    const response = getAiResponse(type, language, code);
-    setMessages((current) => [
-      ...current,
-      { role: "student", text: type.replace("_", " ") },
-      { role: "assistant", text: response }
-    ]);
+  async function sendAi(type: AiInteractionType) {
+    setError(null);
+    const message = aiMessage.trim() || type.replace("_", " ");
+    try {
+      const response = await getAiResponse({
+        session_id: sessionId,
+        assessment_id: assessment.assessment_id,
+        question_id: activeQuestionId,
+        interaction_type: type,
+        message,
+        selected_language: language,
+        active_file_content: code
+      });
+      setMessages((current) => [
+        ...current,
+        { role: "student", text: message },
+        { role: "assistant", text: response }
+      ]);
+      setAiMessage("");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "AI request failed.");
+    }
   }
 
-  function submitFinal() {
+  async function submitFinal() {
     setConfirmSubmit(false);
-    setSubmission(finalizeSubmissionMock());
+    setError(null);
+    try {
+      setSubmission(await finalizeSubmission(sessionId));
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Submission failed.");
+    }
   }
 
   return (
@@ -80,13 +127,29 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Question list</p>
             <h2 className="mt-1 text-lg font-semibold">{assessment.title}</h2>
           </div>
-          <span className="badge">Mock attempt</span>
+          <span className="badge">Backend session</span>
         </div>
         <div className="relative mt-4 space-y-2">
           {assessment.questions.map((question, index) => (
             <button
               key={question.question_id}
-              onClick={() => setActiveQuestionId(question.question_id)}
+              onClick={() => {
+                const activeFile = language === "javascript" ? "main.js" : "main.py";
+                setQuestionStates((current) => ({
+                  ...current,
+                  [activeQuestionId]: {
+                    selected_language: language,
+                    active_file: activeFile,
+                    files: { [activeFile]: { language, content: code } },
+                    last_saved_at: new Date().toISOString(),
+                    version: current[activeQuestionId]?.version ?? 0
+                  }
+                }));
+                const nextState = questionStates[question.question_id];
+                setActiveQuestionId(question.question_id);
+                setLanguage(nextState?.selected_language ?? "python");
+                setCode(nextState?.files[nextState.active_file]?.content ?? question.starter_code.python ?? "");
+              }}
               className={`w-full rounded-xl border p-3 text-left transition ${
                 question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10" : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
@@ -127,6 +190,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           <span className="badge"><UploadCloud size={14} /> {saveState}</span>
           <button className="btn-primary" onClick={() => setConfirmSubmit(true)}>Submit</button>
         </div>
+        {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
         <div className="relative flex flex-wrap items-center gap-3 border-b border-white/10 px-4 py-3">
           <span className="rounded-t-xl border border-b-0 border-cyanGlow/30 bg-black/30 px-4 py-2 font-mono text-xs text-cyanGlow">
             {language === "python" ? "main.py" : "main.js"}
@@ -160,7 +224,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
               <span className="text-xs text-white/40">Public/sample tests only</span>
             </div>
             <div className="scrollbar-soft h-[168px] overflow-y-auto rounded-2xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
-              {runState === "running" ? <p className="text-cyanGlow">mock runner queued...</p> : null}
+              {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
               {runResult ? (
                 <div className="space-y-3">
                   <p className="text-cyanGlow">status: {runResult.status}</p>
@@ -171,7 +235,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                   <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
                 </div>
               ) : (
-                <p className="text-white/35">Run code to see mocked stdout, stderr, and public test results. Hidden tests are not shown here.</p>
+                <p className="text-white/35">Run code to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
               )}
             </div>
           </div>
@@ -183,7 +247,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
           <div>
             <h2 className="font-semibold">AI assistant</h2>
-            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Mock responses enabled" : "Disabled for this assessment"}</p>
+            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Backend responses enabled" : "Disabled for this assessment"}</p>
           </div>
         </div>
         <div className="relative mt-4 grid grid-cols-2 gap-2">
@@ -202,17 +266,22 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           ))}
         </div>
         <div className="relative mt-4 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
-          <input className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30" placeholder="Ask a mock question..." />
+          <input
+            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30"
+            placeholder="Ask a question..."
+            value={aiMessage}
+            onChange={(event) => setAiMessage(event.target.value)}
+          />
           <button className="rounded-xl bg-cyanGlow p-2 text-slate-950" onClick={() => sendAi("chat")}><Send size={16} /></button>
         </div>
       </aside>
 
       {confirmSubmit ? (
         <Modal title="Submit final solution" onClose={() => setConfirmSubmit(false)}>
-          <p className="text-white/60">This mock submit shows a fake score modal. It does not execute hidden tests and does not reveal hidden input or expected output.</p>
+          <p className="text-white/60">This submits the current backend session. Hidden test input and expected output remain private.</p>
           <div className="mt-6 flex justify-end gap-3">
             <button className="btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button>
-            <button className="btn-primary" onClick={submitFinal}>Submit mock result</button>
+            <button className="btn-primary" onClick={submitFinal}>Submit result</button>
           </div>
         </Modal>
       ) : null}
@@ -220,7 +289,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       {submission ? (
         <Modal title="Submission received" onClose={() => setSubmission(null)}>
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><CheckCircle2 className="text-cyanGlow" /><p className="mt-2 text-2xl font-semibold">{submission.score}/{submission.max_score}</p><p className="text-xs text-white/45">Mock score</p></div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><CheckCircle2 className="text-cyanGlow" /><p className="mt-2 text-2xl font-semibold">{submission.score}/{submission.max_score}</p><p className="text-xs text-white/45">Score</p></div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-2xl font-semibold">{submission.visible_test_summary.passed}/{submission.visible_test_summary.total}</p><p className="text-xs text-white/45">Public tests</p></div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-2xl font-semibold">{submission.hidden_test_summary.passed}/{submission.hidden_test_summary.total}</p><p className="text-xs text-white/45">Hidden summary only</p></div>
           </div>

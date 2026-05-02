@@ -1,14 +1,43 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3, CheckCircle2, Clock, FileCode2 } from "lucide-react";
 import { AssessmentCard } from "@/components/student/AssessmentCard";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getStudentAssessments, getStudentDashboard, getStudentResults } from "@/lib/mock-api";
+import { getStudentAssessments, getStudentDashboard, getStudentResults } from "@/lib/api";
+import type { Assessment, StudentDashboard } from "@/lib/types";
 
 export default function StudentDashboardPage() {
-  const dashboard = getStudentDashboard();
-  const assessments = getStudentAssessments();
-  const results = getStudentResults();
+  const router = useRouter();
+  const [dashboard, setDashboard] = useState<StudentDashboard | null>(null);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [results, setResults] = useState<Assessment[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [nextDashboard, nextAssessments, nextResults] = await Promise.all([
+          getStudentDashboard(),
+          getStudentAssessments(),
+          getStudentResults()
+        ]);
+        setDashboard(nextDashboard);
+        setAssessments(nextAssessments);
+        setResults(nextResults);
+      } catch {
+        router.replace("/login");
+      }
+    }
+
+    load();
+  }, [router]);
+
+  if (!dashboard) {
+    return <SectionHeader eyebrow="Student" title="Connecting to backend..." />;
+  }
 
   return (
     <div>
@@ -19,7 +48,7 @@ export default function StudentDashboardPage() {
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={FileCode2} label="Available" value={dashboard.summary.available_assessments} detail="Ready to start" />
-        <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} detail="Mock active attempt" />
+        <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} detail="Active backend sessions" />
         <MetricCard icon={CheckCircle2} label="Completed" value={dashboard.summary.completed_assessments} detail="Submitted assessments" />
         <MetricCard icon={BarChart3} label="Average score" value={`${dashboard.summary.average_score}%`} detail="Published results" />
       </div>

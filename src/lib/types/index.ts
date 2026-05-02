@@ -7,7 +7,8 @@ export type AiInteractionType = "chat" | "hint" | "explain" | "debug" | "code_re
 
 export interface MockUser {
   user_id: string;
-  name: string;
+  name?: string;
+  full_name?: string;
   email: string;
   role: Role;
 }
@@ -29,15 +30,20 @@ export interface AdminTestCase {
   test_case_id: string;
   name: string;
   visibility: "public" | "hidden";
+  input?: string;
+  expected_output?: string;
   input_preview: string;
   expected_output_preview: string;
-  points: number;
+  points?: number;
 }
 
 export interface Question {
   question_id: string;
   title: string;
   problem_description_markdown: string;
+  admin_notes?: string | null;
+  sort_order?: number;
+  max_score?: number;
   constraints: string[];
   language_constraints: Language[];
   starter_code: StarterCode;
@@ -74,7 +80,8 @@ export interface WorkspaceQuestionState {
 }
 
 export interface WorkspaceState {
-  assessment_id: string;
+  assessment_id?: string;
+  session_id?: string;
   questions: Record<string, WorkspaceQuestionState>;
 }
 
