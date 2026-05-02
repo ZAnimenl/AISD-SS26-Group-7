@@ -1,4 +1,4 @@
-# Complete Frontend API List and Backend Alignment Checklist
+﻿# Complete Frontend API List and Backend Alignment Checklist
 
 ## 0. Purpose
 
@@ -15,6 +15,22 @@ Project context:
 - Admins create assessments, questions, test cases, and reports.
 - Code execution, grading, persistence, authentication, sandbox dispatch, and AI provider access belong to backend.
 - Frontend must never receive hidden test cases, call the sandbox directly, or call external LLM APIs directly.
+## 0.1 Module 2 MVP Decisions
+
+These decisions remove ambiguity for the first frontend-only MVP:
+
+- Frontend stack: prefer Next.js App Router + TypeScript + Tailwind CSS. If an existing app uses another stack, keep the existing stack unless the team explicitly approves migration.
+- Routing: use Next.js file-based routes when using Next.js. Do not add `react-router-dom` to a Next.js app.
+- Data source: mock data only. Mock objects should match the future API response shapes in this document.
+- API behavior: do not call these endpoints yet. Add `TODO(API)` comments at future integration points.
+- Authentication: mock role selection only for the first visual MVP. Future backend auth should identify the current user from JWT or another secure token; frontend should not manually manage user identity.
+- Student languages: Python and JavaScript only. Do not show TypeScript as a student submission language in the first MVP.
+- Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns the active attempt internally.
+- Run behavior: mock public/sample test output only. Run does not affect score.
+- Submit behavior: mock final result modal. Do not execute hidden tests. Student UI may show hidden test summary counts only, never hidden inputs or expected outputs.
+- AI behavior: mock chat, hint, explain, debug, and code-review responses only. Do not call external AI APIs from the frontend. Inline completion is out of scope for the first visual MVP.
+- Admin scope: include visual pages for dashboard, assessments, assessment create/edit, question/test-case editing, report list, and report detail. Keep all changes in local mock state only.
+- Out of scope for first Module 2 MVP: `/register`, `/admin/users`, backend routes, database logic, sandbox execution, grading engine, real AI provider calls, and report aggregation logic.
 
 ---
 
@@ -35,8 +51,8 @@ Project context:
 {
   "ok": false,
   "error": {
-    "code": "SESSION_EXPIRED",
-    "message": "The assessment session has expired."
+    "code": "ATTEMPT_EXPIRED",
+    "message": "The assessment attempt has expired."
   }
 }
 ```
@@ -50,8 +66,8 @@ VALIDATION_ERROR
 NOT_FOUND
 ASSESSMENT_NOT_FOUND
 QUESTION_NOT_FOUND
-SESSION_NOT_FOUND
-SESSION_EXPIRED
+ATTEMPT_NOT_FOUND
+ATTEMPT_EXPIRED
 ASSESSMENT_CLOSED
 AI_DISABLED
 EXECUTION_FAILED
@@ -76,12 +92,12 @@ INTERNAL_ERROR
 
 ### Auth decisions to confirm
 
-- Auth method: HttpOnly cookie or Bearer token?
-- Exact role values: `student`, `administrator`?
-- Can students self-register?
-- Can admins self-register? Recommended: no.
-- How is the first admin created? Recommended: seeded super admin.
-- What happens when a user accesses a page outside their role?
+- Future backend decision: Auth method, HttpOnly cookie or Bearer token? For Module 2 MVP, use mock role selection only.
+- MVP role values for UI: `student`, `administrator`.
+- Student self-registration is out of scope for the first Module 2 visual MVP.
+- Admin self-registration is out of scope for the MVP. Future backend behavior should not allow public admin self-registration.
+- Future backend decision: first admin should be created by seed/setup, not by public registration.
+- MVP decision: mock role guard redirects students away from admin pages and administrators away from student pages; real authorization remains backend work.
 
 ### Frontend TODO example
 
@@ -108,7 +124,7 @@ INTERNAL_ERROR
 {
   "summary": {
     "available_assessments": 2,
-    "in_progress_sessions": 1,
+    "in_progress_attempts": 1,
     "completed_assessments": 3,
     "average_score": 82.5
   },
@@ -119,8 +135,8 @@ INTERNAL_ERROR
 ### Student dashboard decisions to confirm
 
 - Should dashboard aggregate data server-side?
-- Should assessment cards include `session_status`?
-- Exact `session_status` values:
+- Should assessment cards include `attempt_status`?
+- Exact `attempt_status` values:
   - `not_started`
   - `active`
   - `expired`
@@ -170,7 +186,7 @@ INTERNAL_ERROR
 | P1 | PUT | `/api/v1/admin/assessments/{assessment_id}` | Update assessment |
 | P2 | POST | `/api/v1/admin/assessments/{assessment_id}/archive` | Archive assessment |
 | P2 | DELETE | `/api/v1/admin/assessments/{assessment_id}` | Delete assessment |
-| P0 | GET | `/api/v1/assessments/{assessment_id}/context?session_id={session_id}` | Student workspace context |
+| P0 | GET | `/api/v1/student/assessments/{assessment_id}/context` | Student workspace context for the authenticated user. Backend derives the active attempt from JWT/auth context. |
 
 ### Student assessment context must include
 
@@ -208,7 +224,7 @@ Student-facing assessment context must never return:
 
 ### Assessment decisions to confirm
 
-- Can one assessment contain multiple questions? Recommended: yes.
+- MVP decision: one assessment can contain multiple questions; the workspace can display a question list.
 - Can questions be reused across assessments?
 - Exact assessment status values:
   - `draft`
@@ -236,57 +252,59 @@ Student-facing assessment context must never return:
 
 - Are problem statements Markdown?
 - Are starter codes stored per language?
-- MVP supported student languages: recommended `python`, `javascript`.
-- Is TypeScript a student submission language now or later?
+- MVP supported student languages: `python`, `javascript`.
+- TypeScript is not a first-MVP student submission language. It may be considered later.
 - Are public test cases visible to students?
 - Are hidden test cases visible only to admins?
 - What exact input/output format should test cases use?
 
 ---
 
-## 7. Session APIs
+## 7. Assessment Attempt APIs
+
+Frontend should not manually manage or persist `session_id`. The backend should identify the current user from JWT/auth context and resolve the active assessment attempt internally from `user_id + assessment_id`.
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | POST | `/api/v1/sessions/initiate` | Start or resume assessment session |
-| P0 | GET | `/api/v1/sessions/{session_id}` | Get timer/session state |
-| P2 | POST | `/api/v1/sessions/{session_id}/complete` | End session manually, optional |
+| P0 | POST | `/api/v1/student/assessments/{assessment_id}/start` | Start or resume the authenticated user's assessment attempt |
+| P0 | GET | `/api/v1/student/assessments/{assessment_id}/attempt` | Get timer and active attempt state for the authenticated user |
+| P2 | POST | `/api/v1/student/assessments/{assessment_id}/complete` | End the authenticated user's attempt manually, optional |
 
-### Session initiate response
+### Start/resume attempt response
 
 ```json
 {
-  "session_id": "uuid",
   "assessment_id": "uuid",
-  "session_status": "active",
+  "attempt_status": "active",
   "started_at": "2026-04-30T13:00:00Z",
   "expires_at": "2026-04-30T14:00:00Z",
   "server_time": "2026-04-30T13:05:00Z"
 }
 ```
 
-### Session decisions to confirm
+### Attempt decisions
 
-- Does `/sessions/initiate` create a new session or resume an active one?
-- Can one student have multiple active sessions for the same assessment? Recommended: no.
+- Frontend does not send or store a real `session_id`.
+- Backend resolves the active attempt from authenticated user + assessment_id.
+- Future backend decision: whether one user can have multiple attempts for the same assessment. MVP UI assumes one active attempt at a time and does not expose an attempt identifier.
 - Timer source of truth: backend `expires_at` and `server_time`.
-- What happens after expiry?
-- Should autosave/run/submit be rejected after expiry? Recommended: yes.
-
+- Future backend decision: autosave/run/submit should be rejected after expiry; Module 2 MVP only shows expired/active UI states.
 ---
 
 ## 8. Workspace APIs
 
+Workspace APIs are assessment-scoped. The backend uses JWT/auth context to identify the user and resolve the active attempt. The frontend sends `assessment_id` and `question_id`, but not `session_id`.
+
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | GET | `/api/v1/sessions/{session_id}/workspace` | Restore code after refresh |
-| P0 | PUT | `/api/v1/sessions/{session_id}/workspace` | Debounced autosave |
+| P0 | GET | `/api/v1/student/assessments/{assessment_id}/workspace` | Restore the authenticated user's code after refresh |
+| P0 | PUT | `/api/v1/student/assessments/{assessment_id}/workspace` | Debounced autosave for the authenticated user's workspace |
 
 ### Workspace shape
 
 ```json
 {
-  "session_id": "uuid",
+  "assessment_id": "uuid",
   "questions": {
     "question_uuid_1": {
       "selected_language": "python",
@@ -304,14 +322,13 @@ Student-facing assessment context must never return:
 }
 ```
 
-### Workspace decisions to confirm
+### Workspace decisions
 
-- MVP single-file or multi-file? Recommended: single-file UI, `files` object for future extension.
-- Autosave unit: session + question.
-- Debounce: 1000–1500ms after typing stops.
+- MVP decision: single-file UI, with data shaped around the `files` object for future extension.
+- Autosave unit: authenticated user + assessment + question.
+- MVP decision: autosave indicator simulates a 1000-1500ms debounce after typing stops.
 - How to handle version conflicts?
 - What should frontend show if autosave fails?
-
 ---
 
 ## 9. Code Execution APIs
@@ -360,9 +377,9 @@ internal_error
 
 ### Execution decisions to confirm
 
-- Is Run different from Submit? Recommended: yes.
-- Does Run use public/sample tests only? Recommended: yes.
-- Does Run affect score? Recommended: no.
+- MVP decision: Run is different from Submit.
+- MVP decision: Run uses mocked public/sample tests only.
+- MVP decision: Run does not affect score.
 - Is execution synchronous or asynchronous?
 - MVP can use mocked execution if real sandbox is not ready.
 
@@ -373,7 +390,7 @@ internal_error
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
 | P0 | POST | `/api/v1/submissions/finalize` | Final submit and grading |
-| P1 | GET | `/api/v1/sessions/{session_id}/submissions?question_id={question_id}` | Student submission history |
+| P1 | GET | `/api/v1/student/assessments/{assessment_id}/submissions?question_id={question_id}` | Authenticated student submission history |
 | P1 | GET | `/api/v1/admin/submissions/{submission_id}` | Admin submission detail |
 
 ### Final submission response shape
@@ -403,10 +420,10 @@ internal_error
 ### Submission decisions to confirm
 
 - Are multiple submissions allowed?
-- Does latest submission or best submission count? Recommended MVP: latest submission counts.
+- MVP decision: mock UI presents the latest submission as the counted submission.
 - Does submit lock the editor?
-- Should hidden test input/output stay hidden? Required: yes.
-- Should frontend show hidden test summary only? Recommended: yes.
+- Required decision: hidden test input/output stay hidden from students.
+- MVP decision: student-facing frontend may show hidden test summary counts only.
 
 ---
 
@@ -416,14 +433,13 @@ internal_error
 |---|---|---|---|
 | P1 | POST | `/api/v1/ai/chat` | AI chat/hint/explain/debug/code review |
 | P2 | POST | `/api/v1/ai/inline-completion` | Monaco ghost text |
-| P1 | GET | `/api/v1/sessions/{session_id}/ai-usage` | AI usage summary |
-| P2 | GET | `/api/v1/admin/sessions/{session_id}/ai-interactions` | Admin AI interaction logs |
+| P1 | GET | `/api/v1/student/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage summary |
+| P2 | GET | `/api/v1/admin/assessments/{assessment_id}/attempts/{attempt_id}/ai-interactions` | Admin AI interaction logs for a stored backend attempt |
 
 ### AI chat request
 
 ```json
 {
-  "session_id": "uuid",
   "assessment_id": "uuid",
   "question_id": "uuid",
   "interaction_type": "hint",
@@ -445,12 +461,10 @@ code_review
 
 ### AI decisions to confirm
 
-- Is AI enabled per assessment or per question? Recommended MVP: per assessment.
-- Which AI features are MVP?
-  - P1: chat/hint/debug
-  - P2: inline completion
+- MVP decision: AI enabled/disabled is per assessment.
+- MVP decision: AI panel supports mocked chat, hint, explain, debug, and code review. Inline completion is out of scope.
 - Does backend log every interaction automatically?
-- Should AI response be Markdown? Recommended: yes.
+- MVP decision: mock AI responses may be displayed as Markdown-style text if the frontend already has a safe renderer; otherwise plain text is acceptable.
 - What semantic tags are possible?
 - What happens if AI is disabled?
 - What happens if AI provider is down?
@@ -486,7 +500,7 @@ code_review
       "user_id": "uuid",
       "student_name": "Alice Student",
       "student_email": "student@example.com",
-      "session_status": "submitted",
+      "attempt_status": "submitted",
       "submission_status": "passed",
       "score": 90,
       "max_score": 100,
@@ -552,8 +566,8 @@ code_review
 | `/student/dashboard` | `GET /api/v1/student/dashboard`, `GET /api/v1/student/assessments`, `GET /api/v1/student/results` |
 | `/student/assessments` | `GET /api/v1/student/assessments` |
 | `/student/results` | `GET /api/v1/student/results` |
-| `/student/assessments/{assessment_id}/start` | `POST /api/v1/sessions/initiate` |
-| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/sessions/{session_id}`, `GET /api/v1/sessions/{session_id}/workspace`, `PUT /api/v1/sessions/{session_id}/workspace`, `POST /api/v1/executions/run`, `POST /api/v1/submissions/finalize`, `POST /api/v1/ai/chat` |
+| `/student/assessments/{assessment_id}/start` | `POST /api/v1/student/assessments/{assessment_id}/start` |
+| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/student/assessments/{assessment_id}/context`, `GET /api/v1/student/assessments/{assessment_id}/attempt`, `GET /api/v1/student/assessments/{assessment_id}/workspace`, `PUT /api/v1/student/assessments/{assessment_id}/workspace`, `POST /api/v1/executions/run`, `POST /api/v1/submissions/finalize`, `POST /api/v1/ai/chat` |
 
 ### Admin Pages
 
@@ -585,11 +599,11 @@ POST /api/v1/auth/logout
 
 GET  /api/v1/student/dashboard
 GET  /api/v1/student/assessments
-POST /api/v1/sessions/initiate
-GET  /api/v1/assessments/{assessment_id}/context?session_id={session_id}
-GET  /api/v1/sessions/{session_id}
-GET  /api/v1/sessions/{session_id}/workspace
-PUT  /api/v1/sessions/{session_id}/workspace
+POST /api/v1/student/assessments/{assessment_id}/start
+GET  /api/v1/student/assessments/{assessment_id}/context
+GET  /api/v1/student/assessments/{assessment_id}/attempt
+GET  /api/v1/student/assessments/{assessment_id}/workspace
+PUT  /api/v1/student/assessments/{assessment_id}/workspace
 POST /api/v1/executions/run
 POST /api/v1/submissions/finalize
 
@@ -613,9 +627,9 @@ PUT  /api/v1/admin/questions/{question_id}
 GET  /api/v1/admin/questions/{question_id}/test-cases
 POST /api/v1/admin/questions/{question_id}/test-cases
 
-GET  /api/v1/sessions/{session_id}/submissions
+GET  /api/v1/student/assessments/{assessment_id}/submissions
 POST /api/v1/ai/chat
-GET  /api/v1/sessions/{session_id}/ai-usage
+GET  /api/v1/student/assessments/{assessment_id}/ai-usage
 GET  /api/v1/admin/submissions/{submission_id}
 ```
 
@@ -623,7 +637,7 @@ GET  /api/v1/admin/submissions/{submission_id}
 
 ```text
 POST /api/v1/ai/inline-completion
-GET  /api/v1/admin/sessions/{session_id}/ai-interactions
+GET  /api/v1/admin/assessments/{assessment_id}/attempts/{attempt_id}/ai-interactions
 GET  /api/v1/admin/reports/{assessment_id}/students/{student_id}
 
 POST /api/v1/admin/users
@@ -651,15 +665,15 @@ GET    /api/v1/executions/{execution_id}
 
 ```ts
 // TODO(API): POST /api/v1/executions/run
-// Purpose: Send current code, language, assessment_id, question_id, session_id.
+// Purpose: Send current code, language, assessment_id, and question_id. Backend derives user and active attempt from auth context.
 // Expected response: status, stdout, stderr, test_results, metrics.
 ```
 
 ```ts
-// TODO(API): PUT /api/v1/sessions/{session_id}/workspace
+// TODO(API): PUT /api/v1/student/assessments/{assessment_id}/workspace
 // Purpose: Debounced autosave for Monaco editor content.
-// Save unit: session + question.
-// Debounce: 1000–1500ms after typing stops.
+// Save unit: authenticated user + assessment + question.
+// Debounce: 1000â€“1500ms after typing stops.
 ```
 
 ---
@@ -693,7 +707,7 @@ The frontend needs API coverage for:
 3. Admin dashboard
 4. Assessment management
 5. Question and test case management
-6. Session management
+6. Assessment attempt management
 7. Workspace restore/autosave
 8. Code execution
 9. Final submissions
@@ -706,14 +720,14 @@ Important boundaries:
 - frontend must never receive hidden test case details
 - frontend must not call sandbox directly
 - frontend must not call external LLM APIs directly
-- backend owns grading, persistence, auth, role authorization, sandbox dispatch, and AI provider access
+- backend owns grading, persistence, auth/JWT identity, role authorization, active attempt resolution, sandbox dispatch, and AI provider access
 
 Please confirm:
 - final endpoint names
 - request/response shapes
 - role values
 - status enums
-- auth method
+- auth method, including whether JWT is used and how active attempts are resolved
 - error format
 - dashboard metrics
 - whether Run and Submit are separate
@@ -721,3 +735,8 @@ Please confirm:
 - whether MVP supports single-file or multi-file workspace
 - which AI features are P1/P2
 ```
+
+
+
+
+
