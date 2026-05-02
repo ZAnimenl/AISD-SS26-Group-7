@@ -34,9 +34,17 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
-    public void Appsettings_configures_seed_admin_demo_login()
+    public void Appsettings_does_not_store_production_seed_admin_credentials()
     {
         using var document = ReadAppsettings("appsettings.json");
+
+        Assert.False(document.RootElement.TryGetProperty("SeedAdmin", out _));
+    }
+
+    [Fact]
+    public void Development_appsettings_configures_local_seed_admin_demo_login()
+    {
+        using var document = ReadAppsettings("appsettings.Development.json");
 
         var seedAdmin = document.RootElement.GetProperty("SeedAdmin");
 

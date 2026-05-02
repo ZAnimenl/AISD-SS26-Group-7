@@ -2,24 +2,38 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Code2, ShieldCheck, Sparkles } from "lucide-react";
-import { login } from "@/lib/api";
-import type { Role } from "@/lib/types";
+import { Code2, LogIn, UserPlus } from "lucide-react";
+import { login, registerStudent } from "@/lib/api";
+
+type AuthMode = "login" | "register";
 
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>("student");
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("student@example.com");
+  const [password, setPassword] = useState("password");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  async function handleLogin() {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
+    setNotice(null);
     setIsSubmitting(true);
     try {
-      const user = await login(role);
+      if (mode === "register") {
+        await registerStudent({ full_name: fullName, email, password });
+        setMode("login");
+        setNotice("Student account registered. You can sign in now.");
+        return;
+      }
+
+      const user = await login(email, password);
       router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Login failed.");
+      setError(exception instanceof Error ? exception.message : "Authentication failed.");
     } finally {
       setIsSubmitting(false);
     }
@@ -40,29 +54,39 @@ export default function LoginPage() {
           </div>
           <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
-            Choose a demo role. The frontend signs in through the backend and stores the returned token for API calls.
+            Sign in with a backend account, or register a student account. Administrator accounts are created by an administrator.
           </p>
-          <div className="mt-10 grid gap-3 sm:grid-cols-2">
-            {(["student", "administrator"] as Role[]).map((item) => (
-              <button
-                key={item}
-                className={`rounded-2xl border p-5 text-left transition ${
-                  role === item ? "border-cyanGlow/50 bg-cyanGlow/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
-                onClick={() => setRole(item)}
-              >
-                <ShieldCheck className={role === item ? "text-cyanGlow" : "text-white/45"} size={22} />
-                <span className="mt-4 block text-lg font-semibold capitalize">{item === "administrator" ? "Administrator" : "Student"}</span>
-                <span className="mt-1 block text-sm text-white/45">
-                  {item === "administrator" ? "Author assessments and inspect reports" : "Open assessments and code in the browser IDE"}
-                </span>
-              </button>
-            ))}
+          <div className="mt-10 flex gap-2">
+            <button className={mode === "login" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setMode("login")}>
+              <LogIn size={16} />
+              Login
+            </button>
+            <button className={mode === "register" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setMode("register")}>
+              <UserPlus size={16} />
+              Register student
+            </button>
           </div>
-          <button className="btn-primary mt-8" onClick={handleLogin} disabled={isSubmitting}>
-            <Sparkles size={18} />
-            {isSubmitting ? "Connecting..." : "Continue"}
-          </button>
+          <form className="mt-6 grid max-w-xl gap-4" onSubmit={handleSubmit}>
+            {mode === "register" ? (
+              <label className="grid gap-2 text-sm text-white/60">
+                Full name
+                <input className="field" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+              </label>
+            ) : null}
+            <label className="grid gap-2 text-sm text-white/60">
+              Email
+              <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </label>
+            <label className="grid gap-2 text-sm text-white/60">
+              Password
+              <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
+            </label>
+            <button className="btn-primary w-fit" type="submit" disabled={isSubmitting}>
+              {mode === "register" ? <UserPlus size={18} /> : <LogIn size={18} />}
+              {isSubmitting ? "Connecting..." : mode === "register" ? "Create student account" : "Sign in"}
+            </button>
+          </form>
+          {notice ? <p className="mt-4 text-sm text-cyanGlow">{notice}</p> : null}
           {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
         </div>
         <div className="border-t border-white/10 bg-black/20 p-8 lg:border-l lg:border-t-0 lg:p-12">
@@ -74,17 +98,20 @@ export default function LoginPage() {
             </div>
             <pre className="whitespace-pre-wrap leading-7">
 {`POST http://localhost:5040/api/v1/auth/login
+POST http://localhost:5040/api/v1/auth/register
 GET  http://localhost:5040/api/v1/auth/me
 POST http://localhost:5040/api/v1/auth/logout
 
-student = "student@example.com";
-administrator = "admin@example.com";
-password = "password";`}
+seed_admin = "admin@example.com";
+demo_student = "student@example.com";
+password = "password";
+
+admin_users = "/api/v1/admin/users";`}
             </pre>
           </div>
           <div className="mt-6 grid gap-3 text-sm text-white/55">
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">JWT is stored in local storage for this demo frontend.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Backend resolves identity, sessions, workspace saves, runs, and submissions.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Self registration always creates a student account.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Use the seed admin to create additional administrator accounts.</p>
           </div>
         </div>
       </section>
