@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, Code2, FileText, LayoutDashboard, LogOut, PlusCircle, Settings, Sparkles, type LucideIcon } from "lucide-react";
-import { mockLogout } from "@/lib/mock-api";
+import { logout } from "@/lib/api";
 
 interface NavItem {
   label: string;
@@ -63,12 +63,12 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
 
       <div className="relative mt-auto space-y-3">
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-white/45">
-          Mock role: <span className="text-white/75">{role === "student" ? "Student" : "Administrator"}</span>
+          Role: <span className="text-white/75">{role === "student" ? "Student" : "Administrator"}</span>
         </div>
         <button
           className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-white/45 transition hover:bg-white/5 hover:text-white"
-          onClick={() => {
-            mockLogout();
+          onClick={async () => {
+            await logout();
             router.push("/login");
           }}
         >
@@ -77,7 +77,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
         </button>
         <div className="flex items-center gap-3 px-4 py-2.5 text-xs text-white/35">
           <Settings size={16} />
-          Frontend mock mode
+          Backend API mode
         </div>
       </div>
     </aside>

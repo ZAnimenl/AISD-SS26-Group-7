@@ -1,10 +1,25 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAggregateReport } from "@/lib/mock-api";
+import { getAggregateReport } from "@/lib/api";
+import type { AggregateReport } from "@/lib/types";
 
 export default function ReportDetailPage({ params }: { params: { assessmentId: string } }) {
-  const report = getAggregateReport(params.assessmentId);
-  const max = Math.max(...report.score_distribution.map((item) => item.count));
+  const router = useRouter();
+  const [report, setReport] = useState<AggregateReport | null>(null);
+
+  useEffect(() => {
+    getAggregateReport(params.assessmentId).then(setReport).catch(() => router.replace("/login"));
+  }, [params.assessmentId, router]);
+
+  if (!report) {
+    return <SectionHeader eyebrow="Report detail" title="Connecting to backend..." />;
+  }
+
+  const max = Math.max(1, ...report.score_distribution.map((item) => item.count));
 
   return (
     <div>

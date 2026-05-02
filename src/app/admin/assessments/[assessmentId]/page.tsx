@@ -1,68 +1,68 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { updateAssessmentMock } from "@/lib/mock-api";
+import { getAdminAssessment, updateAssessment } from "@/lib/api";
+import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage({ params }: { params: { assessmentId: string } }) {
-  const assessment = updateAssessmentMock(params.assessmentId);
-  const questions = assessment.questions.length ? assessment.questions : updateAssessmentMock("algorithms-2026").questions;
+  const router = useRouter();
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAdminAssessment(params.assessmentId).then(setAssessment).catch(() => router.replace("/login"));
+  }, [params.assessmentId, router]);
+
+  async function saveAssessment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!assessment) {
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    setError(null);
+    try {
+      await updateAssessment({
+        ...assessment,
+        title: String(form.get("title") ?? assessment.title),
+        description: String(form.get("description") ?? assessment.description),
+        duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
+        status: String(form.get("status") ?? assessment.status) as AssessmentStatus
+      });
+      setSaved(true);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Unable to save assessment.");
+    }
+  }
+
+  if (!assessment) {
+    return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
+  }
 
   return (
     <div>
       <SectionHeader eyebrow="Administrator" title={`Edit ${assessment.title}`} />
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <section className="panel">
-          <div className="relative grid gap-4">
+          <form className="relative grid gap-4" onSubmit={saveAssessment}>
             <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Assessment details</h2><StatusBadge status={assessment.status} /></div>
-            <label className="grid gap-2 text-sm text-white/60">Title<input className="field" defaultValue={assessment.title} /></label>
-            <label className="grid gap-2 text-sm text-white/60">Description<textarea className="field min-h-28" defaultValue={assessment.description} /></label>
+            <label className="grid gap-2 text-sm text-white/60">Title<input className="field" name="title" defaultValue={assessment.title} /></label>
+            <label className="grid gap-2 text-sm text-white/60">Description<textarea className="field min-h-28" name="description" defaultValue={assessment.description} /></label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" type="number" defaultValue={assessment.duration_minutes} /></label>
-              <label className="grid gap-2 text-sm text-white/60">Status<select className="field" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
+              <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" name="duration_minutes" type="number" defaultValue={assessment.duration_minutes} /></label>
+              <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
             </div>
-            <button className="btn-primary w-fit">Save mock changes</button>
-          </div>
+            <button className="btn-primary w-fit">Save changes</button>
+            {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}
+            {error ? <p className="text-sm text-pinkGlow">{error}</p> : null}
+          </form>
         </section>
-        <section className="panel">
-          <div className="relative">
-            <h2 className="text-lg font-semibold">Questions and test cases</h2>
-            <div className="mt-4 space-y-4">
-              {questions.map((question) => (
-                <article key={question.question_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question editor</p>
-                      <h3 className="mt-1 text-lg font-semibold">{question.title}</h3>
-                      <p className="mt-2 text-sm text-white/50">{question.problem_description_markdown}</p>
-                    </div>
-                    <span className="badge">Python + JavaScript</span>
-                  </div>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                    <textarea className="field min-h-28 font-mono" defaultValue={question.starter_code.python} />
-                    <textarea className="field min-h-28 font-mono" defaultValue={question.starter_code.javascript} />
-                  </div>
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full min-w-[620px] text-left text-xs">
-                      <thead className="uppercase tracking-[0.14em] text-white/35">
-                        <tr><th className="pb-2">Name</th><th className="pb-2">Visibility</th><th className="pb-2">Input preview</th><th className="pb-2">Expected preview</th><th className="pb-2">Points</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/10">
-                        {question.admin_test_cases?.map((testCase) => (
-                          <tr key={testCase.test_case_id}>
-                            <td className="py-3 text-white/80">{testCase.name}</td>
-                            <td className="py-3"><StatusBadge status={testCase.visibility} /></td>
-                            <td className="py-3 text-white/50">{testCase.input_preview}</td>
-                            <td className="py-3 text-white/50">{testCase.expected_output_preview}</td>
-                            <td className="py-3 text-cyanGlow">{testCase.points}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+        <QuestionTestCaseEditor assessment={assessment} onAssessmentChange={setAssessment} />
       </div>
     </div>
   );
