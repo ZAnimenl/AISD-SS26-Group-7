@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Code2, FileText, LayoutDashboard, LogOut, PlusCircle, Settings, Sparkles, type LucideIcon } from "lucide-react";
+import { BarChart3, Code2, FileText, LayoutDashboard, LogOut, PlusCircle, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { logout } from "@/lib/api";
 
 interface NavItem {
@@ -21,7 +21,8 @@ const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Assessments", href: "/admin/assessments", icon: FileText },
   { label: "Create", href: "/admin/assessments/new", icon: PlusCircle },
-  { label: "Reports", href: "/admin/reports", icon: BarChart3 }
+  { label: "Reports", href: "/admin/reports", icon: BarChart3 },
+  { label: "Users", href: "/admin/users", icon: Users }
 ];
 
 export function AppSidebar({ role }: { role: "student" | "administrator" }) {

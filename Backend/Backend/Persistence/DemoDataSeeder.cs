@@ -19,16 +19,20 @@ public sealed class DemoDataSeeder(
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
-        if (await dbContext.Users.AnyAsync(cancellationToken))
-        {
-            return;
-        }
-
         seedAdminOptions.Value.Validate();
 
         var now = DateTimeOffset.UtcNow;
-        dbContext.Users.AddRange(
-            new User
+        await EnsureSeedAdminAsync(now, cancellationToken);
+
+        if (await dbContext.Assessments.AnyAsync(cancellationToken))
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (!await dbContext.Users.AnyAsync(user => user.Id == StudentUserId || user.Email == "student@example.com", cancellationToken))
+        {
+            dbContext.Users.Add(new User
             {
                 Id = StudentUserId,
                 FullName = "Alice Student",
@@ -37,18 +41,39 @@ public sealed class DemoDataSeeder(
                 Role = UserRoles.Student,
                 Status = UserStatuses.Active,
                 CreatedAt = now
-            },
-            new User
+            });
+        }
+
+        await SeedAssessmentAsync(now, cancellationToken);
+    }
+
+    private async Task EnsureSeedAdminAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var options = seedAdminOptions.Value;
+        var admin = await dbContext.Users.FirstOrDefaultAsync(user => user.Email == options.Email, cancellationToken);
+        if (admin is null)
+        {
+            dbContext.Users.Add(new User
             {
                 Id = AdminUserId,
                 FullName = "Ada Admin",
-                Email = seedAdminOptions.Value.Email,
-                PasswordHash = passwordHasher.Hash(seedAdminOptions.Value.Password),
+                Email = options.Email,
+                PasswordHash = passwordHasher.Hash(options.Password),
                 Role = UserRoles.Administrator,
                 Status = UserStatuses.Active,
                 CreatedAt = now
             });
+            return;
+        }
 
+        admin.FullName = string.IsNullOrWhiteSpace(admin.FullName) ? "Ada Admin" : admin.FullName;
+        admin.PasswordHash = passwordHasher.Hash(options.Password);
+        admin.Role = UserRoles.Administrator;
+        admin.Status = UserStatuses.Active;
+    }
+
+    private async Task SeedAssessmentAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
         var assessment = new Assessment
         {
             Id = PythonAssessmentId,

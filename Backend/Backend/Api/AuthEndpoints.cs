@@ -91,9 +91,9 @@ public static class AuthEndpoints
         {
             user_id = user.Id,
             full_name = user.FullName,
-            user.Email,
-            user.Role,
-            user.Status
+            email = user.Email,
+            role = user.Role,
+            status = user.Status
         };
     }
 }

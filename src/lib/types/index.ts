@@ -11,7 +11,11 @@ export interface MockUser {
   full_name?: string;
   email: string;
   role: Role;
+  status?: "active" | "inactive";
+  created_at?: string;
 }
+
+export type UserAccount = Required<Pick<MockUser, "user_id" | "full_name" | "email" | "role" | "status" | "created_at">>;
 
 export interface StarterCode {
   python: string;

@@ -14,6 +14,7 @@ import type {
   RunResult,
   StudentDashboard,
   SubmissionResult,
+  UserAccount,
   WorkspaceState
 } from "@/lib/types";
 
@@ -38,6 +39,8 @@ interface BackendUser {
   full_name: string;
   email: string;
   role: Role;
+  status?: "active" | "inactive";
+  created_at?: string;
 }
 
 interface SessionResponse {
@@ -105,11 +108,10 @@ export function getStoredUser() {
   return value ? (JSON.parse(value) as MockUser) : null;
 }
 
-export async function login(role: Role) {
-  const email = role === "administrator" ? "admin@example.com" : "student@example.com";
+export async function login(email: string, password: string) {
   const result = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password: "password" })
+    body: JSON.stringify({ email, password })
   });
   const user = normalizeUser(result.user);
   window.localStorage.setItem(TOKEN_KEY, result.token);
@@ -128,6 +130,34 @@ export async function logout() {
 
 export async function getCurrentUser() {
   return normalizeUser(await apiRequest<BackendUser>("/auth/me"));
+}
+
+export async function registerStudent(input: { full_name: string; email: string; password: string }) {
+  return normalizeUser(await apiRequest<BackendUser>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function getAdminUsers() {
+  const raw = await apiRequest<BackendUser[]>("/admin/users/");
+  return raw.map(normalizeUserAccount);
+}
+
+export async function createAdminUser(input: {
+  full_name: string;
+  email: string;
+  password: string;
+  role: Role;
+  status?: "active" | "inactive";
+}) {
+  return normalizeUserAccount(await apiRequest<BackendUser>("/admin/users/", {
+    method: "POST",
+    body: JSON.stringify({
+      ...input,
+      status: input.status ?? "active"
+    })
+  }));
 }
 
 export async function getStudentDashboard() {
@@ -383,13 +413,44 @@ export async function getAiResponse(input: {
 }
 
 function normalizeUser(user: BackendUser): MockUser {
+  const rawUser = user as BackendUser & {
+    Role?: Role;
+    Status?: "active" | "inactive";
+    Email?: string;
+    FullName?: string;
+  };
+
   return {
     user_id: user.user_id,
-    name: user.full_name,
-    full_name: user.full_name,
-    email: user.email,
-    role: user.role
+    name: user.full_name ?? rawUser.FullName,
+    full_name: user.full_name ?? rawUser.FullName,
+    email: user.email ?? rawUser.Email,
+    role: normalizeRole(user.role ?? rawUser.Role),
+    status: user.status ?? rawUser.Status,
+    created_at: user.created_at
   };
+}
+
+function normalizeUserAccount(user: BackendUser): UserAccount {
+  const rawUser = user as BackendUser & {
+    Role?: Role;
+    Status?: "active" | "inactive";
+    Email?: string;
+    FullName?: string;
+  };
+
+  return {
+    user_id: user.user_id,
+    full_name: user.full_name ?? rawUser.FullName ?? "",
+    email: user.email ?? rawUser.Email ?? "",
+    role: normalizeRole(user.role ?? rawUser.Role),
+    status: user.status ?? rawUser.Status ?? "active",
+    created_at: user.created_at ?? ""
+  };
+}
+
+function normalizeRole(role: string | undefined): Role {
+  return role === "administrator" ? "administrator" : "student";
 }
 
 function normalizeAssessment(raw: any): Assessment {
