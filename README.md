@@ -79,10 +79,9 @@ Override with `NEXT_PUBLIC_API_BASE_URL` if needed.
 
 ## Environment Files 🌱
 
-Example environment files are provided for handoff clarity:
+An example environment file is provided for handoff clarity:
 
-- `.env.example` - frontend configuration.
-- `Backend/.env.example` - backend shell/container configuration examples.
+- `.env.example` - frontend and backend configuration examples.
 
 For local development, most backend values already come from `Backend/Backend/appsettings.Development.json`. ASP.NET Core also reads environment variables automatically, but it does not load `.env` files by itself unless your shell, container, or tooling loads them.
 
@@ -98,7 +97,7 @@ AI provider keys:
 
 - No AI provider API key is required today.
 - The current backend AI chat endpoint is an MVP stub that logs interactions and returns canned guidance.
-- Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `Backend/.env.example`.
+- Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
 
 ## Frontend 💻
 
