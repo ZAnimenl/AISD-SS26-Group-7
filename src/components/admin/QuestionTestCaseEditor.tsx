@@ -10,6 +10,7 @@ import {
   updateQuestion,
   updateTestCase
 } from "@/lib/api";
+import { defaultTestCode, normalizeTestCode } from "@/lib/languages";
 import type { AdminTestCase, Assessment, Language, Question } from "@/lib/types";
 
 interface QuestionTestCaseEditorProps {
@@ -21,12 +22,6 @@ const defaultStarterCode = {
   python: "def solve():\n    pass\n",
   javascript: "function solve() {\n}\n",
   typescript: "function solve(): unknown {\n  return null;\n}\n"
-};
-
-const defaultTestCode: Record<Language, string> = {
-  python: "from solution import solve\n\n\ndef test_solution_exists():\n    assert callable(solve)\n",
-  javascript: "const { solve } = require(\"./solution.js\");\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n",
-  typescript: "const solve = globalThis.__ojsharpSolve;\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n"
 };
 
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
@@ -259,6 +254,10 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="mt-3 space-y-3">
                   {(question.admin_test_cases ?? []).map((testCase) => (
                     <div key={testCase.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      {(() => {
+                        const testCode = normalizeTestCode(testCase.test_code);
+                        return (
+                          <>
                       <div className="grid gap-3 lg:grid-cols-[1fr_140px_auto]">
                         <label className="grid gap-2 text-sm text-white/60">
                           Name
@@ -284,17 +283,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                       <div className="mt-3 grid gap-3">
                         <label className="grid gap-2 text-sm text-white/60">
                           Python pytest code
-                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
+                          <textarea className="field min-h-40 font-mono" value={testCode.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
                         </label>
                         <label className="grid gap-2 text-sm text-white/60">
                           JavaScript Jest code
-                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
+                          <textarea className="field min-h-40 font-mono" value={testCode.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
                         </label>
                         <label className="grid gap-2 text-sm text-white/60">
                           TypeScript Jest code
-                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
+                          <textarea className="field min-h-40 font-mono" value={testCode.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
                         </label>
                       </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

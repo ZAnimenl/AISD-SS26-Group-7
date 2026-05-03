@@ -24,7 +24,8 @@ interface MonacoCodeEditorProps {
 
 const MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE: Record<Language, string> = {
   python: "python",
-  javascript: "javascript"
+  javascript: "javascript",
+  typescript: "typescript"
 };
 
 function encodeUriPathSegment(value: string) {

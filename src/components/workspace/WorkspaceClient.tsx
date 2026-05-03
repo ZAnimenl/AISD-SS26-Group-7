@@ -284,8 +284,6 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
               {activeQuestion.public_examples.map((example) => (
                 <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/55">
                   <p className="text-white/80">{example.name}</p>
-                  <p>Input: {example.input}</p>
-                  <p>Expected: {example.expected_output}</p>
                 </div>
               ))}
             </div>
@@ -344,7 +342,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
                   <p className="text-cyanGlow">status: {runResult.status}</p>
                   <pre className="whitespace-pre-wrap">{runResult.stdout}</pre>
                   {runResult.test_results.map((test) => (
-                    <p key={test.name}>{test.passed ? "PASS" : "FAIL"} {test.name}: actual {test.actual_output}, expected {test.expected_output}</p>
+                    <p key={test.name}>{test.passed ? "PASS" : "FAIL"} {test.name}{test.output ? `: ${test.output}` : ""}</p>
                   ))}
                   <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
                 </div>

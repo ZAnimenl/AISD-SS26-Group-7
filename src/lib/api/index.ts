@@ -17,6 +17,7 @@ import type {
   UserAccount,
   WorkspaceState
 } from "@/lib/types";
+import { normalizeTestCode } from "@/lib/languages";
 
 const DEFAULT_API_BASE_URL = "http://localhost:5040/api/v1";
 const LOCAL_FALLBACK_API_BASE_URL = "http://localhost:5041/api/v1";
@@ -36,6 +37,17 @@ interface ApiResponse<T> {
 interface ParsedApiResponse<T> {
   payload: ApiResponse<T> | null;
   bodyText: string;
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
 }
 
 interface LoginResponse {
@@ -96,22 +108,32 @@ async function apiRequest<T>(path: string, init: RequestInit = {}) {
   const { payload, bodyText } = await parseApiResponse<T>(response);
 
   if (!response.ok) {
-    throw new Error(
+    throw new ApiRequestError(
       payload?.error?.message
         ?? getPlainTextError(bodyText)
-        ?? `Backend request failed with ${response.status}`
+        ?? `Backend request failed with ${response.status}`,
+      response.status,
+      payload?.error?.code
     );
   }
 
   if (!payload) {
-    throw new Error(`Backend returned an invalid response (${response.status}).`);
+    throw new ApiRequestError(`Backend returned an invalid response (${response.status}).`, response.status, "INVALID_RESPONSE");
   }
 
   if (!payload.ok) {
-    throw new Error(payload.error?.message ?? `Backend request failed with ${response.status}`);
+    throw new ApiRequestError(
+      payload.error?.message ?? `Backend request failed with ${response.status}`,
+      response.status,
+      payload.error?.code
+    );
   }
 
   return payload.data as T;
+}
+
+export function isAuthenticationError(exception: unknown) {
+  return exception instanceof ApiRequestError && (exception.status === 401 || exception.status === 403);
 }
 
 async function fetchApi(path: string, init: RequestInit, headers: Headers) {
@@ -549,10 +571,11 @@ function normalizeQuestion(question: any): Question {
     sort_order: question.sort_order ?? 0,
     max_score: question.max_score ?? 100,
     constraints: question.constraints ?? [],
-    language_constraints: question.language_constraints ?? ["python", "javascript"],
+    language_constraints: question.language_constraints ?? ["python", "javascript", "typescript"],
     starter_code: {
       python: question.starter_code?.python ?? "",
-      javascript: question.starter_code?.javascript ?? ""
+      javascript: question.starter_code?.javascript ?? "",
+      typescript: question.starter_code?.typescript ?? ""
     },
     public_examples: question.public_examples ?? [],
     admin_test_cases: (question.admin_test_cases ?? []).map(normalizeAdminTestCase)
@@ -560,17 +583,11 @@ function normalizeQuestion(question: any): Question {
 }
 
 function normalizeAdminTestCase(testCase: any): AdminTestCase {
-  const input = testCase.input ?? testCase.input_preview ?? "";
-  const expectedOutput = testCase.expected_output ?? testCase.expected_output_preview ?? "";
-
   return {
     test_case_id: testCase.test_case_id,
     name: testCase.name ?? "",
     visibility: testCase.visibility === "hidden" ? "hidden" : "public",
-    input,
-    expected_output: expectedOutput,
-    input_preview: input,
-    expected_output_preview: expectedOutput
+    test_code: normalizeTestCode(testCase.test_code)
   };
 }
 
@@ -578,10 +595,11 @@ function toQuestionRequest(question: Question) {
   return {
     title: question.title,
     problem_description_markdown: question.problem_description_markdown,
-    language_constraints: question.language_constraints.length ? question.language_constraints : ["python", "javascript"],
+    language_constraints: question.language_constraints.length ? question.language_constraints : ["python", "javascript", "typescript"],
     starter_code: {
       python: question.starter_code.python,
-      javascript: question.starter_code.javascript
+      javascript: question.starter_code.javascript,
+      typescript: question.starter_code.typescript
     },
     admin_notes: question.admin_notes ?? "",
     sort_order: question.sort_order ?? 0,
@@ -593,8 +611,7 @@ function toTestCaseRequest(testCase: AdminTestCase) {
   return {
     name: testCase.name,
     visibility: testCase.visibility,
-    input: testCase.input ?? testCase.input_preview,
-    expected_output: testCase.expected_output ?? testCase.expected_output_preview
+    test_code: normalizeTestCode(testCase.test_code)
   };
 }
 
