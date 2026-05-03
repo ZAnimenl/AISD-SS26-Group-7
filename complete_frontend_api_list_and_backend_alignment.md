@@ -1,13 +1,25 @@
 ﻿# Complete Frontend API List and Backend Alignment Checklist
 
+## Status Note
+
+This document is the active frontend/backend API contract and alignment reference.
+
+It includes first frontend-only MVP decisions because the project started with mock UI work. For current backend-connected tasks, do not apply the first-MVP "mock only" rules blindly. Instead:
+
+1. Treat the endpoint names, request/response shapes, error format, security constraints, and session/attempt rules in this document as the intended contract.
+2. Inspect the current backend routes, DTOs, frontend API client, and tests before changing integration code.
+3. If this document and the implementation disagree, stop and report the mismatch instead of inventing a third contract.
+4. Use mock data and `TODO(API)` comments only for frontend-only or not-yet-connected surfaces.
+5. Preserve the security boundaries: frontend must never receive hidden test details, call the sandbox directly, call external LLM APIs directly, or create/store/trust a real `session_id`.
+
 ## 0. Purpose
 
-This document is for UI-first frontend development.
+This document supports both UI-first frontend development and current frontend/backend integration.
 
 Frontend plan:
-- Build visual UI pages first.
-- Use mock data first.
-- Put `TODO(API)` comments where real backend calls will be added later.
+- Build visual UI pages first when a task is frontend-only.
+- Use mock data only for frontend-only or not-yet-connected surfaces.
+- Put `TODO(API)` comments where real backend calls are intentionally deferred.
 - Align endpoint names, request bodies, response bodies, status values, and error formats with backend before coding integration.
 
 Project context:
@@ -17,12 +29,12 @@ Project context:
 - Frontend must never receive hidden test cases, call the sandbox directly, or call external LLM APIs directly.
 ## 0.1 Module 2 MVP Decisions
 
-These decisions remove ambiguity for the first frontend-only MVP:
+These decisions remove ambiguity for the first frontend-only MVP. For backend-connected tasks, prefer the current implementation plus the intended contract in this document, and report any drift.
 
 - Frontend stack: prefer Next.js App Router + TypeScript + Tailwind CSS. If an existing app uses another stack, keep the existing stack unless the team explicitly approves migration.
 - Routing: use Next.js file-based routes when using Next.js. Do not add `react-router-dom` to a Next.js app.
-- Data source: mock data only. Mock objects should match the future API response shapes in this document.
-- API behavior: do not call these endpoints yet. Add `TODO(API)` comments at future integration points.
+- Data source for frontend-only work: mock data may be used, and mock objects should match the API response shapes in this document.
+- API behavior for backend-connected work: call the real backend through the existing frontend API client. Do not invent endpoints; report mismatches.
 - Authentication: mock role selection only for the first visual MVP. Future backend auth should identify the current user from JWT or another secure token; frontend should not manually manage user identity.
 - Student languages: Python and JavaScript only. Do not show TypeScript as a student submission language in the first MVP.
 - Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns the active attempt internally.

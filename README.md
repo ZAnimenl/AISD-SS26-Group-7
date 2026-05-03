@@ -1,8 +1,8 @@
-# AISD-SS26 Group 7 🚀
+﻿# AISD-SS26 Group 7 ðŸš€
 
 AI-assisted online coding assessment platform for browser-based coding assessments, role-based administration, backend-backed workspace persistence, submission evaluation, AI assistance, and reporting.
 
-## Project Shape 🧭
+## Project Shape ðŸ§­
 
 This repository contains a Next.js frontend and an ASP.NET backend:
 
@@ -10,18 +10,19 @@ This repository contains a Next.js frontend and an ASP.NET backend:
 - `Backend/Backend/` - ASP.NET backend API, auth, assessments, sessions/attempts, workspace persistence, submissions, reports, AI endpoint stubs, and execution endpoints.
 - `Backend/OjSharp.Tests/` - backend contract and service tests.
 - `.agents/skills/` - local agent skills for planning, implementation, integration, review, and handoff.
+- `.agents/mcp-usage.md` - MCP server usage guidance for coding-agent workflows.
 
 Authoritative project documents:
 
-- `requirements.md`
+- `SPEC.md`
 - `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
 - `complete_frontend_api_list_and_backend_alignment.md`
-- `module2_frontend_ui_task.md`
 - `ui-style-reference.md`
 
 Do not edit those specification files unless the task explicitly asks for documentation/spec changes.
 
-## Architecture Boundaries 🏗️
+
+## Architecture Boundaries ðŸ—ï¸
 
 The project follows four module boundaries:
 
@@ -37,14 +38,14 @@ The project follows four module boundaries:
 4. Module 4 - AI Telemetry and Assistance
    Secure AI proxy/service, provider calls, AI logging, telemetry, semantic tags, structured AI responses, and rate/error handling.
 
-Security rules 🔒:
+Security rules ðŸ”’:
 
 - Student frontend must never receive hidden test inputs, hidden expected outputs, or grading implementation.
 - Frontend must not access the database, sandbox, or external AI providers directly.
 - Do not execute student submissions locally with `eval`, `child_process`, Docker, or unrestricted runtimes.
 - Frontend must not create, store, or trust a real `session_id`; current backend session-shaped values are treated as transient backend attempt IDs only.
 
-## Prerequisites 🧰
+## Prerequisites ðŸ§°
 
 - Node.js 20+
 - npm
@@ -77,7 +78,7 @@ http://localhost:5041/api/v1
 
 Override with `NEXT_PUBLIC_API_BASE_URL` if needed.
 
-## Environment Files 🌱
+## Environment Files ðŸŒ±
 
 An example environment file is provided for handoff clarity:
 
@@ -99,7 +100,7 @@ AI provider keys:
 - The current backend AI chat endpoint is an MVP stub that logs interactions and returns canned guidance.
 - Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
 
-## Frontend 💻
+## Frontend ðŸ’»
 
 Install dependencies:
 
@@ -135,7 +136,7 @@ Useful routes:
 
 The student workspace uses Monaco through `@monaco-editor/react`.
 
-## Backend ⚙️
+## Backend âš™ï¸
 
 Run backend build:
 
@@ -161,7 +162,7 @@ Local demo users are seeded from development configuration:
 - Student: `student@example.com`
 - Password: `password`
 
-## API Notes 🔌
+## API Notes ðŸ”Œ
 
 Frontend API calls should go through:
 
@@ -184,7 +185,7 @@ Known contract bridge:
 - The current backend still exposes some session-shaped endpoints.
 - The frontend must keep backend attempt IDs transient in memory and must not persist them as authoritative frontend session state.
 
-## Agent Skills 🧠
+## Agent Skills ðŸ§ 
 
 Local agent skills live under:
 
@@ -205,7 +206,15 @@ Common skill chains:
 
 Companion skills provide boundary checks and contract awareness only. They do not expand implementation scope unless the commander explicitly marks them as primary or approves cross-module work.
 
-## Recommended Checks Before Handoff ✅
+MCP usage guidance for coding agents lives in:
+
+```text
+.agents/mcp-usage.md
+```
+
+MCP servers are configured in each user's coding-agent environment. Do not commit MCP credentials, OAuth tokens, API keys, or personal agent settings.
+
+## Recommended Checks Before Handoff âœ…
 
 Frontend:
 
