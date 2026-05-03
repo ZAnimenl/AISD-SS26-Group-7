@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock, Code2, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { Brain, Clock, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
 import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode } from "@/lib/api";
-import type { AiInteractionType, Assessment, Language, RunResult, WorkspaceState } from "@/lib/types";
+import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
+import type { AiInteractionType, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
@@ -13,6 +14,51 @@ interface WorkspaceClientProps {
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
+
+const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
+  { value: "python", label: "Python" },
+  { value: "javascript", label: "JavaScript" }
+];
+
+function getFileNameForLanguage(language: Language) {
+  return language === "javascript" ? "main.js" : "main.py";
+}
+
+function createQuestionState(question: Question | undefined, language: Language = "python"): WorkspaceQuestionState {
+  const fileName = getFileNameForLanguage(language);
+
+  return {
+    selected_language: language,
+    active_file: fileName,
+    files: {
+      [fileName]: {
+        language,
+        content: question?.starter_code[language] ?? ""
+      }
+    },
+    last_saved_at: "",
+    version: 0
+  };
+}
+
+function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Question | undefined, language: Language) {
+  const fileName = getFileNameForLanguage(language);
+  return state?.files[fileName]?.content ?? question?.starter_code[language] ?? "";
+}
+
+function mergeQuestionStates(current: WorkspaceState["questions"], saved: WorkspaceState["questions"]) {
+  return Object.entries(saved).reduce<WorkspaceState["questions"]>((nextStates, [questionId, savedState]) => ({
+    ...nextStates,
+    [questionId]: {
+      ...(nextStates[questionId] ?? savedState),
+      ...savedState,
+      files: {
+        ...(nextStates[questionId]?.files ?? {}),
+        ...savedState.files
+      }
+    }
+  }), current);
+}
 
 export function WorkspaceClient({ assessment, workspace, backendAttemptId }: WorkspaceClientProps) {
   const router = useRouter();
@@ -23,9 +69,9 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     () => assessment.questions.find((question) => question.question_id === activeQuestionId) ?? assessment.questions[0],
     [assessment.questions, activeQuestionId]
   );
-  const initialState = questionStates[activeQuestionId] ?? Object.values(questionStates)[0];
+  const initialState = questionStates[activeQuestionId] ?? Object.values(questionStates)[0] ?? createQuestionState(activeQuestion);
   const [language, setLanguage] = useState<Language>(initialState?.selected_language ?? "python");
-  const [code, setCode] = useState(initialState?.files[initialState.active_file]?.content ?? activeQuestion?.starter_code.python ?? "");
+  const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState?.selected_language ?? "python"));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
@@ -41,7 +87,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     const saving = window.setTimeout(() => setSaveState("saving"), 450);
     const saved = window.setTimeout(async () => {
       try {
-        const activeFile = language === "javascript" ? "main.js" : "main.py";
+        const activeFile = getFileNameForLanguage(language);
         const savedWorkspace = await autosaveWorkspace(
           backendAttemptId,
           activeQuestionId,
@@ -49,7 +95,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
           activeFile,
           code
         );
-        setQuestionStates(savedWorkspace.questions);
+        setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
         setSaveState("saved");
       } catch (exception) {
         setError(exception instanceof Error ? exception.message : "Autosave failed.");
@@ -62,9 +108,82 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     };
   }, [activeQuestionId, backendAttemptId, code, language]);
 
+  function persistCurrentCode(nextQuestionStates = questionStates) {
+    const activeFile = getFileNameForLanguage(language);
+    return {
+      ...nextQuestionStates,
+      [activeQuestionId]: {
+        ...(nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language)),
+        selected_language: language,
+        active_file: activeFile,
+        files: {
+          ...(nextQuestionStates[activeQuestionId]?.files ?? {}),
+          [activeFile]: { language, content: code }
+        },
+        last_saved_at: nextQuestionStates[activeQuestionId]?.last_saved_at ?? new Date().toISOString(),
+        version: nextQuestionStates[activeQuestionId]?.version ?? 0
+      }
+    };
+  }
+
+  function updateCode(nextCode: string) {
+    setCode(nextCode);
+    setQuestionStates((current) => {
+      const activeFile = getFileNameForLanguage(language);
+      const currentQuestionState = current[activeQuestionId] ?? createQuestionState(activeQuestion, language);
+
+      return {
+        ...current,
+        [activeQuestionId]: {
+          ...currentQuestionState,
+          selected_language: language,
+          active_file: activeFile,
+          files: {
+            ...currentQuestionState.files,
+            [activeFile]: { language, content: nextCode }
+          }
+        }
+      };
+    });
+  }
+
   function switchLanguage(nextLanguage: Language) {
+    const nextQuestionStates = persistCurrentCode();
+    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, nextLanguage);
+    const nextFile = getFileNameForLanguage(nextLanguage);
+    const nextCode = currentQuestionState.files[nextFile]?.content ?? activeQuestion?.starter_code[nextLanguage] ?? "";
+
+    setQuestionStates({
+      ...nextQuestionStates,
+      [activeQuestionId]: {
+        ...currentQuestionState,
+        selected_language: nextLanguage,
+        active_file: nextFile,
+        files: {
+          ...currentQuestionState.files,
+          [nextFile]: {
+            language: nextLanguage,
+            content: nextCode
+          }
+        }
+      }
+    });
     setLanguage(nextLanguage);
-    setCode(activeQuestion?.starter_code[nextLanguage] ?? "");
+    setCode(nextCode);
+  }
+
+  function switchQuestion(question: Question) {
+    const nextQuestionStates = persistCurrentCode();
+    const nextState = nextQuestionStates[question.question_id] ?? createQuestionState(question);
+    const nextLanguage = nextState.selected_language;
+
+    setQuestionStates({
+      ...nextQuestionStates,
+      [question.question_id]: nextState
+    });
+    setActiveQuestionId(question.question_id);
+    setLanguage(nextLanguage);
+    setCode(getCodeFromState(nextState, question, nextLanguage));
   }
 
   async function handleRun() {
@@ -121,6 +240,8 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     }
   }
 
+  const activeFile = getFileNameForLanguage(language);
+
   return (
     <div className="grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
       <aside className="panel flex min-h-0 min-w-0 flex-col rounded-xl p-3">
@@ -135,23 +256,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
           {assessment.questions.map((question, index) => (
             <button
               key={question.question_id}
-              onClick={() => {
-                const activeFile = language === "javascript" ? "main.js" : "main.py";
-                setQuestionStates((current) => ({
-                  ...current,
-                  [activeQuestionId]: {
-                    selected_language: language,
-                    active_file: activeFile,
-                    files: { [activeFile]: { language, content: code } },
-                    last_saved_at: new Date().toISOString(),
-                    version: current[activeQuestionId]?.version ?? 0
-                  }
-                }));
-                const nextState = questionStates[question.question_id];
-                setActiveQuestionId(question.question_id);
-                setLanguage(nextState?.selected_language ?? "python");
-                setCode(nextState?.files[nextState.active_file]?.content ?? question.starter_code.python ?? "");
-              }}
+              onClick={() => switchQuestion(question)}
               className={`w-full rounded-xl border p-3 text-left transition ${
                 question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10" : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
@@ -203,12 +308,13 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
           <span className="rounded-t-xl border border-b-0 border-cyanGlow/30 bg-black/30 px-4 py-2 font-mono text-xs text-cyanGlow">
-            {language === "python" ? "main.py" : "main.js"}
+            {activeFile}
           </span>
           <label className="ml-auto hidden text-xs text-white/40 xl:inline" htmlFor="language">Language</label>
           <select id="language" className="field py-2" value={language} onChange={(event) => switchLanguage(event.target.value as Language)}>
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
+            {STUDENT_LANGUAGES.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
           <button className="btn-secondary px-4 py-2" onClick={handleRun} disabled={runState === "running"}>
             <Play size={16} />
@@ -217,15 +323,13 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
         </div>
         <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_176px]">
           <div className="min-h-0 bg-black/30 p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs text-white/35">
-              <Code2 size={14} />
-              <span>TODO(Monaco): replace textarea fallback with Monaco Editor when dependency is approved.</span>
-            </div>
-            <textarea
-              className="scrollbar-soft h-full w-full resize-none rounded-2xl border border-white/10 bg-[#080b14] p-4 font-mono text-sm leading-7 text-white/85 outline-none focus:border-cyanGlow/60"
+            <MonacoCodeEditor
+              assessmentId={assessment.assessment_id}
+              questionId={activeQuestionId}
+              fileName={activeFile}
+              language={language}
               value={code}
-              spellCheck={false}
-              onChange={(event) => setCode(event.target.value)}
+              onChange={updateCode}
             />
           </div>
           <div className="border-t border-white/10 bg-black/25 p-3">

@@ -264,6 +264,17 @@ Student-facing assessment context must never return:
 
 Frontend should not manually manage or persist `session_id`. The backend should identify the current user from JWT/auth context and resolve the active assessment attempt internally from `user_id + assessment_id`.
 
+### Session/attempt terminology alignment
+
+The architecture PDF uses `session_id` in some schemas to describe the assessment-session identifier. For the current frontend/backend contract, use `attempt` as the product concept and treat any `session_id` field as a backend-owned compatibility name for the same active assessment attempt.
+
+Canonical rule:
+- One authenticated user may have one active attempt/session for a given assessment in the MVP.
+- The backend creates, resumes, validates, and owns that attempt/session.
+- The frontend must not create, store, or trust a real `session_id`.
+- The frontend should use assessment-scoped APIs where the backend derives the active attempt from auth context.
+- If the current backend still requires a session-shaped identifier for workspace/run/submit endpoints, the frontend may pass the backend-returned attempt id as a transient in-memory `backendAttemptId`. It must not be stored in localStorage, exposed as trusted state, or treated as a replacement for backend authorization.
+
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
 | P0 | POST | `/api/v1/student/assessments/{assessment_id}/start` | Start or resume the authenticated user's assessment attempt |
@@ -284,7 +295,8 @@ Frontend should not manually manage or persist `session_id`. The backend should 
 
 ### Attempt decisions
 
-- Frontend does not send or store a real `session_id`.
+- Target contract: frontend does not send or store a real `session_id`; the backend derives the active attempt from auth context.
+- Interim compatibility: frontend may pass a backend-returned attempt/session-shaped id only when an existing backend endpoint still requires it. Keep it in memory only.
 - Backend resolves the active attempt from authenticated user + assessment_id.
 - Future backend decision: whether one user can have multiple attempts for the same assessment. MVP UI assumes one active attempt at a time and does not expose an attempt identifier.
 - Timer source of truth: backend `expires_at` and `server_time`.
@@ -293,7 +305,7 @@ Frontend should not manually manage or persist `session_id`. The backend should 
 
 ## 8. Workspace APIs
 
-Workspace APIs are assessment-scoped. The backend uses JWT/auth context to identify the user and resolve the active attempt. The frontend sends `assessment_id` and `question_id`, but not `session_id`.
+Workspace APIs are assessment-scoped. The backend uses JWT/auth context to identify the user and resolve the active attempt. In the target contract, the frontend sends `assessment_id` and `question_id`, but not `session_id`. During backend compatibility work, a transient in-memory `backendAttemptId` may be passed only to endpoints that still require the older session-shaped parameter.
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|

@@ -78,7 +78,7 @@ The AI Agent must obey these constraints:
 - Do not call external AI APIs.
 - Do not expose hidden test cases in student-facing UI.
 - Do not modify backend, database schema, sandbox, or AI provider logic.
-- Use mock data only. Frontend MVP must not manage a real `session_id`; use a mock active assessment attempt if needed.
+- Frontend MVP must not manage a real `session_id`. In a mock-only flow, use mock active assessment attempt state if needed. In a backend-connected flow, keep any backend-returned attempt/session-shaped identifier in memory only as a transient compatibility value.
 - Use `TODO(API)` comments where backend calls will be inserted later.
 
 Framework decision for this project:
