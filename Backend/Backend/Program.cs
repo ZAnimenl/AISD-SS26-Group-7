@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseUrls("http://localhost:5040");
+builder.WebHost.UseUrls(builder.Configuration["BackendUrls"] ?? "http://localhost:5040");
 
 builder.Services.Configure<JsonOptions>(options =>
 {
@@ -76,7 +76,7 @@ static async Task SeedDatabaseAsync(WebApplication app)
     }
     catch (Exception exception)
     {
-        app.Logger.LogWarning(exception, "Database initialization failed. Verify PostgreSQL is running on localhost:5433.");
+        Backend.StartupDiagnostics.LogDatabaseInitializationFailure(app.Logger, exception);
     }
 }
 
