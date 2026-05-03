@@ -234,7 +234,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     setError(null);
     try {
       await finalizeSubmission(backendAttemptId);
-      router.push("/");
+      router.push(`/student/assessments/${assessment.assessment_id}/review`);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");
     }
