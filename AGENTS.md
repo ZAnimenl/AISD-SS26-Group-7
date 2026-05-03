@@ -1,4 +1,4 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 This file is the global orchestration guide for coding agents working in this repository.
 
@@ -17,7 +17,7 @@ Before planning or modifying code, inspect the relevant specification documents.
 
 Follow this priority order when documents or implementation choices conflict:
 
-1. `requirements.md`
+1. `SPEC.md`
    - Main product/system requirements specification.
    - Defines goals, non-goals, stakeholders, user stories, REQ/NFR statements, constraints, MVP clarifications, and acceptance criteria.
 
@@ -29,12 +29,10 @@ Follow this priority order when documents or implementation choices conflict:
    - Frontend/backend API contract and integration alignment document.
    - Defines endpoint names, request/response shapes, status values, error format, MVP API decisions, mock/TODO(API) rules, and frontend-backend boundaries.
 
-4. `module2_frontend_ui_task.md`, if present
-   - Module 2 frontend task breakdown.
-
-5. `ui-style-reference.md`
+4. `ui-style-reference.md`
    - Visual style reference only.
    - It must not override requirements, architecture, authentication behavior, database schema, existing routes, assessment/submission/reporting behavior, or API contracts.
+
 
 Do not modify these specification documents unless explicitly asked by the user.
 
@@ -91,6 +89,29 @@ When producing a prompt for another agent, include a short `Skills to use` secti
 
 ---
 
+## 2.2 MCP Server Usage
+
+MCP servers are external tools configured in the user's coding-agent environment. They are used during phases that need live documentation, external review context, browser verification, or database/schema inspection. They are not project runtime dependencies and should not be committed with private credentials.
+
+MCP workflow guidance lives in:
+
+```text
+.agents/mcp-usage.md
+```
+
+Use MCP servers as live context or tool access. They do not override `SPEC.md`, the architecture PDF, API alignment docs, module boundaries, security rules, or local skills.
+
+Use by phase:
+
+- Planning/implementation: use `context7` for current library/API documentation.
+- Team review/release/handoff: use `github` for issues, pull requests, branches, CI/checks, and review context.
+- Frontend implementation/review: use `browser` / `playwright` for local route, form, screenshot, and interaction checks.
+- Backend/fullstack integration: use read-only database MCP for schema/data inspection when a database MCP server is configured.
+
+Do not commit MCP OAuth tokens, API keys, bearer tokens, local MCP config, or personal agent settings.
+
+---
+
 # 3. Agent Workflow
 
 ## 3.1 Planning / Commander Work
@@ -111,6 +132,7 @@ The commander should:
 6. Include a `Skills to use` section in generated prompts, with primary and companion skills.
 7. Produce the exact coding-agent prompt for the requested stage.
 8. Produce a review checklist.
+9. Require implementation output to include verification commands, changed files, contract/spec risks, and review status.
 
 The commander must not modify files unless explicitly instructed.
 
@@ -126,10 +148,10 @@ Use the module-router skill.
 
 The router should classify the task into one of:
 
-1. Module 1 — Identity and Assessment Management
-2. Module 2 — Interactive Browser-Based Workspace / Frontend IDE
-3. Module 3 — Sandboxed Code Execution and Evaluation Engine
-4. Module 4 — AI Telemetry and Assistance Service
+1. Module 1 - Identity and Assessment Management
+2. Module 2 - Interactive Browser-Based Workspace / Frontend IDE
+3. Module 3 - Sandboxed Code Execution and Evaluation Engine
+4. Module 4 - AI Telemetry and Assistance Service
 5. Cross-module integration
 
 The router must not modify files.
@@ -261,7 +283,23 @@ Before coding, the agent must state:
 
 ---
 
-## 3.4 Review Work
+## 3.4 Closed Implementation Loop
+
+Every implementation task must end with:
+
+1. Changed files.
+2. Verification commands run, or a clear reason each relevant command could not be run.
+3. API/spec/security risks checked.
+4. Remaining TODOs or open decisions.
+5. Review status:
+   - run `strict-code-reviewer`, or
+   - provide the exact reviewer prompt/checklist if a separate review agent will run next.
+
+Do not treat implementation as complete until this loop is reported.
+
+---
+
+## 3.5 Review Work
 
 Use:
 
@@ -295,7 +333,7 @@ Focus on:
 
 ---
 
-## 3.5 Handoff Work
+## 3.6 Handoff Work
 
 Use:
 
@@ -323,7 +361,7 @@ The handoff must include:
 
 The project follows a four-module architecture.
 
-## Module 1 — Identity and Assessment Management
+## Module 1 - Identity and Assessment Management
 
 Owns:
 
@@ -350,7 +388,7 @@ Must protect:
 
 ---
 
-## Module 2 — Interactive Browser-Based Workspace / Frontend IDE
+## Module 2 - Interactive Browser-Based Workspace / Frontend IDE
 
 Owns:
 
@@ -378,7 +416,7 @@ Must not:
 
 ---
 
-## Module 3 — Sandboxed Code Execution and Evaluation Engine
+## Module 3 - Sandboxed Code Execution and Evaluation Engine
 
 Owns:
 
@@ -399,7 +437,7 @@ Must not:
 
 ---
 
-## Module 4 — AI Telemetry and Assistance Service
+## Module 4 - AI Telemetry and Assistance Service
 
 Owns:
 

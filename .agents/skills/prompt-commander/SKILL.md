@@ -1,4 +1,4 @@
----
+﻿---
 name: prompt-commander
 description: Use this as the planning commander before coding. It reads specs, routes the task to the correct module(s), creates safe prompt for implementation, and produces exact prompts for the coding agent and reviewer.
 ---
@@ -18,7 +18,7 @@ Do not modify files.
 
 Follow this priority order when documents or implementation choices conflict:
 
-1. `requirements.md`
+1. `SPEC.md`
    - Main product/system requirements specification.
    - Defines goals, non-goals, stakeholders, user stories, REQ/NFR statements, constraints, MVP clarifications, and acceptance criteria.
 
@@ -30,21 +30,18 @@ Follow this priority order when documents or implementation choices conflict:
    - Frontend/backend API contract and integration alignment document.
    - Defines endpoint names, request/response shapes, status values, error format, MVP API decisions, mock/TODO(API) rules, and frontend-backend boundaries.
 
-4. `module2_frontend_ui_task.md`, if present
-   - Module 2 task breakdown.
-
-5. `ui-style-reference.md`
+4. `ui-style-reference.md`
    - Visual style reference only.
    - It must not override requirements, architecture, authentication behavior, database schema, existing routes, assessment/submission/reporting behavior, or API contracts.
+
 
 ### Do not modify specification documents unless explicitly asked
 
 Do not modify these files unless the user explicitly asks for documentation/spec changes:
 
-- `requirements.md`
+- `SPEC.md`
 - `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
 - `complete_frontend_api_list_and_backend_alignment.md`
-- `module2_frontend_ui_task.md`
 - `ui-style-reference.md`
 
 If a coding task conflicts with these documents, stop and report the conflict before editing implementation files.
@@ -66,16 +63,16 @@ Do not assume these blindly. Inspect the repository first and report what you fi
 
 The architecture has four non-overlapping modules:
 
-1. **Module 1 — Identity and Assessment Management**
+1. **Module 1 - Identity and Assessment Management**
    - Authentication, RBAC, users, assessments, questions/test cases, attempt/session lifecycle, workspace persistence, submissions, results, reports, and database-backed authoritative state.
 
-2. **Module 2 — Interactive Browser-Based Workspace / Frontend IDE**
+2. **Module 2 - Interactive Browser-Based Workspace / Frontend IDE**
    - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, AI assistant UI, frontend API clients, and visual interaction layer.
 
-3. **Module 3 — Sandboxed Code Execution and Evaluation Engine**
+3. **Module 3 - Sandboxed Code Execution and Evaluation Engine**
    - Isolated execution of untrusted code, resource limits, hidden test evaluation, stdout/stderr capture, execution result schema, workers/queues, cleanup.
 
-4. **Module 4 — AI Telemetry and Assistance Service**
+4. **Module 4 - AI Telemetry and Assistance Service**
    - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured AI responses, rate/error handling.
 
 ### Global security boundaries
@@ -99,7 +96,7 @@ However, the current requirements/API alignment decision says:
 - The frontend must not create, store, or trust a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Any frontend first-MVP attempt/session state must be mock-only.
+- Frontend-only first-MVP attempt/session state may be mock-only; backend-connected work may use backend-returned attempt identifiers only as transient in-memory compatibility values.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 
@@ -128,6 +125,10 @@ When implementing current frontend/backend integration, follow the newer require
 Generated prompts should make skill usage explicit.
 
 Companion skills provide boundary checks and contract awareness. They do not expand implementation scope unless the commander explicitly marks them as primary or approves cross-module work. If the task truly requires edits across modules, make `fullstack-integration-coder` the primary skill or explicitly state the approved cross-module scope.
+
+## MCP / external tooling guidance
+
+When live external context would reduce risk, include a short `MCP/tools to use` section in generated prompts. Prefer Context7 for current library/API documentation such as Next.js, React, Monaco, Tailwind CSS, ASP.NET, EF Core, PostgreSQL, or AI/provider SDKs. MCP output is implementation guidance only; it must not override project specs, API contracts, security rules, or module boundaries.
 
 Use this shape when useful:
 

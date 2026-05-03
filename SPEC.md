@@ -1,4 +1,4 @@
-﻿# requirements.md
+﻿# SPEC.md
 
 ## 1. Overview
 

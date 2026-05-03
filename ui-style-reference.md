@@ -8,7 +8,7 @@ This document is a visual style reference for the Module 2 frontend MVP polish p
 
 It must not override:
 
-- product requirements in requirements.md
+- product requirements in SPEC.md
 
 - authentication behavior
 
