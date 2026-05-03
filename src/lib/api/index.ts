@@ -26,7 +26,6 @@ const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
   : [API_BASE_URL];
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
-const SESSION_PREFIX = "ojsharp.assessment.session.";
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -53,10 +52,19 @@ interface BackendUser {
   created_at?: string;
 }
 
-interface SessionResponse {
+interface BackendAttemptResponse {
   session_id: string;
   assessment_id: string;
   session_status: string;
+  started_at: string;
+  expires_at: string;
+  server_time: string;
+}
+
+interface BackendAttempt {
+  backend_attempt_id: string;
+  assessment_id: string;
+  attempt_status: string;
   started_at: string;
   expires_at: string;
   server_time: string;
@@ -68,18 +76,6 @@ function getToken() {
   }
 
   return window.localStorage.getItem(TOKEN_KEY);
-}
-
-function storeSession(assessmentId: string, sessionId: string) {
-  window.localStorage.setItem(`${SESSION_PREFIX}${assessmentId}`, sessionId);
-}
-
-function getStoredSessionId(assessmentId: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return window.localStorage.getItem(`${SESSION_PREFIX}${assessmentId}`);
 }
 
 async function apiRequest<T>(path: string, init: RequestInit = {}) {
@@ -386,40 +382,37 @@ export async function getAssessment(assessmentId: string) {
 }
 
 export async function startAssessment(assessmentId: string) {
-  const session = await apiRequest<SessionResponse>("/sessions/initiate", {
+  const response = await apiRequest<BackendAttemptResponse>("/sessions/initiate", {
     method: "POST",
     body: JSON.stringify({ assessment_id: assessmentId })
   });
-  storeSession(assessmentId, session.session_id);
-  return session;
+  return normalizeBackendAttempt(response);
 }
 
-export async function getAssessmentAttempt(assessmentId: string) {
-  const sessionId = getStoredSessionId(assessmentId);
-  if (!sessionId) {
-    return startAssessment(assessmentId);
-  }
-
-  return apiRequest<SessionResponse>(`/sessions/${sessionId}`);
+export async function getAssessmentAttempt(backendAttemptId: string) {
+  return normalizeBackendAttempt(await apiRequest<BackendAttemptResponse>(`/sessions/${backendAttemptId}`));
 }
 
-export async function getWorkspaceContext(assessmentId: string, sessionId: string) {
-  return normalizeAssessment(await apiRequest<any>(`/assessments/${assessmentId}/context?sessionId=${sessionId}`));
+export async function getWorkspaceContext(assessmentId: string, backendAttemptId: string) {
+  // Backend gap: current backend context endpoint still requires a sessionId query value.
+  // Keep this transient ID in memory only; do not persist it as frontend-owned assessment state.
+  const query = new URLSearchParams({ sessionId: backendAttemptId });
+  return normalizeAssessment(await apiRequest<any>(`/assessments/${assessmentId}/context?${query}`));
 }
 
-export async function getWorkspace(sessionId: string) {
-  return apiRequest<WorkspaceState>(`/sessions/${sessionId}/workspace`);
+export async function getWorkspace(backendAttemptId: string) {
+  return apiRequest<WorkspaceState>(`/sessions/${backendAttemptId}/workspace`);
 }
 
 export async function autosaveWorkspace(
-  sessionId: string,
+  backendAttemptId: string,
   questionId: string,
   selectedLanguage: Language,
   activeFile: string,
   content: string,
   version?: number
 ) {
-  return apiRequest<WorkspaceState>(`/sessions/${sessionId}/workspace`, {
+  return apiRequest<WorkspaceState>(`/sessions/${backendAttemptId}/workspace`, {
     method: "PUT",
     body: JSON.stringify({
       questions: {
@@ -440,7 +433,7 @@ export async function autosaveWorkspace(
 }
 
 export async function runCode(input: {
-  session_id: string;
+  backend_attempt_id: string;
   assessment_id: string;
   question_id: string;
   selected_language: Language;
@@ -448,19 +441,25 @@ export async function runCode(input: {
 }) {
   return apiRequest<RunResult>("/executions/run", {
     method: "POST",
-    body: JSON.stringify(input)
+    body: JSON.stringify({
+      session_id: input.backend_attempt_id,
+      assessment_id: input.assessment_id,
+      question_id: input.question_id,
+      selected_language: input.selected_language,
+      active_file_content: input.active_file_content
+    })
   });
 }
 
-export async function finalizeSubmission(sessionId: string) {
+export async function finalizeSubmission(backendAttemptId: string) {
   return apiRequest<SubmissionResult>("/submissions/finalize", {
     method: "POST",
-    body: JSON.stringify({ session_id: sessionId })
+    body: JSON.stringify({ session_id: backendAttemptId })
   });
 }
 
 export async function getAiResponse(input: {
-  session_id: string;
+  backend_attempt_id: string;
   assessment_id: string;
   question_id: string;
   interaction_type: AiInteractionType;
@@ -470,7 +469,15 @@ export async function getAiResponse(input: {
 }) {
   const response = await apiRequest<{ response_markdown: string }>("/ai/chat", {
     method: "POST",
-    body: JSON.stringify(input)
+    body: JSON.stringify({
+      session_id: input.backend_attempt_id,
+      assessment_id: input.assessment_id,
+      question_id: input.question_id,
+      interaction_type: input.interaction_type,
+      message: input.message,
+      selected_language: input.selected_language,
+      active_file_content: input.active_file_content
+    })
   });
   return response.response_markdown;
 }
@@ -597,4 +604,15 @@ function normalizeAttemptStatus(value: string | undefined): AttemptStatus {
   }
 
   return "not_started";
+}
+
+function normalizeBackendAttempt(response: BackendAttemptResponse): BackendAttempt {
+  return {
+    backend_attempt_id: response.session_id,
+    assessment_id: response.assessment_id,
+    attempt_status: response.session_status,
+    started_at: response.started_at,
+    expires_at: response.expires_at,
+    server_time: response.server_time
+  };
 }
