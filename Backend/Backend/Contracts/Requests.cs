@@ -24,7 +24,7 @@ public sealed record QuestionRequest(
     int SortOrder,
     int MaxScore);
 
-public sealed record TestCaseRequest(string Name, string Visibility, string Input, string ExpectedOutput);
+public sealed record TestCaseRequest(string Name, string Visibility, Dictionary<string, string> TestCode);
 
 public sealed record InitiateSessionRequest(Guid AssessmentId);
 

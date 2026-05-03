@@ -50,9 +50,17 @@ public static class SubmissionEndpoints
         {
             var question = session.Assessment!.Questions.First(item => item.Id == state.QuestionId);
             var tests = await dbContext.TestCases.Where(testCase => testCase.QuestionId == state.QuestionId).ToListAsync(cancellationToken);
-            var content = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>())
-                .Values.FirstOrDefault()?.Content ?? string.Empty;
-            var passed = evaluationService.IsMeaningfulCode(content);
+            var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+            var content = files.TryGetValue(state.ActiveFile, out var activeFile)
+                ? activeFile.Content
+                : files.Values.FirstOrDefault()?.Content ?? string.Empty;
+            var result = await evaluationService.EvaluateAsync(
+                Guid.NewGuid(),
+                tests,
+                content,
+                state.SelectedLanguage,
+                cancellationToken);
+            var score = evaluationService.CalculateScore(question.MaxScore, result.TestResults);
             var visibleTotal = tests.Count(testCase => testCase.Visibility == TestCaseVisibilities.Public);
             var hiddenTotal = tests.Count(testCase => testCase.Visibility == TestCaseVisibilities.Hidden);
             var submission = new Submission
@@ -60,17 +68,17 @@ public static class SubmissionEndpoints
                 Id = Guid.NewGuid(),
                 SessionId = session.Id,
                 QuestionId = state.QuestionId,
-                EvaluationStatus = passed ? ExecutionStatuses.Passed : ExecutionStatuses.Failed,
-                Score = passed ? question.MaxScore : 0,
+                EvaluationStatus = result.Status,
+                Score = score,
                 MaxScore = question.MaxScore,
-                Stdout = passed ? "All tests passed." : null,
-                Stderr = passed ? null : "Submission did not pass validation.",
+                Stdout = result.Stdout,
+                Stderr = result.Stderr,
                 FilesJson = state.FilesJson,
-                VisiblePassed = passed ? visibleTotal : 0,
-                VisibleFailed = passed ? 0 : visibleTotal,
+                VisiblePassed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Public && testResult.Passed),
+                VisibleFailed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Public && !testResult.Passed),
                 VisibleTotal = visibleTotal,
-                HiddenPassed = passed ? hiddenTotal : 0,
-                HiddenFailed = passed ? 0 : hiddenTotal,
+                HiddenPassed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Hidden && testResult.Passed),
+                HiddenFailed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Hidden && !testResult.Passed),
                 HiddenTotal = hiddenTotal,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
@@ -84,7 +92,7 @@ public static class SubmissionEndpoints
 
         var totalScore = allSubmissions.Sum(submission => submission.Score);
         var maxScore = allSubmissions.Sum(submission => submission.MaxScore);
-        var status = totalScore == maxScore ? ExecutionStatuses.Passed : ExecutionStatuses.Failed;
+        var status = BuildFinalStatus(allSubmissions, totalScore, maxScore);
         return ApiResults.Success(new
         {
             submission_id = allSubmissions.FirstOrDefault()?.Id ?? Guid.Empty,
@@ -107,6 +115,18 @@ public static class SubmissionEndpoints
                 total = allSubmissions.Sum(submission => submission.HiddenTotal)
             }
         });
+    }
+
+    private static string BuildFinalStatus(IReadOnlyCollection<Submission> submissions, int totalScore, int maxScore)
+    {
+        if (maxScore > 0 && totalScore == maxScore)
+        {
+            return ExecutionStatuses.Passed;
+        }
+
+        return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)
+            ? ExecutionStatuses.RuntimeError
+            : ExecutionStatuses.Failed;
     }
 
     private static async Task<IResult> HistoryAsync(

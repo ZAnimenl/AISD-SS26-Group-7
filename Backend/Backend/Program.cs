@@ -3,6 +3,7 @@ using Backend.Api;
 using Backend.Configuration;
 using Backend.Persistence;
 using Backend.Services;
+using Backend.Services.Grading;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,9 +36,11 @@ builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<SessionClock>();
 builder.Services.AddSingleton<AssessmentProjectionService>();
 builder.Services.AddSingleton<WorkspaceProjectionService>();
+builder.Services.AddSingleton<ICodeRunner, DockerCodeRunner>();
 builder.Services.AddSingleton<CodeEvaluationService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.AddScoped<DemoDataSeeder>();
+builder.Services.AddScoped<SchemaCompatibilityService>();
 builder.Services.Configure<SeedAdminOptions>(builder.Configuration.GetSection(SeedAdminOptions.SectionName));
 
 var app = builder.Build();
@@ -72,6 +75,7 @@ static async Task SeedDatabaseAsync(WebApplication app)
         await using var scope = app.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OjSharpDbContext>();
         await dbContext.Database.EnsureCreatedAsync();
+        await scope.ServiceProvider.GetRequiredService<SchemaCompatibilityService>().EnsureAsync(CancellationToken.None);
         await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);
     }
     catch (Exception exception)

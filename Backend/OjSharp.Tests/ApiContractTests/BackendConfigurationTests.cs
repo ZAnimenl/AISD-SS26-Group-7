@@ -52,6 +52,23 @@ public sealed class BackendConfigurationTests
         Assert.Equal("password", seedAdmin.GetProperty("Password").GetString());
     }
 
+    [Fact]
+    public void Schema_compatibility_sql_escapes_json_default_for_execute_sql_raw()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Persistence",
+            "SchemaCompatibilityService.cs"));
+
+        Assert.Contains("DEFAULT '{{}}'", source);
+        Assert.DoesNotContain("DEFAULT '{}'", source);
+        Assert.Contains("ALTER COLUMN \"Input\" DROP NOT NULL", source);
+        Assert.Contains("ALTER COLUMN \"ExpectedOutput\" DROP NOT NULL", source);
+        Assert.Contains("test_solution_exists", source);
+        Assert.Contains("ExecuteSqlInterpolatedAsync", source);
+    }
+
     private static JsonDocument ReadAppsettings(string fileName)
     {
         var solutionDirectory = FindSolutionDirectory();

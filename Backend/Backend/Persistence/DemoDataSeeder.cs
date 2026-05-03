@@ -91,11 +91,12 @@ public sealed class DemoDataSeeder(
             AssessmentId = assessment.Id,
             Title = "Array Sum",
             ProblemDescriptionMarkdown = "## Task\nWrite a function that returns the sum of an array.",
-            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript" }),
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript", "typescript" }),
             StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
             {
                 ["python"] = "def solve(arr):\n    pass\n",
-                ["javascript"] = "function solve(arr) {\n  // TODO\n}\n"
+                ["javascript"] = "function solve(arr) {\n  // TODO\n}\n",
+                ["typescript"] = "function solve(arr: number[]): number {\n  return 0;\n}\n"
             }),
             SortOrder = 1,
             MaxScore = 50,
@@ -106,16 +107,20 @@ public sealed class DemoDataSeeder(
                     Id = Guid.Parse("66666666-6666-6666-6666-666666666666"),
                     Name = "sample test 1",
                     Visibility = TestCaseVisibilities.Public,
-                    Input = "[1,2,3]",
-                    ExpectedOutput = "6"
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_sample_sum():\n    assert solve([1, 2, 3]) == 6\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"sample sum\", () => {\n  expect(solve([1, 2, 3])).toBe(6);\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"sample sum\", () => {\n  expect(solve([1, 2, 3])).toBe(6);\n});\n"))
                 },
                 new TestCase
                 {
                     Id = Guid.Parse("77777777-7777-7777-7777-777777777777"),
                     Name = "hidden mixed signs",
                     Visibility = TestCaseVisibilities.Hidden,
-                    Input = "[-3,5,10]",
-                    ExpectedOutput = "12"
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_mixed_signs():\n    assert solve([-3, 5, 10]) == 12\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"mixed signs\", () => {\n  expect(solve([-3, 5, 10])).toBe(12);\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"mixed signs\", () => {\n  expect(solve([-3, 5, 10])).toBe(12);\n});\n"))
                 }
             ]
         });
@@ -126,11 +131,12 @@ public sealed class DemoDataSeeder(
             AssessmentId = assessment.Id,
             Title = "Reverse String",
             ProblemDescriptionMarkdown = "## Task\nReturn the input string in reverse order.",
-            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript" }),
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript", "typescript" }),
             StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
             {
                 ["python"] = "def solve(value):\n    pass\n",
-                ["javascript"] = "function solve(value) {\n  // TODO\n}\n"
+                ["javascript"] = "function solve(value) {\n  // TODO\n}\n",
+                ["typescript"] = "function solve(value: string): string {\n  return \"\";\n}\n"
             }),
             SortOrder = 2,
             MaxScore = 50,
@@ -141,21 +147,35 @@ public sealed class DemoDataSeeder(
                     Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
                     Name = "sample test 1",
                     Visibility = TestCaseVisibilities.Public,
-                    Input = "hello",
-                    ExpectedOutput = "olleh"
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_reverse_word():\n    assert solve(\"hello\") == \"olleh\"\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"reverse word\", () => {\n  expect(solve(\"hello\")).toBe(\"olleh\");\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"reverse word\", () => {\n  expect(solve(\"hello\")).toBe(\"olleh\");\n});\n"))
                 },
                 new TestCase
                 {
                     Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
                     Name = "hidden palindrome",
                     Visibility = TestCaseVisibilities.Hidden,
-                    Input = "level",
-                    ExpectedOutput = "level"
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_palindrome():\n    assert solve(\"level\") == \"level\"\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"palindrome\", () => {\n  expect(solve(\"level\")).toBe(\"level\");\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"palindrome\", () => {\n  expect(solve(\"level\")).toBe(\"level\");\n});\n"))
                 }
             ]
         });
 
         dbContext.Assessments.Add(assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static Dictionary<string, string> TestCode(string python, string javascript, string typescript)
+    {
+        return new Dictionary<string, string>
+        {
+            ["python"] = python,
+            ["javascript"] = javascript,
+            ["typescript"] = typescript
+        };
     }
 }

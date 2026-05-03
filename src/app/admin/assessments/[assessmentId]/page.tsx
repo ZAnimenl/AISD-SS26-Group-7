@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAdminAssessment, updateAssessment } from "@/lib/api";
+import { getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage({ params }: { params: { assessmentId: string } }) {
@@ -15,7 +15,16 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminAssessment(params.assessmentId).then(setAssessment).catch(() => router.replace("/login"));
+    getAdminAssessment(params.assessmentId)
+      .then(setAssessment)
+      .catch((exception) => {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load assessment.");
+      });
   }, [params.assessmentId, router]);
 
   async function saveAssessment(event: React.FormEvent<HTMLFormElement>) {
@@ -25,17 +34,24 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
     }
 
     const form = new FormData(event.currentTarget);
+    const nextAssessment = {
+      ...assessment,
+      title: String(form.get("title") ?? assessment.title),
+      description: String(form.get("description") ?? assessment.description),
+      duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
+      status: String(form.get("status") ?? assessment.status) as AssessmentStatus
+    };
     setError(null);
     try {
-      await updateAssessment({
-        ...assessment,
-        title: String(form.get("title") ?? assessment.title),
-        description: String(form.get("description") ?? assessment.description),
-        duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
-        status: String(form.get("status") ?? assessment.status) as AssessmentStatus
-      });
+      await updateAssessment(nextAssessment);
+      setAssessment(nextAssessment);
       setSaved(true);
     } catch (exception) {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
       setError(exception instanceof Error ? exception.message : "Unable to save assessment.");
     }
   }

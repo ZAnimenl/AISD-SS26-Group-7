@@ -75,6 +75,7 @@ public static class AssessmentEndpoints
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
         AssessmentProjectionService projectionService,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -82,6 +83,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = await dbContext.Assessments
             .Include(item => item.Questions.OrderBy(question => question.SortOrder))

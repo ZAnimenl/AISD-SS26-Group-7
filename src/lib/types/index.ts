@@ -1,5 +1,5 @@
 export type Role = "student" | "administrator";
-export type Language = "python" | "javascript";
+export type Language = "python" | "javascript" | "typescript";
 export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
@@ -20,25 +20,20 @@ export type UserAccount = Required<Pick<MockUser, "user_id" | "full_name" | "ema
 export interface StarterCode {
   python: string;
   javascript: string;
+  typescript: string;
 }
 
 export interface PublicTestCase {
   test_case_id: string;
   name: string;
   visibility: "public";
-  input: string;
-  expected_output: string;
 }
 
 export interface AdminTestCase {
   test_case_id: string;
   name: string;
   visibility: "public" | "hidden";
-  input?: string;
-  expected_output?: string;
-  input_preview: string;
-  expected_output_preview: string;
-  points?: number;
+  test_code: Record<Language, string>;
 }
 
 export interface Question {
@@ -97,8 +92,7 @@ export interface RunResult {
     name: string;
     visibility: "public";
     passed: boolean;
-    actual_output: string;
-    expected_output: string;
+    output: string;
   }>;
   metrics: {
     cpu_time_seconds: number;

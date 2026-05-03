@@ -46,30 +46,38 @@ public static class ExecutionEndpoints
             .Where(testCase => testCase.QuestionId == request.QuestionId && testCase.Visibility == TestCaseVisibilities.Public)
             .ToListAsync(cancellationToken);
         var executionId = Guid.NewGuid();
-        var result = evaluationService.BuildRunResult(executionId, publicTests, request.ActiveFileContent);
+        var result = await evaluationService.EvaluateAsync(
+            executionId,
+            publicTests,
+            request.ActiveFileContent,
+            request.SelectedLanguage,
+            cancellationToken);
 
         dbContext.ExecutionRecords.Add(new ExecutionRecord
         {
             Id = executionId,
             SessionId = request.SessionId,
             QuestionId = request.QuestionId,
-            Status = evaluationService.IsMeaningfulCode(request.ActiveFileContent) ? ExecutionStatuses.Passed : ExecutionStatuses.Failed,
-            Stdout = evaluationService.IsMeaningfulCode(request.ActiveFileContent) ? "Sample tests passed.\n" : null,
-            Stderr = evaluationService.IsMeaningfulCode(request.ActiveFileContent) ? null : "No executable solution was detected.",
-            TestResultsJson = JsonDocumentSerializer.Serialize(publicTests.Select(testCase => new
+            Status = result.Status,
+            Stdout = result.Stdout,
+            Stderr = result.Stderr,
+            TestResultsJson = JsonDocumentSerializer.Serialize(result.TestResults.Select(testResult => new
             {
-                testCase.Name,
-                testCase.Visibility,
-                passed = evaluationService.IsMeaningfulCode(request.ActiveFileContent),
-                actual_output = evaluationService.IsMeaningfulCode(request.ActiveFileContent) ? testCase.ExpectedOutput : "",
-                expected_output = testCase.ExpectedOutput
+                testResult.Name,
+                testResult.Visibility,
+                passed = testResult.Passed,
+                output = testResult.Output
             })),
-            MetricsJson = JsonDocumentSerializer.Serialize(new { cpu_time_seconds = 0.04, peak_memory_kb = 12000 }),
+            MetricsJson = JsonDocumentSerializer.Serialize(new
+            {
+                cpu_time_seconds = result.Metrics.CpuTimeSeconds,
+                peak_memory_kb = result.Metrics.PeakMemoryKb
+            }),
             CreatedAt = DateTimeOffset.UtcNow
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ApiResults.Success(result);
+        return ApiResults.Success(evaluationService.ToApiObject(result));
     }
 
     private static async Task<IResult> GetAsync(

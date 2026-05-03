@@ -73,8 +73,7 @@ public sealed class AssessmentProjectionService
                             test_case_id = testCase.Id,
                             testCase.Name,
                             testCase.Visibility,
-                            testCase.Input,
-                            expected_output = testCase.ExpectedOutput
+                            test_code = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>())
                         })
                 })
         };
