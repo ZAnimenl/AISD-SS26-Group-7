@@ -18,7 +18,12 @@ import type {
   WorkspaceState
 } from "@/lib/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5040/api/v1";
+const DEFAULT_API_BASE_URL = "http://localhost:5040/api/v1";
+const LOCAL_FALLBACK_API_BASE_URL = "http://localhost:5041/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
+  ? [DEFAULT_API_BASE_URL, LOCAL_FALLBACK_API_BASE_URL]
+  : [API_BASE_URL];
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
 const SESSION_PREFIX = "ojsharp.assessment.session.";
@@ -27,6 +32,11 @@ interface ApiResponse<T> {
   ok: boolean;
   data: T | null;
   error: { code: string; message: string } | null;
+}
+
+interface ParsedApiResponse<T> {
+  payload: ApiResponse<T> | null;
+  bodyText: string;
 }
 
 interface LoginResponse {
@@ -85,18 +95,71 @@ async function apiRequest<T>(path: string, init: RequestInit = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store"
-  });
-  const payload = (await response.json()) as ApiResponse<T>;
+  const response = await fetchApi(path, init, headers);
 
-  if (!response.ok || !payload.ok) {
+  const { payload, bodyText } = await parseApiResponse<T>(response);
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error?.message
+        ?? getPlainTextError(bodyText)
+        ?? `Backend request failed with ${response.status}`
+    );
+  }
+
+  if (!payload) {
+    throw new Error(`Backend returned an invalid response (${response.status}).`);
+  }
+
+  if (!payload.ok) {
     throw new Error(payload.error?.message ?? `Backend request failed with ${response.status}`);
   }
 
   return payload.data as T;
+}
+
+async function fetchApi(path: string, init: RequestInit, headers: Headers) {
+  for (let index = 0; index < API_BASE_URLS.length; index += 1) {
+    const baseUrl = API_BASE_URLS[index];
+
+    try {
+      return await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers,
+        cache: "no-store"
+      });
+    } catch {
+      if (index === API_BASE_URLS.length - 1) {
+        throw new Error("Backend is unreachable. Please check that the backend server is running.");
+      }
+    }
+  }
+
+  throw new Error("Backend is unreachable. Please check that the backend server is running.");
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ParsedApiResponse<T>> {
+  const bodyText = await response.text();
+
+  if (!bodyText.trim()) {
+    return { payload: null, bodyText };
+  }
+
+  try {
+    return { payload: JSON.parse(bodyText) as ApiResponse<T>, bodyText };
+  } catch {
+    return { payload: null, bodyText };
+  }
+}
+
+function getPlainTextError(bodyText: string) {
+  const message = bodyText.trim();
+
+  if (!message) {
+    return null;
+  }
+
+  return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
 export function getStoredUser() {
