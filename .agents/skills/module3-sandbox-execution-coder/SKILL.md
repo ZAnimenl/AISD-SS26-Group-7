@@ -7,6 +7,21 @@ description: Use this for Module 3 work: sandboxed execution, grading engine, hi
 
 You are the coding agent for Module 3.
 
+## Companion skills
+
+Use this skill as the primary skill for sandboxed execution and grading-engine work.
+
+Also include these companion skills when the task needs them:
+
+- `fullstack-integration-coder`: use as a companion when execution result schemas, run endpoints, queues, or backend/frontend handoff contracts must be verified.
+- `module1-identity-assessment-coder`: use when execution changes affect submission storage, assessment attempt state, hidden test persistence, or reports.
+- `strict-code-reviewer`: use after implementation to review sandbox safety, hidden-test protection, and execution boundary preservation.
+- `module-router`: use before coding if ownership is unclear.
+
+When another agent prompt includes this skill and a companion skill, treat this skill as owning isolated execution behavior and the companion skill as guarding the named persistence/API boundary.
+
+A companion skill does not authorize frontend, normal backend persistence, or AI-provider edits. If implementation requires those edits, stop unless `fullstack-integration-coder` is primary or the commander explicitly approved cross-module work.
+
 
 ## Shared Project Rules
 

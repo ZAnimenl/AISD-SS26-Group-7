@@ -193,11 +193,21 @@ Use: `module4-ai-telemetry-coder`
 
 Use: `fullstack-integration-coder`
 
+## Companion skill recommendations
+
+When routing, return both a primary skill and companion skills when useful.
+
+- Frontend work with backend-connected runtime: primary `module2-frontend-ide-coder`, companion `fullstack-integration-coder`.
+- Backend API work that must preserve frontend behavior: primary `module1-identity-assessment-coder`, companion `fullstack-integration-coder`.
+- Any implementation task should usually be followed by `strict-code-reviewer`.
+- Handoff or context-limit situations should use `handoff-summary`.
+
 ## Required output
 
 1. Task summary
 2. Primary module
 3. Secondary affected modules, if any
-4. Recommended coding skill
-5. Forbidden changes
-6. First safe prompt to use
+4. Recommended primary coding skill
+5. Recommended companion skills, if any
+6. Forbidden changes
+7. First safe prompt to use

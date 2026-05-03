@@ -9,6 +9,22 @@ You are the cross-module integration coding agent.
 
 Use this only when the task genuinely touches more than one module or connects frontend and backend.
 
+## Companion skills
+
+Use this skill as the primary skill for cross-module integration, or as a companion skill when a module-specific coder needs API-boundary support.
+
+Common pairings:
+
+- With `module2-frontend-ide-coder`: verify frontend API calls, auth behavior, workspace/run/submit/AI request shapes, error handling, and session/attempt alignment.
+- With `module1-identity-assessment-coder`: verify backend endpoint contracts, DTOs, auth/RBAC, and frontend consumer compatibility.
+- With `module3-sandbox-execution-coder`: verify execution API handoff and that frontend/backend do not bypass sandbox boundaries.
+- With `module4-ai-telemetry-coder`: verify AI service API contracts and that frontend never calls provider APIs directly.
+- Follow implementation with `strict-code-reviewer`.
+
+When used as a companion, do not take ownership away from the primary module skill. Guard the integration contract and module boundary.
+
+As a companion skill, this skill provides API/auth/data-flow awareness only. It does not authorize edits outside the primary skill's module unless the commander explicitly approved cross-module work. Use this skill as primary when the task truly requires coordinated frontend and backend implementation.
+
 
 ## Shared Project Rules
 

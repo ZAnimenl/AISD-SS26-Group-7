@@ -7,6 +7,20 @@ description: Use this for Module 2 work: frontend UI, browser-based IDE, Monaco/
 
 You are the coding agent for Module 2.
 
+## Companion skills
+
+Use this skill as the primary skill for frontend IDE/UI work.
+
+Also include these companion skills when the task needs them:
+
+- `fullstack-integration-coder`: use as a companion when frontend changes touch live backend API contracts, auth flow, workspace/run/submit/AI request shapes, or frontend/backend mismatch fixes.
+- `strict-code-reviewer`: use after implementation to review spec compliance, hidden-test protection, frontend/backend contracts, and build results.
+- `module-router`: use before coding if ownership is unclear.
+
+When another agent prompt includes this skill and a companion skill, treat this skill as owning frontend files and the companion skill as guarding the boundary it names.
+
+A companion skill does not authorize backend, database, sandbox, or AI-provider edits. If implementation requires those edits, stop unless `fullstack-integration-coder` is primary or the commander explicitly approved cross-module work.
+
 
 ## Shared Project Rules
 
@@ -142,6 +156,7 @@ When implementing current frontend/backend integration, follow the newer require
 If frontend is connected to backend:
 
 - Use existing backend API contracts.
+- If request/response shapes or endpoint names are uncertain, consult `fullstack-integration-coder` guidance before editing.
 - Do not invent endpoints if backend already has routes.
 - Handle backend-down, non-JSON, 401, 403, 404, and 500 errors gracefully.
 - Preserve auth token/cookie behavior already used by the project.

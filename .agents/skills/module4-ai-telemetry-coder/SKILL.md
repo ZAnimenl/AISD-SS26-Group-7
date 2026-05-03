@@ -7,6 +7,22 @@ description: Use this for Module 4 work: AI assistance service, secure AI proxy,
 
 You are the coding agent for Module 4.
 
+## Companion skills
+
+Use this skill as the primary skill for AI backend, proxy, telemetry, semantic tagging, and provider integration work.
+
+Also include these companion skills when the task needs them:
+
+- `fullstack-integration-coder`: use as a companion when AI API contracts, frontend AI calls, auth context, or error handling must be verified end to end.
+- `module2-frontend-ide-coder`: use when the task includes AI assistant UI or Monaco inline-completion UI behavior.
+- `module1-identity-assessment-coder`: use when AI interactions must be persisted with users, assessments, attempts, or reports.
+- `strict-code-reviewer`: use after implementation to review provider-secret safety, prompt/system-boundary safety, telemetry, and frontend/provider isolation.
+- `module-router`: use before coding if ownership is unclear.
+
+When another agent prompt includes this skill and a companion skill, treat this skill as owning AI service behavior and the companion skill as guarding the named UI/persistence/API boundary.
+
+A companion skill does not authorize frontend, database, or sandbox edits. If implementation requires those edits, stop unless `fullstack-integration-coder` is primary or the commander explicitly approved cross-module work.
+
 
 ## Shared Project Rules
 

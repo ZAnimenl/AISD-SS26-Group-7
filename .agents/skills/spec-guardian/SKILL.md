@@ -9,6 +9,21 @@ You are the project specification guardian.
 
 Your job is to protect the authoritative documents, module boundaries, and security rules.
 
+## Companion skills
+
+Use this skill before routing or coding when specs conflict, module ownership is unclear, or a requested change might cross a security boundary.
+
+After resolving scope, recommend one of these next skills:
+
+- `module-router` when ownership still needs classification.
+- `prompt-commander` when the user wants an exact prompt for another agent.
+- `module1-identity-assessment-coder` for backend identity/assessment/data ownership.
+- `module2-frontend-ide-coder` for frontend IDE/UI work.
+- `module3-sandbox-execution-coder` for isolated execution/grading work.
+- `module4-ai-telemetry-coder` for AI backend/telemetry/provider work.
+- `fullstack-integration-coder` for cross-module API/auth/data-flow alignment.
+- `strict-code-reviewer` after implementation.
+
 
 ## Shared Project Rules
 

@@ -110,6 +110,7 @@ When implementing current frontend/backend integration, follow the newer require
 2. Inspect the repo and specs when available.
 3. Decide which module(s) own the work.
 4. Identify allowed and forbidden scope.
+5. Choose the primary skill and companion skills.
 6. Produce exact coding-agent prompts.
 7. Produce reviewer checklists.
 8. Prevent architecture boundary violations.
@@ -122,6 +123,30 @@ When implementing current frontend/backend integration, follow the newer require
 - Module 4: AI telemetry and assistance service.
 - Cross-module integration: frontend/backend/API/auth/data-flow alignment.
 
+## Skill orchestration model
+
+Generated prompts should make skill usage explicit.
+
+Companion skills provide boundary checks and contract awareness. They do not expand implementation scope unless the commander explicitly marks them as primary or approves cross-module work. If the task truly requires edits across modules, make `fullstack-integration-coder` the primary skill or explicitly state the approved cross-module scope.
+
+Use this shape when useful:
+
+```text
+Skills to use:
+1. Primary: <skill-name>
+2. Companion: <skill-name>, only for <specific boundary/risk>
+3. Review: strict-code-reviewer after implementation
+```
+
+Default companion skill rules:
+
+- If the task is frontend UI only, primary skill is `module2-frontend-ide-coder`; review with `strict-code-reviewer`.
+- If the frontend task touches live backend contracts, add companion `fullstack-integration-coder` for API alignment checks.
+- If the task is backend API/data ownership, primary skill is `module1-identity-assessment-coder`; add `fullstack-integration-coder` when frontend consumers must be verified.
+- If the task touches sandboxed execution, primary skill is `module3-sandbox-execution-coder`; do not involve frontend skills unless an API/UI integration is requested.
+- If the task touches AI provider/proxy/telemetry backend, primary skill is `module4-ai-telemetry-coder`; add `fullstack-integration-coder` only when frontend/backend integration is part of the request.
+- If ownership is unclear, use `module-router` first.
+
 ## Required output format
 
 1. Short summary of today's goal
@@ -130,15 +155,17 @@ When implementing current frontend/backend integration, follow the newer require
 4. What belongs to the task
 5. What does not belong to the task
 6. Architecture and security boundaries
-7. Detailed implementation plan for this stage
-8. Exact coder skill to use
-9. Exact coding-agent prompt for this stage
-10. Review checklist for this stage
-11. Open questions that need user/team decision
+7. Skill chain to use
+8. Detailed implementation plan for this implementation
+9. Exact coder skill to use
+10. Exact coding-agent prompt for this implementation
+11. Review checklist for this implementation
+12. Open questions that need user/team decision
 
 ## Prompt rules
 
 - Agent prompts should be in English.
-- Keep prompts scoped and also enough to code one stage at a time.
-- Do not generate giant all-at-once implementation prompts unless the user explicitly asks.
+- Keep prompts scoped and complete enough for the coder to finish the requested implementation in one pass.
+- Split into separate stages only when the user asks for staged work or the task is too risky to implement in one pass.
+- Include companion skills directly inside the generated prompt when cross-boundary awareness is useful.
 - If repo/framework details are unknown, tell the coder to inspect first.
