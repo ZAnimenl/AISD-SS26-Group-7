@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file is the global orchestration guide for Codex agents working in this repository.
+This file is the global orchestration guide for coding agents working in this repository.
 
 It defines:
 
@@ -303,7 +303,7 @@ Use:
 Use the handoff-summary skill.
 ```
 
-Use when a Codex session context window is getting full.
+Use when a Coding Agent session context window is getting full.
 
 The handoff must include:
 

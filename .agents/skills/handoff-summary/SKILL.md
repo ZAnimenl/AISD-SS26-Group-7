@@ -1,11 +1,11 @@
 ---
 name: handoff-summary
-description: Use this when the current Codex session context window is getting full and the user needs a clean handoff summary to continue in a new Codex session.
+description: Use this when the current Coding Agent session context window is getting full and the user needs a clean handoff summary to continue in a new Coding Agent session.
 ---
 
 # Handoff Summary Skill
 
-Create a complete markdown handoff summary for a new Codex session.
+Create a complete markdown handoff summary for a new Coding Agent session.
 
 Do not modify files.
 
@@ -117,7 +117,7 @@ When implementing current frontend/backend integration, follow the newer require
 
 ## User workflow
 
-The user often works with three Codex chat sessions:
+The user often works with three Coding Agent chat sessions:
 
 1. Prompt Commander
 2. Coder
@@ -150,7 +150,7 @@ This handoff must allow a new session to continue safely.
 12. API contracts touched
 13. Architecture decisions made
 14. What the next session should do first
-15. Exact next prompt to paste into Codex
+15. Exact next prompt to paste into Coding Agent
 16. What the next session must not change
 
 ## Style
