@@ -5,7 +5,9 @@ import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
   const actionHref =
-    assessment.attempt_status === "active"
+    assessment.attempt_status === "submitted"
+      ? `/student/assessments/${assessment.assessment_id}/review`
+      : assessment.attempt_status === "active"
       ? `/student/assessments/${assessment.assessment_id}/workspace`
       : `/student/assessments/${assessment.assessment_id}/start`;
 
