@@ -85,7 +85,6 @@ export interface WorkspaceQuestionState {
 
 export interface WorkspaceState {
   assessment_id?: string;
-  session_id?: string;
   questions: Record<string, WorkspaceQuestionState>;
 }
 

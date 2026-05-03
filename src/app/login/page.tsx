@@ -49,7 +49,7 @@ export default function LoginPage() {
             </span>
             <span>
               <span className="block text-sm font-semibold">AI Coding Assessment</span>
-              <span className="block text-xs text-white/45">Module 2 backend connected</span>
+              <span className="block text-xs text-white/45">Frontend and API client</span>
             </span>
           </div>
           <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>

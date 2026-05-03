@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Brain, CheckCircle2, Clock, Code2, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Brain, Clock, Code2, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
 import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode } from "@/lib/api";
-import type { AiInteractionType, Assessment, Language, RunResult, SubmissionResult, WorkspaceState } from "@/lib/types";
+import type { AiInteractionType, Assessment, Language, RunResult, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
   workspace: WorkspaceState;
-  sessionId: string;
+  backendAttemptId: string;
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
 
-export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceClientProps) {
+export function WorkspaceClient({ assessment, workspace, backendAttemptId }: WorkspaceClientProps) {
+  const router = useRouter();
   const firstQuestion = assessment.questions[0];
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "q-two-sum");
   const [questionStates, setQuestionStates] = useState(workspace.questions);
@@ -28,7 +30,6 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
-  const [submission, setSubmission] = useState<SubmissionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiMessage, setAiMessage] = useState("");
   const [messages, setMessages] = useState([
@@ -42,7 +43,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
       try {
         const activeFile = language === "javascript" ? "main.js" : "main.py";
         const savedWorkspace = await autosaveWorkspace(
-          sessionId,
+          backendAttemptId,
           activeQuestionId,
           language,
           activeFile,
@@ -59,7 +60,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [activeQuestionId, code, language, sessionId]);
+  }, [activeQuestionId, backendAttemptId, code, language]);
 
   function switchLanguage(nextLanguage: Language) {
     setLanguage(nextLanguage);
@@ -72,7 +73,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
     setError(null);
     try {
       setRunResult(await runCode({
-        session_id: sessionId,
+        backend_attempt_id: backendAttemptId,
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         selected_language: language,
@@ -90,7 +91,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
     const message = aiMessage.trim() || type.replace("_", " ");
     try {
       const response = await getAiResponse({
-        session_id: sessionId,
+        backend_attempt_id: backendAttemptId,
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         interaction_type: type,
@@ -113,7 +114,8 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
     setConfirmSubmit(false);
     setError(null);
     try {
-      setSubmission(await finalizeSubmission(sessionId));
+      await finalizeSubmission(backendAttemptId);
+      router.push("/");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");
     }
@@ -127,7 +129,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
             <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Question list</p>
             <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
           </div>
-          <span className="badge hidden shrink-0 xl:inline-flex">Backend session</span>
+          <span className="badge hidden shrink-0 xl:inline-flex">Active attempt</span>
         </div>
         <div className="relative mt-4 space-y-2">
           {assessment.questions.map((question, index) => (
@@ -164,19 +166,27 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
           <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
           <p className="mt-3 leading-7 text-white/65">{activeQuestion?.problem_description_markdown}</p>
           <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Constraints</h4>
-          <ul className="mt-2 space-y-2 text-sm text-white/55">
-            {activeQuestion?.constraints.map((constraint) => <li key={constraint}>- {constraint}</li>)}
-          </ul>
+          {activeQuestion?.constraints.length ? (
+            <ul className="mt-2 space-y-2 text-sm text-white/55">
+              {activeQuestion.constraints.map((constraint) => <li key={constraint}>- {constraint}</li>)}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-white/40">No extra constraints are listed for this question.</p>
+          )}
           <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Public examples</h4>
-          <div className="mt-2 space-y-2">
-            {activeQuestion?.public_examples.map((example) => (
-              <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/55">
-                <p className="text-white/80">{example.name}</p>
-                <p>Input: {example.input}</p>
-                <p>Expected: {example.expected_output}</p>
-              </div>
-            ))}
-          </div>
+          {activeQuestion?.public_examples.length ? (
+            <div className="mt-2 space-y-2">
+              {activeQuestion.public_examples.map((example) => (
+                <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/55">
+                  <p className="text-white/80">{example.name}</p>
+                  <p>Input: {example.input}</p>
+                  <p>Expected: {example.expected_output}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-white/40">No public examples are listed for this question.</p>
+          )}
         </div>
       </aside>
 
@@ -247,7 +257,7 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
           <div className="min-w-0">
             <h2 className="font-semibold">AI assistant</h2>
-            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Backend responses enabled" : "Disabled for this assessment"}</p>
+            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
           </div>
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
@@ -278,22 +288,11 @@ export function WorkspaceClient({ assessment, workspace, sessionId }: WorkspaceC
 
       {confirmSubmit ? (
         <Modal title="Submit final solution" onClose={() => setConfirmSubmit(false)}>
-          <p className="text-white/60">This submits the current backend session. Hidden test input and expected output remain private.</p>
+          <p className="text-white/60">This submits the current attempt. Hidden test input and expected output remain private.</p>
           <div className="mt-6 flex justify-end gap-3">
             <button className="btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button>
             <button className="btn-primary" onClick={submitFinal}>Submit result</button>
           </div>
-        </Modal>
-      ) : null}
-
-      {submission ? (
-        <Modal title="Submission received" onClose={() => setSubmission(null)}>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><CheckCircle2 className="text-cyanGlow" /><p className="mt-2 text-2xl font-semibold">{submission.score}/{submission.max_score}</p><p className="text-xs text-white/45">Score</p></div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-2xl font-semibold">{submission.visible_test_summary.passed}/{submission.visible_test_summary.total}</p><p className="text-xs text-white/45">Public tests</p></div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-2xl font-semibold">{submission.hidden_test_summary.passed}/{submission.hidden_test_summary.total}</p><p className="text-xs text-white/45">Hidden summary only</p></div>
-          </div>
-          <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">{submission.stdout}</p>
         </Modal>
       ) : null}
     </div>
