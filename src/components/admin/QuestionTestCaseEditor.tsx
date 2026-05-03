@@ -19,7 +19,14 @@ interface QuestionTestCaseEditorProps {
 
 const defaultStarterCode = {
   python: "def solve():\n    pass\n",
-  javascript: "function solve() {\n}\n"
+  javascript: "function solve() {\n}\n",
+  typescript: "function solve(): unknown {\n  return null;\n}\n"
+};
+
+const defaultTestCode: Record<Language, string> = {
+  python: "from solution import solve\n\n\ndef test_solution_exists():\n    assert callable(solve)\n",
+  javascript: "const { solve } = require(\"./solution.js\");\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n",
+  typescript: "const solve = globalThis.__ojsharpSolve;\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n"
 };
 
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
@@ -74,6 +81,21 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     });
   }
 
+  function updateTestCode(questionId: string, testCaseId: string, language: Language, value: string) {
+    const question = assessment.questions.find((item) => item.question_id === questionId);
+    const testCase = question?.admin_test_cases?.find((item) => item.test_case_id === testCaseId);
+    if (!question || !testCase) {
+      return;
+    }
+
+    updateTestCaseState(questionId, testCaseId, {
+      test_code: {
+        ...testCase.test_code,
+        [language]: value
+      }
+    });
+  }
+
   async function addQuestion() {
     const sortOrder = assessment.questions.length + 1;
     const question = await createQuestion(assessment.assessment_id, {
@@ -84,7 +106,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       sort_order: sortOrder,
       max_score: 100,
       constraints: [],
-      language_constraints: ["python", "javascript"],
+      language_constraints: ["python", "javascript", "typescript"],
       starter_code: defaultStarterCode,
       public_examples: [],
       admin_test_cases: []
@@ -128,10 +150,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       test_case_id: "new",
       name: `test ${(question.admin_test_cases?.length ?? 0) + 1}`,
       visibility: "public",
-      input: "",
-      expected_output: "",
-      input_preview: "",
-      expected_output_preview: ""
+      test_code: defaultTestCode
     };
     const testCaseId = await createTestCase(questionId, nextTestCase);
 
@@ -213,7 +232,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   Admin notes
                   <textarea className="field min-h-20" value={question.admin_notes ?? ""} onChange={(event) => updateQuestionState(question.question_id, { admin_notes: event.target.value })} />
                 </label>
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className="grid gap-3 lg:grid-cols-3">
                   <label className="grid gap-2 text-sm text-white/60">
                     Python starter code
                     <textarea className="field min-h-32 font-mono" value={question.starter_code.python} onChange={(event) => updateStarterCode(question.question_id, "python", event.target.value)} />
@@ -221,6 +240,10 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   <label className="grid gap-2 text-sm text-white/60">
                     JavaScript starter code
                     <textarea className="field min-h-32 font-mono" value={question.starter_code.javascript} onChange={(event) => updateStarterCode(question.question_id, "javascript", event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    TypeScript starter code
+                    <textarea className="field min-h-32 font-mono" value={question.starter_code.typescript} onChange={(event) => updateStarterCode(question.question_id, "typescript", event.target.value)} />
                   </label>
                 </div>
               </div>
@@ -258,14 +281,18 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      <div className="mt-3 grid gap-3">
                         <label className="grid gap-2 text-sm text-white/60">
-                          Input
-                          <textarea className="field min-h-24 font-mono" value={testCase.input ?? ""} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { input: event.target.value, input_preview: event.target.value })} />
+                          Python pytest code
+                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
                         </label>
                         <label className="grid gap-2 text-sm text-white/60">
-                          Expected output
-                          <textarea className="field min-h-24 font-mono" value={testCase.expected_output ?? ""} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { expected_output: event.target.value, expected_output_preview: event.target.value })} />
+                          JavaScript Jest code
+                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
+                        </label>
+                        <label className="grid gap-2 text-sm text-white/60">
+                          TypeScript Jest code
+                          <textarea className="field min-h-40 font-mono" value={testCase.test_code.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
                         </label>
                       </div>
                     </div>

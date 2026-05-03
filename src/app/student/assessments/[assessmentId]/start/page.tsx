@@ -51,7 +51,7 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
         <aside className="panel">
           <h2 className="relative text-lg font-semibold">Questions</h2>
           <div className="relative mt-4 space-y-3">
-            {(assessment.questions.length ? assessment.questions : [{ question_id: "placeholder", title: "Questions load in workspace", constraints: [], language_constraints: ["python", "javascript"] }]).map((question, index) => (
+            {(assessment.questions.length ? assessment.questions : [{ question_id: "placeholder", title: "Questions load in workspace", constraints: [], language_constraints: ["python", "javascript", "typescript"] }]).map((question, index) => (
               <div key={question.question_id} className="rounded-xl border border-white/10 bg-black/20 p-4">
                 <p className="text-xs text-cyanGlow/70">Question {index + 1}</p>
                 <p className="mt-1 font-semibold">{question.title}</p>

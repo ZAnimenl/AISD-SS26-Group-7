@@ -146,7 +146,7 @@ public static class SessionEndpoints
         {
             var starterCode = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>());
             var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
-            var activeFile = language == "javascript" ? "main.js" : "main.py";
+            var activeFile = GetActiveFile(language);
             dbContext.WorkspaceQuestionStates.Add(new WorkspaceQuestionState
             {
                 Id = Guid.NewGuid(),
@@ -164,6 +164,16 @@ public static class SessionEndpoints
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string GetActiveFile(string language)
+    {
+        return language switch
+        {
+            "javascript" => "main.js",
+            "typescript" => "main.ts",
+            _ => "main.py"
+        };
     }
 
     private static object ToSessionDto(AssessmentSession session, DateTimeOffset now)

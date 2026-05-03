@@ -62,6 +62,7 @@ As a student, I want access to AI assistance during the assessment so that I can
 
 ### US-06 Automated Evaluation
 As an administrator, I want submissions to be evaluated automatically using test cases so that scoring is fast, consistent, and reproducible.
+The Evaluation relies on test code defined by the administrator.
 
 ### US-07 AI Usage Review
 As an administrator, I want to review how AI was used during an assessment so that I can judge process as well as final output.

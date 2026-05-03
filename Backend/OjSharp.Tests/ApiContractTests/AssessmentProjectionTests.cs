@@ -36,8 +36,10 @@ public sealed class AssessmentProjectionTests
                         {
                             Name = "hidden",
                             Visibility = TestCaseVisibilities.Hidden,
-                            Input = "secret input",
-                            ExpectedOutput = "secret output"
+                            TestCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+                            {
+                                ["python"] = "def test_secret():\n    assert False\n"
+                            })
                         }
                     ]
                 }
@@ -58,8 +60,7 @@ public sealed class AssessmentProjectionTests
         });
 
         Assert.Contains("Array Sum", json);
-        Assert.DoesNotContain("secret input", json);
-        Assert.DoesNotContain("secret output", json);
+        Assert.DoesNotContain("test_secret", json);
         Assert.DoesNotContain("Do not show this.", json);
     }
 
@@ -97,8 +98,10 @@ public sealed class AssessmentProjectionTests
                             Id = Guid.NewGuid(),
                             Name = "hidden",
                             Visibility = TestCaseVisibilities.Hidden,
-                            Input = "secret input",
-                            ExpectedOutput = "secret output"
+                            TestCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+                            {
+                                ["python"] = "def test_secret():\n    assert True\n"
+                            })
                         }
                     ]
                 }
@@ -114,8 +117,8 @@ public sealed class AssessmentProjectionTests
 
         Assert.Contains("Array Sum", json);
         Assert.Contains("Visible to admin.", json);
-        Assert.Contains("secret input", json);
-        Assert.Contains("secret output", json);
+        Assert.Contains("test_secret", json);
+        Assert.Contains("test_code", json);
         Assert.Contains("max_score", json);
         Assert.Contains("admin_test_cases", json);
     }

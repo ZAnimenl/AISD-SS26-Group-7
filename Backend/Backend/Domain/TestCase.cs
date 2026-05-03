@@ -12,7 +12,5 @@ public sealed class TestCase
 
     public string Visibility { get; set; } = TestCaseVisibilities.Public;
 
-    public string Input { get; set; } = string.Empty;
-
-    public string ExpectedOutput { get; set; } = string.Empty;
+    public string TestCodeJson { get; set; } = "{}";
 }

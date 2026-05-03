@@ -25,6 +25,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -62,6 +63,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -117,6 +119,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -124,6 +127,8 @@ public static class QuestionEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var testCases = await dbContext.TestCases
             .Where(testCase => testCase.QuestionId == questionId)
@@ -133,8 +138,7 @@ public static class QuestionEndpoints
                 test_case_id = testCase.Id,
                 testCase.Name,
                 testCase.Visibility,
-                testCase.Input,
-                expected_output = testCase.ExpectedOutput
+                test_code = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>())
             })
             .ToListAsync(cancellationToken);
 
@@ -147,6 +151,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -154,6 +159,8 @@ public static class QuestionEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         if (!await dbContext.Questions.AnyAsync(question => question.Id == questionId, cancellationToken))
         {
@@ -166,8 +173,7 @@ public static class QuestionEndpoints
             QuestionId = questionId,
             Name = request.Name,
             Visibility = NormalizeVisibility(request.Visibility),
-            Input = request.Input,
-            ExpectedOutput = request.ExpectedOutput
+            TestCodeJson = JsonDocumentSerializer.Serialize(NormalizeTestCode(request.TestCode))
         };
 
         dbContext.TestCases.Add(testCase);
@@ -181,6 +187,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -188,6 +195,8 @@ public static class QuestionEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var testCase = await dbContext.TestCases.FindAsync([testCaseId], cancellationToken);
         if (testCase is null)
@@ -197,8 +206,7 @@ public static class QuestionEndpoints
 
         testCase.Name = request.Name;
         testCase.Visibility = NormalizeVisibility(request.Visibility);
-        testCase.Input = request.Input;
-        testCase.ExpectedOutput = request.ExpectedOutput;
+        testCase.TestCodeJson = JsonDocumentSerializer.Serialize(NormalizeTestCode(request.TestCode));
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return ApiResults.Success(new { test_case_id = testCase.Id });
@@ -209,6 +217,7 @@ public static class QuestionEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -216,6 +225,8 @@ public static class QuestionEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var testCase = await dbContext.TestCases.FindAsync([testCaseId], cancellationToken);
         if (testCase is null)
@@ -246,5 +257,12 @@ public static class QuestionEndpoints
     private static string NormalizeVisibility(string visibility)
     {
         return visibility == TestCaseVisibilities.Hidden ? TestCaseVisibilities.Hidden : TestCaseVisibilities.Public;
+    }
+
+    private static Dictionary<string, string> NormalizeTestCode(Dictionary<string, string>? testCode)
+    {
+        return testCode is null
+            ? new Dictionary<string, string>()
+            : testCode.ToDictionary(item => item.Key.ToLowerInvariant(), item => item.Value);
     }
 }
