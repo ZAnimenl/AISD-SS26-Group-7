@@ -9,6 +9,19 @@ Create a complete markdown handoff summary for a new Codex session.
 
 Do not modify files.
 
+## Companion skills
+
+Use this skill when a session is ending, context is full, or work needs to move to another agent.
+
+The handoff must name the recommended next skill chain, for example:
+
+```text
+Recommended next skills:
+1. Primary: module2-frontend-ide-coder
+2. Companion: fullstack-integration-coder for API alignment
+3. Review: strict-code-reviewer
+```
+
 
 ## Shared Project Rules
 

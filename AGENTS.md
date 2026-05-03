@@ -1,13 +1,543 @@
-# Global requirements
-1. Don't use emojis in comments, commit messages
-2. Use English for comments
-3. Add tests to OjSharp.Tests/XxTests' incrementally, absolutely do not break project structure, do not break file structure
-4. Use PostgreSQL as the database, connect with string "Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password"
-5. Adhere single response principal for design, which means every class should have only one responsibility, and every method should do only one thing.
-6. When need to configure a ef core class with fluent api, write a single static `XxConfiguration` class that implements static method `Configure` which takes `ModelBuilder` as parameter, and call the `Configure` method in `OnModelCreating` method of `DbContext`.
+# AGENTS.md
 
-# Frontend
-1. never use emoji or classical Blue gradient color in fronted UI
-2. Make all frontend ui support three localization: Chinese, English and German, and the default language is English, the user can switch language in the top right corner of the page, and the language preference is stored in local storage and will be applied on next visit.
-3. Use flat design, don't use big rounded corners in frontend UI, the border radius should be no more than 4px.
-4. Put page UI in separate files
+This file is the global orchestration guide for Codex agents working in this repository.
+
+It defines:
+
+1. Which specification documents are authoritative.
+2. How agents should route work to the correct module.
+3. Which skills should be used for planning, coding, review, and handoff.
+4. Global coding and project rules that apply to all work.
+
+---
+
+# 1. Authoritative Documents and Priority
+
+Before planning or modifying code, inspect the relevant specification documents.
+
+Follow this priority order when documents or implementation choices conflict:
+
+1. `requirements.md`
+   - Main product/system requirements specification.
+   - Defines goals, non-goals, stakeholders, user stories, REQ/NFR statements, constraints, MVP clarifications, and acceptance criteria.
+
+2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
+   - Architecture and module-boundary specification.
+   - Defines the four-module architecture and security boundaries.
+
+3. `complete_frontend_api_list_and_backend_alignment.md`
+   - Frontend/backend API contract and integration alignment document.
+   - Defines endpoint names, request/response shapes, status values, error format, MVP API decisions, mock/TODO(API) rules, and frontend-backend boundaries.
+
+4. `module2_frontend_ui_task.md`, if present
+   - Module 2 frontend task breakdown.
+
+5. `ui-style-reference.md`
+   - Visual style reference only.
+   - It must not override requirements, architecture, authentication behavior, database schema, existing routes, assessment/submission/reporting behavior, or API contracts.
+
+Do not modify these specification documents unless explicitly asked by the user.
+
+If a task conflicts with the specification documents, stop and report the conflict before editing implementation files.
+
+---
+
+# 2. Skills Directory
+
+Specialized reusable agent instructions live under:
+
+```text
+.agents/skills/
+```
+
+Use these skills instead of writing a large custom prompt from scratch.
+
+Available skills:
+
+```text
+.agents/skills/spec-guardian/SKILL.md
+.agents/skills/module-router/SKILL.md
+.agents/skills/prompt-commander/SKILL.md
+.agents/skills/module1-identity-assessment-coder/SKILL.md
+.agents/skills/module2-frontend-ide-coder/SKILL.md
+.agents/skills/module3-sandbox-execution-coder/SKILL.md
+.agents/skills/module4-ai-telemetry-coder/SKILL.md
+.agents/skills/fullstack-integration-coder/SKILL.md
+.agents/skills/strict-code-reviewer/SKILL.md
+.agents/skills/handoff-summary/SKILL.md
+```
+
+When the user asks for planning, coding, review, or handoff, prefer using the matching skill.
+
+## 2.1 Skill Chaining
+
+Skills can and should point to companion skills when a task crosses boundaries.
+
+Use one primary skill for ownership, then name supporting skills explicitly in the prompt when they are needed.
+
+A companion skill provides boundary checks and contract awareness. It does not expand the implementation scope unless the commander explicitly marks it as primary or approves cross-module work. If the task truly requires edits across modules, use `fullstack-integration-coder` as the primary skill or get explicit commander approval for cross-module implementation.
+
+Common chains:
+
+- Planning a coding task: `prompt-commander` -> module coder -> `strict-code-reviewer`
+- Unclear ownership: `module-router` -> chosen module coder -> `strict-code-reviewer`
+- Frontend with backend API contract risk: `module2-frontend-ide-coder` + `fullstack-integration-coder` -> `strict-code-reviewer`
+- Backend API work with frontend consumers: `module1-identity-assessment-coder` + `fullstack-integration-coder` -> `strict-code-reviewer`
+- Sandbox execution changes: `module3-sandbox-execution-coder` -> `strict-code-reviewer`
+- AI backend changes: `module4-ai-telemetry-coder` -> `strict-code-reviewer`
+- Context handoff: active coder/reviewer -> `handoff-summary`
+
+When producing a prompt for another agent, include a short `Skills to use` section that lists the primary skill and any companion skills in order.
+
+---
+
+# 3. Agent Workflow
+
+## 3.1 Planning / Commander Work
+
+Use this skill when the user asks for planning, phase breakdown, task routing, or coding prompts:
+
+```text
+Use the prompt-commander skill.
+```
+
+The commander should:
+
+1. Inspect the repository and relevant specs.
+2. Decide which architecture module owns the task.
+3. Define allowed and forbidden scope.
+4. Keep the implementation prompt as one focused stage by default.
+5. Split work into phases only when the user asks for phases or the task is too risky to implement in one pass.
+6. Include a `Skills to use` section in generated prompts, with primary and companion skills.
+7. Produce the exact coding-agent prompt for the requested stage.
+8. Produce a review checklist.
+
+The commander must not modify files unless explicitly instructed.
+
+---
+
+## 3.2 Module Routing
+
+If it is unclear which module owns a task, use:
+
+```text
+Use the module-router skill.
+```
+
+The router should classify the task into one of:
+
+1. Module 1 — Identity and Assessment Management
+2. Module 2 — Interactive Browser-Based Workspace / Frontend IDE
+3. Module 3 — Sandboxed Code Execution and Evaluation Engine
+4. Module 4 — AI Telemetry and Assistance Service
+5. Cross-module integration
+
+The router must not modify files.
+
+---
+
+## 3.3 Coding Work
+
+Use exactly one suitable coding skill unless the task is explicitly cross-module.
+
+### Module 1: Identity / Assessment / Backend / Database
+
+Use:
+
+```text
+Use the module1-identity-assessment-coder skill.
+```
+
+Use for:
+
+- authentication
+- authorization / RBAC
+- users and roles
+- assessment management backend
+- questions and test cases persistence
+- assessment attempts
+- autosave persistence
+- submissions
+- results
+- reports
+- EF Core
+- PostgreSQL
+- backend API contracts
+
+---
+
+### Module 2: Frontend / Browser IDE / UI
+
+Use:
+
+```text
+Use the module2-frontend-ide-coder skill.
+```
+
+Use for:
+
+- Next.js frontend
+- browser IDE
+- Monaco/editor
+- student dashboard
+- admin dashboard
+- student/admin pages
+- frontend API clients
+- frontend loading/error/empty states
+- UI polish
+- mock data
+- TODO(API) comments
+
+---
+
+### Module 3: Sandboxed Execution / Evaluation
+
+Use:
+
+```text
+Use the module3-sandbox-execution-coder skill.
+```
+
+Use for:
+
+- sandboxed execution
+- grading engine
+- hidden test evaluation
+- stdout/stderr capture
+- execution workers
+- queues
+- resource limits
+- timeout/memory handling
+- execution result schema
+
+---
+
+### Module 4: AI Telemetry / AI Assistance
+
+Use:
+
+```text
+Use the module4-ai-telemetry-coder skill.
+```
+
+Use for:
+
+- AI backend service
+- secure AI proxy
+- LLM provider integration
+- AI interaction logging
+- token usage telemetry
+- semantic tags
+- structured AI responses
+- inline completion backend
+- AI provider error handling
+
+---
+
+### Cross-Module Integration
+
+Use:
+
+```text
+Use the fullstack-integration-coder skill.
+```
+
+Use for:
+
+- frontend/backend API integration
+- auth flow integration
+- JWT/cookie/token behavior
+- frontend/backend request/response mismatch
+- dashboard data loading from backend
+- assessment/attempt/workspace API flow
+- end-to-end integration fixes
+- integration tests
+
+Before coding, the agent must state:
+
+1. Which modules are involved.
+2. Which files are likely affected.
+3. Why cross-module work is necessary.
+
+---
+
+## 3.4 Review Work
+
+Use:
+
+```text
+Use the strict-code-reviewer skill.
+```
+
+The reviewer must:
+
+1. Review latest changes only.
+2. Not modify files.
+3. Inspect `git status` and relevant diffs.
+4. Run available checks when possible.
+5. Report findings by severity:
+   - P0: blocker/data loss/security disaster
+   - P1: must fix before merge
+   - P2: should fix soon
+   - P3: minor but worth noting
+
+Focus on:
+
+- spec compliance
+- module ownership
+- API contract consistency
+- auth/RBAC
+- hidden-test protection
+- sandbox safety
+- AI-provider safety
+- frontend/backend integration
+- build/test failures
+
+---
+
+## 3.5 Handoff Work
+
+Use:
+
+```text
+Use the handoff-summary skill.
+```
+
+Use when a Codex session context window is getting full.
+
+The handoff must include:
+
+1. Current goal
+2. Current session role
+3. Module(s) involved
+4. Specs already read
+5. Files changed
+6. Commands run
+7. Known bugs/TODOs/open questions
+8. Next recommended prompt
+9. What the next session must not change
+
+---
+
+# 4. Four-Module Architecture
+
+The project follows a four-module architecture.
+
+## Module 1 — Identity and Assessment Management
+
+Owns:
+
+- authentication
+- RBAC
+- users and roles
+- assessments
+- questions and test cases
+- attempt/session lifecycle
+- workspace persistence
+- submissions
+- results
+- reports
+- database persistence
+
+Must protect:
+
+- hidden test cases
+- expected hidden outputs
+- user identity
+- role permissions
+- scores
+- assessment attempt state
+
+---
+
+## Module 2 — Interactive Browser-Based Workspace / Frontend IDE
+
+Owns:
+
+- frontend UI
+- browser IDE
+- Monaco/editor
+- student/admin pages
+- problem statement display
+- language selector
+- timer display
+- autosave indicator
+- run/submit UI
+- output console
+- AI assistant UI
+- frontend API clients
+
+Must not:
+
+- access database directly
+- call sandbox directly
+- call external LLM APIs directly
+- execute student code locally
+- expose hidden test cases in student UI
+- create/store/trust a real frontend-managed `session_id`
+
+---
+
+## Module 3 — Sandboxed Code Execution and Evaluation Engine
+
+Owns:
+
+- isolated execution of untrusted code
+- resource limits
+- stdout/stderr capture
+- hidden test evaluation
+- execution result schema
+- worker/queue execution lifecycle
+- cleanup of execution environments
+
+Must not:
+
+- expose hidden test details to student APIs
+- be directly called by frontend
+- run untrusted code in the normal web backend process
+- weaken isolation for convenience
+
+---
+
+## Module 4 — AI Telemetry and Assistance Service
+
+Owns:
+
+- secure AI proxy
+- external LLM provider calls
+- server-side system prompts
+- AI interaction logging
+- token usage telemetry
+- semantic tagging
+- structured AI responses
+- AI provider error handling
+
+Must not:
+
+- expose provider API keys to frontend
+- let frontend call external LLM APIs directly
+- leak system prompts
+- leak hidden tests or grading criteria
+- bypass logging/rate-limit controls where required
+
+---
+
+# 5. Global Engineering Rules
+
+1. Use English for code comments.
+2. Do not use emojis in code comments or commit messages.
+3. Do not break the existing project structure unless explicitly approved.
+4. Add tests incrementally where appropriate.
+5. Keep responsibilities separated:
+   - each class should have one responsibility
+   - each method should do one clear thing
+6. Prefer small, reviewable changes.
+7. Do not commit secrets, credentials, API keys, JWT secrets, or local environment files.
+8. Do not change the project stack unless explicitly approved.
+9. If the frontend is Next.js, do not convert it to Vite.
+10. If the frontend is Next.js, do not add `react-router-dom`.
+11. Do not invent new API contracts if an existing spec or backend route exists.
+12. If implementation requires changing an API contract, report the reason first.
+
+---
+
+# 6. Database and EF Core Rules
+
+The project uses PostgreSQL.
+
+Local development connection string may be:
+
+```text
+Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password
+```
+
+Do not hardcode production credentials.
+
+When configuring EF Core classes with Fluent API:
+
+1. Create a single static `XxConfiguration` class.
+2. Implement a static `Configure(ModelBuilder modelBuilder)` method.
+3. Call this `Configure` method from `OnModelCreating` in the `DbContext`.
+
+Do not add migrations unless the task explicitly requires database schema changes.
+
+---
+
+# 7. Frontend Rules
+
+1. Use English for code comments.
+2. Do not use emojis in UI text unless explicitly approved.
+3. Do not use emojis in comments or commit messages.
+4. Do not use classical blue gradient styling.
+5. Prefer flat, clean UI unless the current approved UI spec says otherwise.
+6. Border radius should generally be no more than 4px unless the approved UI style document or existing design system requires otherwise.
+7. Put page UI into separate files/components where practical.
+8. Support localization if the current frontend architecture already supports it or the task explicitly asks for it.
+9. If localization is implemented:
+   - support English, Chinese, and German
+   - default language should be English
+   - provide language switcher in the top-right area where appropriate
+   - store language preference in local storage
+10. Do not let visual style override product requirements, route behavior, auth behavior, database schema, or API contracts.
+
+---
+
+# 8. Session and Attempt Rule
+
+The architecture PDF may contain older schema examples using `session_id`.
+
+For the current implementation, follow the newer requirements/API alignment decision:
+
+1. Frontend must not create, store, or trust a real `session_id`.
+2. Backend should identify the user from authentication context, such as JWT or another secure token.
+3. Backend should resolve the active assessment attempt from authenticated user + `assessment_id`.
+4. Frontend mock state is allowed only for visual/MVP behavior.
+5. If an interim backend endpoint still requires a session-shaped value, the frontend may pass the backend-returned attempt identifier as a transient in-memory compatibility value only. Do not persist it or treat it as authoritative identity/session state.
+
+If a task appears to require frontend-managed `session_id`, stop and ask for clarification.
+
+---
+
+# 9. Hidden Test Case Rule
+
+Student-facing UI and student-facing APIs must never expose:
+
+- hidden test case input
+- hidden expected output
+- grading implementation
+- admin-only notes
+
+Student-facing UI may show hidden test summary counts only if allowed by the specs.
+
+Admin-facing UI may show hidden test metadata/details only where the role and route are authorized.
+
+---
+
+# 10. Untrusted Code Execution Rule
+
+Do not execute student code through:
+
+- frontend JavaScript
+- `eval`
+- `child_process`
+- normal backend request handlers
+- unrestricted local Python/Node/.NET runtimes
+
+Untrusted code execution belongs to Module 3 and must follow the sandbox architecture.
+
+---
+
+# 11. AI Provider Rule
+
+Frontend must not call external AI providers directly.
+
+AI provider calls belong to Module 4 and must protect:
+
+- provider API keys
+- server-side system prompts
+- hidden tests
+- grading criteria
+- user/assessment context
+- telemetry logging
+
+For frontend-only work, use mock AI responses unless explicitly instructed otherwise.

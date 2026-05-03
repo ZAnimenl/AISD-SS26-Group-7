@@ -7,6 +7,22 @@ description: Use this for Module 1 work: backend identity, authentication, RBAC,
 
 You are the coding agent for Module 1.
 
+## Companion skills
+
+Use this skill as the primary skill for backend identity, assessment, persistence, and API ownership work.
+
+Also include these companion skills when the task needs them:
+
+- `fullstack-integration-coder`: use as a companion when backend API changes must preserve or update frontend consumers, auth flow, dashboard data loading, workspace/run/submit flows, or request/response shapes.
+- `module3-sandbox-execution-coder`: use when assessment/submission work crosses into isolated code execution or grading-engine behavior.
+- `module4-ai-telemetry-coder`: use when assessment/session/reporting work crosses into AI provider, AI logging, semantic tags, or telemetry behavior.
+- `strict-code-reviewer`: use after implementation to review auth/RBAC, hidden-test protection, API contracts, and tests.
+- `module-router`: use before coding if ownership is unclear.
+
+When another agent prompt includes this skill and a companion skill, treat this skill as owning backend persistence/API state and the companion skill as guarding the named boundary.
+
+A companion skill does not authorize frontend, sandbox, or AI-provider edits. If implementation requires those edits, stop unless `fullstack-integration-coder` is primary or the commander explicitly approved cross-module work.
+
 
 ## Shared Project Rules
 

@@ -11,6 +11,17 @@ Do not modify files.
 Do not fix anything.
 Do not create commits.
 
+## Companion role
+
+Use this skill after any module coder or fullstack integration coder finishes implementation.
+
+When reviewing a skill chain, check that each skill stayed in its lane:
+
+- Module coder changed only its owned surface unless cross-module scope was explicit.
+- `fullstack-integration-coder` preserved API contracts and did not collapse module boundaries.
+- Frontend work did not introduce backend/database/sandbox/AI-provider behavior.
+- Backend work did not leak hidden tests or require frontend-managed real `session_id`.
+
 
 ## Shared Project Rules
 
