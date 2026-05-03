@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home } from "lucide-react";
-import { getStudentResults } from "@/lib/api";
+import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "lucide-react";
+import { getStudentAssessments, getStudentResults } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Assessment } from "@/lib/types";
@@ -12,12 +12,18 @@ import type { Assessment } from "@/lib/types";
 export default function StudentAssessmentReviewPage({ params }: { params: { assessmentId: string } }) {
   const router = useRouter();
   const [results, setResults] = useState<Assessment[]>([]);
+  const [activeAssessmentIds, setActiveAssessmentIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        setResults(await getStudentResults());
+        const [nextResults, nextAssessments] = await Promise.all([
+          getStudentResults(),
+          getStudentAssessments()
+        ]);
+        setResults(nextResults);
+        setActiveAssessmentIds(nextAssessments.map((assessment) => assessment.assessment_id));
       } catch {
         router.replace("/login");
       } finally {
@@ -32,6 +38,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
     () => results.find((item) => item.assessment_id === params.assessmentId),
     [params.assessmentId, results]
   );
+  const canStartAnotherAttempt = activeAssessmentIds.includes(params.assessmentId);
 
   if (isLoading) {
     return <SectionHeader eyebrow="Assessment review" title="Loading result..." />;
@@ -52,6 +59,9 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
           <div className="relative mt-6 flex flex-wrap gap-3">
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> Results</Link>
+            {canStartAnotherAttempt ? (
+              <Link className="btn-secondary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+            ) : null}
           </div>
         </section>
       </div>
@@ -63,7 +73,14 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
       <SectionHeader
         eyebrow="Assessment review"
         title={result.title}
-        action={<Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>}
+        action={
+          <div className="flex flex-wrap justify-end gap-2">
+            {canStartAnotherAttempt ? (
+              <Link className="btn-primary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+            ) : null}
+            <Link className="btn-secondary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>
+          </div>
+        }
       />
       <div className="grid gap-4 md:grid-cols-3">
         <section className="metric-card">
@@ -103,6 +120,9 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Back to dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> View all results</Link>
+            {canStartAnotherAttempt ? (
+              <Link className="btn-secondary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+            ) : null}
           </div>
         </div>
       </section>

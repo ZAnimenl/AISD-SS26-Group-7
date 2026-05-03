@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Sparkles } from "lucide-react";
+import { Clock, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAssessment, startAssessment } from "@/lib/api";
@@ -31,6 +31,9 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
     return <SectionHeader eyebrow="Start assessment" title="Connecting to backend..." />;
   }
 
+  const canStartAttempt = assessment.status === "active";
+  const startButtonLabel = assessment.attempt_status === "submitted" ? "Start another attempt" : "Start attempt";
+
   return (
     <div>
       <SectionHeader eyebrow="Start assessment" title={assessment.title} />
@@ -44,7 +47,14 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-purpleGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.questions.length || assessment.question_count}</p><p className="text-sm text-white/45">Questions</p></div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.ai_enabled ? "On" : "Off"}</p><p className="text-sm text-white/45">AI assistance</p></div>
             </div>
-            <button className="btn-primary mt-8" onClick={openWorkspace}>Start attempt</button>
+            {canStartAttempt ? (
+              <button className="btn-primary mt-8" onClick={openWorkspace}>
+                {assessment.attempt_status === "submitted" ? <RotateCcw size={16} /> : <PlayCircle size={16} />}
+                {startButtonLabel}
+              </button>
+            ) : (
+              <p className="mt-8 text-sm text-white/50">This assessment is not open for new attempts.</p>
+            )}
             {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
           </div>
         </section>
