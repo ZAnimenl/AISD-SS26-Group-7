@@ -21,6 +21,7 @@ public static class AiEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        AiMockService aiMockService,
         CancellationToken cancellationToken)
     {
         var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
@@ -48,14 +49,11 @@ public static class AiEndpoints
             return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
         }
 
-        var tags = new[] { request.InteractionType == "debug" ? "debug" : "conceptual_hint" };
-        var response = request.InteractionType switch
-        {
-            "debug" => "Review the failing branch first. Compare the sample input with the value your function returns.",
-            "code_review" => "Check that the function signature matches the starter code and that edge cases return a value.",
-            "explain" => "Break the problem into input parsing, transformation, and output formatting.",
-            _ => "Start with the public sample and write the smallest function that satisfies it."
-        };
+        var (responseMarkdown, tags) = aiMockService.GenerateResponse(
+            request.InteractionType,
+            request.Message,
+            request.SelectedLanguage,
+            request.ActiveFileContent);
 
         var interaction = new AiInteraction
         {
@@ -67,7 +65,7 @@ public static class AiEndpoints
             Message = request.Message,
             SelectedLanguage = request.SelectedLanguage,
             ActiveFileContent = request.ActiveFileContent,
-            ResponseMarkdown = response,
+            ResponseMarkdown = responseMarkdown,
             SemanticTagsJson = JsonDocumentSerializer.Serialize(tags),
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -78,7 +76,7 @@ public static class AiEndpoints
         return ApiResults.Success(new
         {
             interaction_id = interaction.Id,
-            response_markdown = response,
+            response_markdown = responseMarkdown,
             semantic_tags = tags,
             created_at = interaction.CreatedAt
         });

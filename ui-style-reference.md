@@ -167,7 +167,7 @@ Two utility classes defined in the project global stylesheet under @layer compon
 
 &#x20; border: 1px solid rgba(255, 255, 255, 0.08);
 
-&#x20; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.06);
+&#x20; box-shadow: 0 0 0 1.5px rgba(0, 229, 255, 0.9), 0 0 40px rgba(0, 229, 255, 0.4), 0 0 80px rgba(0, 229, 255, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 
 &#x20; position: relative;
 
@@ -296,17 +296,12 @@ Animated dot grid background using CSS + SVG:
 
 
 .bg-grid {
-
-&#x20; background-image:
-
-&#x20;   radial-gradient(ellipse 80% 50% at 20% 40%, rgba(0, 229, 255, 0.08) 0%, transparent 60%),
-
-&#x20;   radial-gradient(ellipse 60% 40% at 80% 70%, rgba(168, 85, 247, 0.1) 0%, transparent 60%),
-
-&#x20;   radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
-
-&#x20; background-size: auto, auto, 28px 28px;
-
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(0, 229, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 70%, rgba(168, 85, 247, 0.40) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 60% 20%, rgba(236, 72, 153, 0.20) 0%, transparent 50%),
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.10) 1px, transparent 0);
+  background-size: auto, auto, auto, 28px 28px;
 }
 
 
