@@ -5,37 +5,43 @@ import { useRouter } from "next/navigation";
 import { Code2, LogIn, UserPlus } from "lucide-react";
 import { login, registerStudent } from "@/lib/api";
 
-type AuthMode = "login" | "register";
+type AuthAction = "login" | "register";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("student@example.com");
   const [password, setPassword] = useState("password");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const router = useRouter();
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setNotice(null);
-    setIsSubmitting(true);
+    setSubmittingAction("login");
     try {
-      if (mode === "register") {
-        await registerStudent({ full_name: fullName, email, password });
-        setMode("login");
-        setNotice("Student account registered. You can sign in now.");
-        return;
-      }
-
       const user = await login(email, password);
       router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Authentication failed.");
     } finally {
-      setIsSubmitting(false);
+      setSubmittingAction(null);
+    }
+  }
+
+  async function handleRegisterStudent() {
+    setError(null);
+    setNotice(null);
+    setSubmittingAction("register");
+    try {
+      const fallbackName = email.split("@")[0]?.trim() || "Student";
+      await registerStudent({ full_name: fallbackName, email, password });
+      setNotice("Student account registered. You can sign in now.");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Registration failed.");
+    } finally {
+      setSubmittingAction(null);
     }
   }
 
@@ -56,23 +62,7 @@ export default function LoginPage() {
           <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
             Sign in with a backend account, or register a student account. Administrator accounts are created by an administrator.
           </p>
-          <div className="mt-10 flex gap-2">
-            <button className={mode === "login" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setMode("login")}>
-              <LogIn size={16} />
-              Login
-            </button>
-            <button className={mode === "register" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setMode("register")}>
-              <UserPlus size={16} />
-              Register student
-            </button>
-          </div>
-          <form className="mt-6 grid max-w-xl gap-4" onSubmit={handleSubmit}>
-            {mode === "register" ? (
-              <label className="grid gap-2 text-sm text-white/60">
-                Full name
-                <input className="field" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-              </label>
-            ) : null}
+          <form className="mt-10 grid max-w-xl gap-4" onSubmit={handleSignIn}>
             <label className="grid gap-2 text-sm text-white/60">
               Email
               <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
@@ -81,10 +71,16 @@ export default function LoginPage() {
               Password
               <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
             </label>
-            <button className="btn-primary w-fit" type="submit" disabled={isSubmitting}>
-              {mode === "register" ? <UserPlus size={18} /> : <LogIn size={18} />}
-              {isSubmitting ? "Connecting..." : mode === "register" ? "Create student account" : "Sign in"}
-            </button>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button className="btn-primary" type="submit" disabled={submittingAction !== null}>
+                <LogIn size={18} />
+                {submittingAction === "login" ? "Connecting..." : "Sign in"}
+              </button>
+              <button className="btn-secondary" type="button" onClick={handleRegisterStudent} disabled={submittingAction !== null}>
+                <UserPlus size={18} />
+                {submittingAction === "register" ? "Creating..." : "Register Student"}
+              </button>
+            </div>
           </form>
           {notice ? <p className="mt-4 text-sm text-cyanGlow">{notice}</p> : null}
           {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
