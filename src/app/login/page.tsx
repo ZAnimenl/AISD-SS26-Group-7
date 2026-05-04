@@ -97,10 +97,10 @@ export default function LoginPage() {
               <span className="h-3 w-3 rounded-full bg-cyanGlow" />
             </div>
             <pre className="whitespace-pre-wrap leading-7">
-{`POST http://localhost:5040/api/v1/auth/login
-POST http://localhost:5040/api/v1/auth/register
-GET  http://localhost:5040/api/v1/auth/me
-POST http://localhost:5040/api/v1/auth/logout
+{`POST http://localhost:5140/api/v1/auth/login
+POST http://localhost:5140/api/v1/auth/register
+GET  http://localhost:5140/api/v1/auth/me
+POST http://localhost:5140/api/v1/auth/logout
 
 seed_admin = "admin@example.com";
 demo_student = "student@example.com";

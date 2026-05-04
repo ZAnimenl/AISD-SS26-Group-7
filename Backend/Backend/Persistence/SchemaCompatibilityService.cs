@@ -9,20 +9,20 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync(
             """
-            ALTER TABLE test_cases
-            ADD COLUMN IF NOT EXISTS test_code_json text NOT NULL DEFAULT '{{}}';
+            DO $$
+            BEGIN
+                ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS test_code_json text NOT NULL DEFAULT '{{}}';
 
-            ALTER TABLE test_cases
-            ALTER COLUMN "Input" DROP NOT NULL;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='test_cases' AND column_name='Input') THEN
+                    ALTER TABLE test_cases ALTER COLUMN "Input" DROP NOT NULL;
+                    ALTER TABLE test_cases ALTER COLUMN "Input" SET DEFAULT '';
+                END IF;
 
-            ALTER TABLE test_cases
-            ALTER COLUMN "ExpectedOutput" DROP NOT NULL;
-
-            ALTER TABLE test_cases
-            ALTER COLUMN "Input" SET DEFAULT '';
-
-            ALTER TABLE test_cases
-            ALTER COLUMN "ExpectedOutput" SET DEFAULT '';
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='test_cases' AND column_name='ExpectedOutput') THEN
+                    ALTER TABLE test_cases ALTER COLUMN "ExpectedOutput" DROP NOT NULL;
+                    ALTER TABLE test_cases ALTER COLUMN "ExpectedOutput" SET DEFAULT '';
+                END IF;
+            END $$;
             """,
             cancellationToken);
 

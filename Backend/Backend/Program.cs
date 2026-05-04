@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseUrls(builder.Configuration["BackendUrls"] ?? "http://localhost:5040");
+builder.WebHost.UseUrls(builder.Configuration["BackendUrls"] ?? "http://localhost:5140");
 
 builder.Services.Configure<JsonOptions>(options =>
 {
