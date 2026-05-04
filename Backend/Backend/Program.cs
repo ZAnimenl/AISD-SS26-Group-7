@@ -39,6 +39,7 @@ builder.Services.AddSingleton<WorkspaceProjectionService>();
 builder.Services.AddSingleton<ICodeRunner, DockerCodeRunner>();
 builder.Services.AddSingleton<CodeEvaluationService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
+builder.Services.AddSingleton<AiMockService>();
 builder.Services.AddScoped<DemoDataSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();
 builder.Services.Configure<SeedAdminOptions>(builder.Configuration.GetSection(SeedAdminOptions.SectionName));
