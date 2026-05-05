@@ -45,10 +45,19 @@ public static class SubmissionEndpoints
             return ApiResults.Error("SESSION_EXPIRED", "The assessment session has expired.", StatusCodes.Status409Conflict);
         }
 
+        var now = DateTimeOffset.UtcNow;
+        var addedStates = EnsureWorkspaceStates(session, now);
+        dbContext.WorkspaceQuestionStates.AddRange(addedStates);
+
         var allSubmissions = new List<Submission>();
         foreach (var state in session.WorkspaceStates)
         {
-            var question = session.Assessment!.Questions.First(item => item.Id == state.QuestionId);
+            var question = session.Assessment!.Questions.FirstOrDefault(item => item.Id == state.QuestionId);
+            if (question is null)
+            {
+                continue;
+            }
+
             var tests = await dbContext.TestCases.Where(testCase => testCase.QuestionId == state.QuestionId).ToListAsync(cancellationToken);
             var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
             var content = files.TryGetValue(state.ActiveFile, out var activeFile)
@@ -80,14 +89,14 @@ public static class SubmissionEndpoints
                 HiddenPassed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Hidden && testResult.Passed),
                 HiddenFailed = result.TestResults.Count(testResult => testResult.Visibility == TestCaseVisibilities.Hidden && !testResult.Passed),
                 HiddenTotal = hiddenTotal,
-                SubmittedAt = DateTimeOffset.UtcNow
+                SubmittedAt = now
             };
             allSubmissions.Add(submission);
             dbContext.Submissions.Add(submission);
         }
 
         session.Status = SessionStatuses.Submitted;
-        session.CompletedAt = DateTimeOffset.UtcNow;
+        session.CompletedAt = now;
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var totalScore = allSubmissions.Sum(submission => submission.Score);
@@ -115,6 +124,48 @@ public static class SubmissionEndpoints
                 total = allSubmissions.Sum(submission => submission.HiddenTotal)
             }
         });
+    }
+
+    internal static IReadOnlyCollection<WorkspaceQuestionState> EnsureWorkspaceStates(AssessmentSession session, DateTimeOffset now)
+    {
+        var addedStates = new List<WorkspaceQuestionState>();
+        var existingQuestionIds = session.WorkspaceStates.Select(state => state.QuestionId).ToHashSet();
+
+        foreach (var question in session.Assessment!.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
+        {
+            var starterCode = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>());
+            var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
+            var activeFile = GetActiveFile(language);
+            var state = new WorkspaceQuestionState
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                QuestionId = question.Id,
+                SelectedLanguage = language,
+                ActiveFile = activeFile,
+                FilesJson = JsonDocumentSerializer.Serialize(new Dictionary<string, WorkspaceFileDto>
+                {
+                    [activeFile] = new WorkspaceFileDto(language, starterCode.GetValueOrDefault(language, string.Empty))
+                }),
+                LastSavedAt = now,
+                Version = 1
+            };
+
+            session.WorkspaceStates.Add(state);
+            addedStates.Add(state);
+        }
+
+        return addedStates;
+    }
+
+    private static string GetActiveFile(string language)
+    {
+        return language switch
+        {
+            "javascript" => "main.js",
+            "typescript" => "main.ts",
+            _ => "main.py"
+        };
     }
 
     private static string BuildFinalStatus(IReadOnlyCollection<Submission> submissions, int totalScore, int maxScore)

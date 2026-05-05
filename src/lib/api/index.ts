@@ -15,6 +15,7 @@ import type {
   StudentDashboard,
   SubmissionResult,
   UserAccount,
+  WorkspaceQuestionState,
   WorkspaceState
 } from "@/lib/types";
 import { normalizeTestCode } from "@/lib/languages";
@@ -438,22 +439,38 @@ export async function autosaveWorkspace(
   content: string,
   version?: number
 ) {
+  return saveWorkspace(backendAttemptId, {
+    [questionId]: {
+      selected_language: selectedLanguage,
+      active_file: activeFile,
+      files: {
+        [activeFile]: {
+          language: selectedLanguage,
+          content
+        }
+      },
+      last_saved_at: "",
+      version: version ?? 0
+    }
+  });
+}
+
+export async function saveWorkspace(
+  backendAttemptId: string,
+  questions: Record<string, WorkspaceQuestionState>
+) {
   return apiRequest<WorkspaceState>(`/sessions/${backendAttemptId}/workspace`, {
     method: "PUT",
     body: JSON.stringify({
-      questions: {
-        [questionId]: {
-          selected_language: selectedLanguage,
-          active_file: activeFile,
-          files: {
-            [activeFile]: {
-              language: selectedLanguage,
-              content
-            }
-          },
-          version
+      questions: Object.fromEntries(Object.entries(questions).map(([questionId, state]) => [
+        questionId,
+        {
+          selected_language: state.selected_language,
+          active_file: state.active_file,
+          files: state.files,
+          version: state.version
         }
-      }
+      ]))
     })
   });
 }

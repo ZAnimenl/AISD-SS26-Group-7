@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brain, Clock, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
-import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode } from "@/lib/api";
+import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import type { AiInteractionType, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
@@ -232,11 +232,18 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
   async function submitFinal() {
     setConfirmSubmit(false);
     setError(null);
+    setSaveState("saving");
     try {
+      const nextQuestionStates = persistCurrentCode();
+      setQuestionStates(nextQuestionStates);
+      const savedWorkspace = await saveWorkspace(backendAttemptId, nextQuestionStates);
+      setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
+      setSaveState("saved");
       await finalizeSubmission(backendAttemptId);
       router.push(`/student/assessments/${assessment.assessment_id}/review`);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");
+      setSaveState("unsaved");
     }
   }
 
