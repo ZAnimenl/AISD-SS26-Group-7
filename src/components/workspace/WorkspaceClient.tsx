@@ -46,6 +46,47 @@ function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Q
   return state?.files[fileName]?.content ?? question?.starter_code[language] ?? "";
 }
 
+function buildRunFailureSummary(runResult: RunResult | null, error: string | null) {
+  if (error) {
+    return error;
+  }
+
+  if (!runResult) {
+    return null;
+  }
+
+  if (runResult.status === "runtime_error") {
+    return runResult.stderr ?? runResult.stdout ?? "Runtime error occurred during execution.";
+  }
+
+  if (runResult.status === "failed") {
+    const failingTests = runResult.test_results.filter((test) => !test.passed);
+    const failingSummary = failingTests.length
+      ? failingTests.map((test) => `${test.name}${test.output ? `: ${test.output}` : ""}`).join("; ")
+      : "The sample tests failed.";
+
+    return `${failingSummary}\n\nStdout: ${runResult.stdout || "(empty)"}${runResult.stderr ? `\nStderr: ${runResult.stderr}` : ""}`;
+  }
+
+  return null;
+}
+
+function buildDebugPrompt(runResult: RunResult | null, error: string | null) {
+  const summary = buildRunFailureSummary(runResult, error);
+  if (!summary) {
+    return "Please help me debug my current solution.";
+  }
+
+  return [
+    "I ran my current solution and need debugging help.",
+    "",
+    "Issue summary:",
+    summary,
+    "",
+    "Please point out the most likely cause and suggest a next step without giving away the full final answer."
+  ].join("\n");
+}
+
 function mergeQuestionStates(current: WorkspaceState["questions"], saved: WorkspaceState["questions"]) {
   return Object.entries(saved).reduce<WorkspaceState["questions"]>((nextStates, [questionId, savedState]) => ({
     ...nextStates,
@@ -205,9 +246,9 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     }
   }
 
-  async function sendAi(type: AiInteractionType) {
+  async function sendAi(type: AiInteractionType, overrideMessage?: string) {
     setError(null);
-    const message = aiMessage.trim() || type.replace("_", " ");
+    const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     try {
       const response = await getAiResponse({
         backend_attempt_id: backendAttemptId,
@@ -342,6 +383,18 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
               <h2 className="font-semibold">Output console</h2>
               <span className="text-xs text-white/40">Public/sample tests only</span>
             </div>
+            {buildRunFailureSummary(runResult, error) ? (
+              <div className="mb-3 rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 p-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
+                <p className="mt-2 text-sm leading-6 text-white/70">
+                  The last run exposed a problem. Ask the assistant to debug the current output and code path.
+                </p>
+                <button className="btn-secondary mt-3 px-3 py-2 text-xs" onClick={() => sendAi("debug", buildDebugPrompt(runResult, error))}>
+                  <Sparkles size={14} />
+                  Ask AI to debug this run
+                </button>
+              </div>
+            ) : null}
             <div className="scrollbar-soft h-[116px] overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
               {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
               {runResult ? (

@@ -2,17 +2,34 @@ using Backend.Domain;
 
 namespace Backend.Services;
 
-// Mock AI service that generates context-aware responses without calling external LLM providers.
-// This is the MVP implementation. Replace with a real provider adapter when an API key is available.
 public sealed class AiMockService
 {
-    public (string ResponseMarkdown, string[] SemanticTags) GenerateResponse(
+    private readonly IEnumerable<IAiResponseProvider> _responseProviders;
+
+    public AiMockService(IEnumerable<IAiResponseProvider> responseProviders)
+    {
+        _responseProviders = responseProviders;
+    }
+
+    public async Task<(string ResponseMarkdown, string[] SemanticTags)> GenerateResponseAsync(
         string interactionType,
         string message,
         string selectedLanguage,
-        string activeFileContent)
+        string activeFileContent,
+        CancellationToken cancellationToken)
     {
         var tags = DeriveSemanticTags(interactionType, message, activeFileContent);
+        var context = new AiGenerationContext(interactionType, message, selectedLanguage, activeFileContent);
+
+        foreach (var responseProvider in _responseProviders)
+        {
+            var providerResponse = await responseProvider.TryGenerateAsync(context, tags, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(providerResponse))
+            {
+                return (providerResponse, tags);
+            }
+        }
+
         var response = BuildResponse(interactionType, message, selectedLanguage, activeFileContent);
         return (response, tags);
     }
