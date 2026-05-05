@@ -49,11 +49,12 @@ public static class AiEndpoints
             return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
         }
 
-        var (responseMarkdown, tags) = aiMockService.GenerateResponse(
+        var (responseMarkdown, tags) = await aiMockService.GenerateResponseAsync(
             request.InteractionType,
             request.Message,
             request.SelectedLanguage,
-            request.ActiveFileContent);
+            request.ActiveFileContent,
+            cancellationToken);
 
         var interaction = new AiInteraction
         {
