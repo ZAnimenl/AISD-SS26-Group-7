@@ -61,19 +61,19 @@ Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password
 The backend default local URL is:
 
 ```text
-http://localhost:5040
+http://localhost:5140
 ```
 
 The frontend API client defaults to:
 
 ```text
-http://localhost:5040/api/v1
+http://localhost:5140/api/v1
 ```
 
 and falls back to:
 
 ```text
-http://localhost:5041/api/v1
+http://localhost:5141/api/v1
 ```
 
 Override with `NEXT_PUBLIC_API_BASE_URL` if needed.
@@ -90,7 +90,7 @@ Things users may configure:
 
 - `NEXT_PUBLIC_API_BASE_URL` - frontend API base URL. Optional for normal local development.
 - `ASPNETCORE_ENVIRONMENT` - backend environment, usually `Development` locally.
-- `BackendUrls` - backend listen URL, defaulting to `http://localhost:5040`.
+- `BackendUrls` - backend listen URL, defaulting to `http://localhost:5140`.
 - `ConnectionStrings__DefaultConnection` - PostgreSQL connection string.
 - `SeedAdmin__Email` and `SeedAdmin__Password` - required for published/production environments because production `appsettings.json` intentionally omits seed admin credentials.
 
