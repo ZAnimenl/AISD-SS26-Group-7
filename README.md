@@ -1,8 +1,8 @@
-﻿# AISD-SS26 Group 7 ðŸš€
+# AISD-SS26 Group 7
 
 AI-assisted online coding assessment platform for browser-based coding assessments, role-based administration, backend-backed workspace persistence, submission evaluation, AI assistance, and reporting.
 
-## Project Shape ðŸ§­
+## Project Shape
 
 This repository contains a Next.js frontend and an ASP.NET backend:
 
@@ -22,7 +22,7 @@ Authoritative project documents:
 Do not edit those specification files unless the task explicitly asks for documentation/spec changes.
 
 
-## Architecture Boundaries ðŸ—ï¸
+## Architecture Boundaries
 
 The project follows four module boundaries:
 
@@ -38,14 +38,14 @@ The project follows four module boundaries:
 4. Module 4 - AI Telemetry and Assistance
    Secure AI proxy/service, provider calls, AI logging, telemetry, semantic tags, structured AI responses, and rate/error handling.
 
-Security rules ðŸ”’:
+Security rules:
 
 - Student frontend must never receive hidden test inputs, hidden expected outputs, or grading implementation.
 - Frontend must not access the database, sandbox, or external AI providers directly.
 - Do not execute student submissions locally with `eval`, `child_process`, Docker, or unrestricted runtimes.
 - Frontend must not create, store, or trust a real `session_id`; current backend session-shaped values are treated as transient backend attempt IDs only.
 
-## Prerequisites ðŸ§°
+## Prerequisites
 
 - Node.js 20+
 - npm
@@ -78,7 +78,7 @@ http://localhost:5041/api/v1
 
 Override with `NEXT_PUBLIC_API_BASE_URL` if needed.
 
-## Environment Files ðŸŒ±
+## Environment Files
 
 An example environment file is provided for handoff clarity:
 
@@ -100,7 +100,7 @@ AI provider keys:
 - The current backend AI chat endpoint is an MVP stub that logs interactions and returns canned guidance.
 - Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
 
-## Frontend ðŸ’»
+## Frontend
 
 Install dependencies:
 
@@ -136,7 +136,7 @@ Useful routes:
 
 The student workspace uses Monaco through `@monaco-editor/react`.
 
-## Backend âš™ï¸
+## Backend
 
 Run backend build:
 
@@ -162,7 +162,7 @@ Local demo users are seeded from development configuration:
 - Student: `student@example.com`
 - Password: `password`
 
-## API Notes ðŸ”Œ
+## API Notes
 
 Frontend API calls should go through:
 
@@ -185,7 +185,7 @@ Known contract bridge:
 - The current backend still exposes some session-shaped endpoints.
 - The frontend must keep backend attempt IDs transient in memory and must not persist them as authoritative frontend session state.
 
-## Agent Skills ðŸ§ 
+## Agent Skills
 
 Local agent skills live under:
 
@@ -214,7 +214,7 @@ MCP usage guidance for coding agents lives in:
 
 MCP servers are configured in each user's coding-agent environment. Do not commit MCP credentials, OAuth tokens, API keys, or personal agent settings.
 
-## Recommended Checks Before Handoff âœ…
+## Recommended Checks Before Handoff
 
 Frontend:
 
