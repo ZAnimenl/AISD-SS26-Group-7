@@ -12,7 +12,7 @@ import type { Assessment } from "@/lib/types";
 export default function StudentAssessmentReviewPage({ params }: { params: { assessmentId: string } }) {
   const router = useRouter();
   const [results, setResults] = useState<Assessment[]>([]);
-  const [activeAssessmentIds, setActiveAssessmentIds] = useState<string[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
           getStudentAssessments()
         ]);
         setResults(nextResults);
-        setActiveAssessmentIds(nextAssessments.map((assessment) => assessment.assessment_id));
+        setAssessments(nextAssessments);
       } catch {
         router.replace("/login");
       } finally {
@@ -34,11 +34,20 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
     load();
   }, [router]);
 
-  const result = useMemo(
-    () => results.find((item) => item.assessment_id === params.assessmentId),
-    [params.assessmentId, results]
-  );
-  const canStartAnotherAttempt = activeAssessmentIds.includes(params.assessmentId);
+  const result = useMemo(() => {
+    const nextResult = results.find((item) => item.assessment_id === params.assessmentId);
+    const assessment = assessments.find((item) => item.assessment_id === params.assessmentId);
+
+    if (!nextResult) {
+      return null;
+    }
+
+    return {
+      ...nextResult,
+      question_count: nextResult.question_count || assessment?.question_count || assessment?.questions.length || 0
+    };
+  }, [assessments, params.assessmentId, results]);
+  const canStartAnotherAttempt = assessments.some((assessment) => assessment.assessment_id === params.assessmentId);
 
   if (isLoading) {
     return <SectionHeader eyebrow="Assessment review" title="Loading result..." />;

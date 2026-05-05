@@ -277,6 +277,7 @@ export async function getStudentResults() {
       status: "closed",
       session_status: "submitted",
       score: item.max_score ? Math.round((item.score / item.max_score) * 100) : item.score,
+      question_count: item.question_count,
       ai_enabled: false
     })
   );
