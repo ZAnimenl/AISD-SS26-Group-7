@@ -115,20 +115,58 @@ public static class StudentEndpoints
             .Where(submission => submission.Session!.UserId == user!.Id)
             .Include(submission => submission.Session)
             .ThenInclude(session => session!.Assessment)
-            .OrderByDescending(submission => submission.SubmittedAt)
-            .Select(submission => new
-            {
-                submission_id = submission.Id,
-                session_id = submission.SessionId,
-                assessment_id = submission.Session!.AssessmentId,
-                assessment_title = submission.Session.Assessment!.Title,
-                submission.EvaluationStatus,
-                submission.Score,
-                max_score = submission.MaxScore,
-                submitted_at = submission.SubmittedAt
-            })
+            .ThenInclude(assessment => assessment!.Questions)
             .ToListAsync(cancellationToken);
 
-        return ApiResults.Success(results);
+        return ApiResults.Success(BuildResultSummaries(results));
     }
+
+    internal static IReadOnlyList<StudentResultSummary> BuildResultSummaries(IEnumerable<Submission> results)
+    {
+        return results
+            .GroupBy(submission => submission.SessionId)
+            .Select(group =>
+            {
+                var submissions = group.ToList();
+                var latestSubmission = submissions.OrderByDescending(submission => submission.SubmittedAt).First();
+                var score = submissions.Sum(submission => submission.Score);
+                var maxScore = submissions.Sum(submission => submission.MaxScore);
+
+                return new StudentResultSummary(
+                    SubmissionId: latestSubmission.Id,
+                    SessionId: latestSubmission.SessionId,
+                    AssessmentId: latestSubmission.Session!.AssessmentId,
+                    AssessmentTitle: latestSubmission.Session.Assessment!.Title,
+                    EvaluationStatus: BuildResultStatus(submissions, score, maxScore),
+                    Score: score,
+                    MaxScore: maxScore,
+                    QuestionCount: latestSubmission.Session.Assessment.Questions.Count,
+                    SubmittedAt: submissions.Max(submission => submission.SubmittedAt));
+            })
+            .OrderByDescending(result => result.SubmittedAt)
+            .ToList();
+    }
+
+    private static string BuildResultStatus(IReadOnlyCollection<Submission> submissions, int score, int maxScore)
+    {
+        if (maxScore > 0 && score == maxScore)
+        {
+            return ExecutionStatuses.Passed;
+        }
+
+        return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)
+            ? ExecutionStatuses.RuntimeError
+            : ExecutionStatuses.Failed;
+    }
+
+    internal sealed record StudentResultSummary(
+        Guid SubmissionId,
+        Guid SessionId,
+        Guid AssessmentId,
+        string AssessmentTitle,
+        string EvaluationStatus,
+        int Score,
+        int MaxScore,
+        int QuestionCount,
+        DateTimeOffset SubmittedAt);
 }
