@@ -5,7 +5,7 @@ export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" |
 export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
 export type AiInteractionType = "chat" | "hint" | "explain" | "debug" | "code_review";
 
-export interface MockUser {
+export interface AuthUser {
   user_id: string;
   name?: string;
   full_name?: string;
@@ -15,7 +15,7 @@ export interface MockUser {
   created_at?: string;
 }
 
-export type UserAccount = Required<Pick<MockUser, "user_id" | "full_name" | "email" | "role" | "status" | "created_at">>;
+export type UserAccount = Required<Pick<AuthUser, "user_id" | "full_name" | "email" | "role" | "status" | "created_at">>;
 
 export interface StarterCode {
   python: string;

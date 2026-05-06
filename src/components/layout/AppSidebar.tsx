@@ -39,7 +39,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
         </span>
         <span className={compact ? "sr-only" : ""}>
           <span className="block text-sm font-semibold text-white">AI Coding</span>
-          <span className="block text-xs text-white/40">Assessment MVP</span>
+          <span className="block text-xs text-white/40">Assessment Platform</span>
         </span>
       </Link>
 
