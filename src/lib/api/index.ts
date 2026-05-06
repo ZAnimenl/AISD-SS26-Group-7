@@ -5,9 +5,9 @@ import type {
   Assessment,
   AssessmentStatus,
   AttemptStatus,
+  AuthUser,
   AdminTestCase,
   Language,
-  MockUser,
   Question,
   ReportListItem,
   Role,
@@ -191,7 +191,7 @@ export function getStoredUser() {
   }
 
   const value = window.localStorage.getItem(USER_KEY);
-  return value ? (JSON.parse(value) as MockUser) : null;
+  return value ? (JSON.parse(value) as AuthUser) : null;
 }
 
 export async function login(email: string, password: string) {
@@ -526,7 +526,7 @@ export async function getAiResponse(input: {
   return response.response_markdown;
 }
 
-function normalizeUser(user: BackendUser): MockUser {
+function normalizeUser(user: BackendUser): AuthUser {
   const rawUser = user as BackendUser & {
     Role?: Role;
     Status?: "active" | "inactive";

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AI Coding Assessment",
-  description: "Frontend visual MVP for an AI-assisted coding assessment platform"
+  description: "AI-assisted coding assessment platform"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
