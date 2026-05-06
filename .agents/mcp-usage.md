@@ -31,6 +31,11 @@ browser / playwright
 postgres / database, read-only when possible
   Purpose: Inspect schema and data shape.
   Use during: backend and fullstack integration checks. Do not use it to bypass migrations, specs, or review.
+
+mcp-code-analyzer
+  Purpose: Run the project-provided scan_requirements_compliance tool against SPEC.md and local code heuristics.
+  Use during: planning, review, and handoff as an advisory requirements sanity check only.
+  Location: mcp-code-analyzer/
 ```
 
 ## Rules
@@ -40,7 +45,8 @@ postgres / database, read-only when possible
 3. Use Context7 when library/API behavior is version-sensitive or likely to have changed.
 4. Project specs override MCP output.
 5. MCP output must not be used to invent API contracts that conflict with `complete_frontend_api_list_and_backend_alignment.md`.
-6. If an MCP server is unavailable, report that limitation and continue with local specs, repo code, package versions, and official documentation where possible.
+6. The `mcp-code-analyzer` output is heuristic and advisory. It does not prove implementation correctness and does not override `SPEC.md`, the architecture PDF, API alignment docs, module boundaries, security rules, or local skills.
+7. If an MCP server is unavailable, report that limitation and continue with local specs, repo code, package versions, and official documentation where possible.
 
 ## Example Prompt
 

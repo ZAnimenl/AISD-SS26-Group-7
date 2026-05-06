@@ -107,6 +107,21 @@ Use by phase:
 - Team review/release/handoff: use `github` for issues, pull requests, branches, CI/checks, and review context.
 - Frontend implementation/review: use `browser` / `playwright` for local route, form, screenshot, and interaction checks.
 - Backend/fullstack integration: use read-only database MCP for schema/data inspection when a database MCP server is configured.
+- Requirements sanity check: optionally use the project-provided `mcp-code-analyzer` MCP server to run `scan_requirements_compliance`.
+
+### Project MCP: `mcp-code-analyzer`
+
+This repository may include a project-provided MCP server under:
+
+```text
+mcp-code-analyzer/
+```
+
+It exposes a `scan_requirements_compliance` tool that reads `SPEC.md` and produces a heuristic requirements-compliance report.
+
+Use this tool only as an advisory sanity check during planning, review, or handoff. Its output does not prove implementation correctness and does not override `SPEC.md`, the architecture PDF, API alignment docs, module boundaries, security rules, or local skills.
+
+If the analyzer output conflicts with authoritative specs or code review findings, follow the authoritative specs and report the conflict.
 
 Do not commit MCP OAuth tokens, API keys, bearer tokens, local MCP config, or personal agent settings.
 
@@ -114,9 +129,92 @@ Do not commit MCP OAuth tokens, API keys, bearer tokens, local MCP config, or pe
 
 # 3. Agent Workflow
 
+## 3.0 Default Implementation Workflow
+
+For every implementation request, use this strict sequence unless the user explicitly asks for planning-only or review-only work:
+
+1. Read `AGENTS.md`.
+2. Use `prompt-commander` first to route the task, define scope, identify risks, and choose the skill chain.
+3. Run the skill activation checklist in section 3.0.1 and state which skills are active, which are inactive, and why.
+4. Implement with the selected primary coding skill.
+5. Use companion skills only for the specific boundary or contract risks identified by `prompt-commander`.
+6. Finish with `strict-code-reviewer`, or provide the exact reviewer checklist if a separate review pass will run next.
+7. Report the closed implementation loop from section 3.4.
+
+Do not skip `prompt-commander` for implementation tasks. For tiny mechanical edits, the commander pass may be brief, but it must still identify the owning module and selected skill chain before editing.
+
+The same agent may continue from the commander pass into implementation. Do not stop after producing a refined prompt unless the user asked for planning-only or prompt-generation-only work.
+
+For planning-only work, use `prompt-commander` and do not modify files.
+For review-only work, use `strict-code-reviewer` and do not modify files.
+For handoff-only work, use `handoff-summary` and do not modify files unless explicitly asked.
+
+Default implementation prompt users may give:
+
+```text
+Read AGENTS.md and follow the default implementation workflow with maximum strictness.
+Use prompt-commander first, run the skill activation checklist, then implement with the selected skill chain.
+
+Task: <describe the implementation>
+
+Do not edit specification documents. Respect module boundaries. After implementation, run relevant checks and report changed files, verification commands, spec/API/security risks, and review status.
+```
+
+## 3.0.1 Skill Activation Checklist
+
+Before implementation, consider every local skill and activate only the ones that apply:
+
+1. `spec-guardian`
+   - Activate when the task touches requirements, acceptance criteria, security boundaries, hidden tests, session/attempt behavior, AI-provider safety, or any possible conflict between specs and implementation.
+   - If inactive, state that no spec conflict or requirements interpretation risk was identified.
+
+2. `module-router`
+   - Activate when module ownership is unclear after the initial commander pass.
+   - If inactive, state that ownership was clear and name the owning module.
+
+3. `prompt-commander`
+   - Always activate first for implementation tasks.
+   - Use it to choose the primary coding skill, companion skills, forbidden scope, and verification expectations.
+
+4. `module1-identity-assessment-coder`
+   - Activate for backend identity, auth/RBAC, assessment, question/test-case persistence, attempts, workspace persistence, submissions, results, reports, EF Core, PostgreSQL, or backend API ownership.
+
+5. `module2-frontend-ide-coder`
+   - Activate for Next.js UI, browser IDE, Monaco/editor, student/admin pages, frontend API client behavior, loading/error states, UI polish, mock data, or frontend workspace behavior.
+
+6. `module3-sandbox-execution-coder`
+   - Activate for sandboxed execution, grading, hidden test evaluation, stdout/stderr capture, workers/queues, resource limits, timeouts, or execution result schema.
+
+7. `module4-ai-telemetry-coder`
+   - Activate for AI backend service, provider integration, secure AI proxy, telemetry, semantic tags, structured AI responses, inline completion backend, system prompts, or AI provider error handling.
+
+8. `fullstack-integration-coder`
+   - Activate as primary when the task requires coordinated frontend/backend implementation.
+   - Activate as companion when a module-specific task has API, auth, session/attempt, request/response, or end-to-end contract risk.
+
+9. `strict-code-reviewer`
+   - Activate after implementation unless the user explicitly says a separate reviewer will handle review.
+
+10. `handoff-summary`
+    - Activate when context is getting full, work is paused midstream, or the user asks for a handoff.
+
+Skill activation is a checklist, not permission to use every skill at once. A skill that is inactive should be briefly marked inactive with a reason. This prevents forgotten skills while keeping ownership narrow.
+
+## 3.0.2 Hallucination-Reduction Rules
+
+To reduce ambiguity and repeated-instruction drift:
+
+1. Treat `AGENTS.md` as the single global orchestration source.
+2. Treat skill files as role-specific instructions, not separate sources of project truth.
+3. If a skill repeats a global rule, use the `AGENTS.md` version when wording differs.
+4. Do not infer requirements from skill wording when the authoritative specs say something different.
+5. Do not invent missing API contracts, routes, schema fields, hidden-test behavior, or AI-provider behavior.
+6. When uncertain, inspect local code and specs before acting; if still uncertain, report the uncertainty instead of guessing.
+7. Keep implementation scope tied to the active primary skill. Companion skills provide checks and constraints, not extra permission to expand scope.
+
 ## 3.1 Planning / Commander Work
 
-Use this skill when the user asks for planning, phase breakdown, task routing, or coding prompts:
+Use this skill first for every implementation task, and also when the user asks for planning, phase breakdown, task routing, or coding prompts:
 
 ```text
 Use the prompt-commander skill.
@@ -130,9 +228,10 @@ The commander should:
 4. Keep the implementation prompt as one focused stage by default.
 5. Split work into phases only when the user asks for phases or the task is too risky to implement in one pass.
 6. Include a `Skills to use` section in generated prompts, with primary and companion skills.
-7. Produce the exact coding-agent prompt for the requested stage.
-8. Produce a review checklist.
-9. Require implementation output to include verification commands, changed files, contract/spec risks, and review status.
+7. Run the skill activation checklist from section 3.0.1.
+8. Produce the exact coding-agent prompt for the requested stage.
+9. Produce a review checklist.
+10. Require implementation output to include verification commands, changed files, contract/spec risks, and review status.
 
 The commander must not modify files unless explicitly instructed.
 
@@ -160,7 +259,7 @@ The router must not modify files.
 
 ## 3.3 Coding Work
 
-Use exactly one suitable coding skill unless the task is explicitly cross-module.
+Use exactly one primary coding skill unless the task is explicitly cross-module. Companion skills may be active for boundary checks, but they do not expand the write scope unless `prompt-commander` explicitly approved cross-module implementation.
 
 ### Module 1: Identity / Assessment / Backend / Database
 
