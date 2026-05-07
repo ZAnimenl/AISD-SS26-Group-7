@@ -8,7 +8,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       <ParticleBackground />
       <AppSidebar role="administrator" />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <TopBar label="Administrator assessment authoring and reporting" />
+        <TopBar label="Search admin pages..." role="administrator" />
         <main className="relative flex-1 p-4 lg:p-6">{children}</main>
       </div>
     </div>
