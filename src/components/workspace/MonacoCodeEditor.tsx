@@ -7,7 +7,7 @@ import type { Language } from "@/lib/types";
 const Editor = dynamic(() => import("@monaco-editor/react").then((module) => module.default), {
   ssr: false,
   loading: () => (
-    <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-white/10 bg-[#080b14] font-mono text-sm text-white/45">
+    <div className="grid h-full min-h-0 place-items-center rounded-xl border border-white/10 bg-[#080b14] font-mono text-sm text-white/45">
       Loading editor...
     </div>
   )
@@ -53,7 +53,7 @@ export function MonacoCodeEditor({ assessmentId, questionId, fileName, language,
   };
 
   return (
-    <div className="h-full min-h-[320px] overflow-hidden rounded-xl border border-white/10 bg-[#080b14]">
+    <div className="h-full min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#080b14]">
       <Editor
         height="100%"
         path={modelPath}

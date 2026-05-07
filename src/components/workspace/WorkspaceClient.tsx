@@ -338,7 +338,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
       </aside>
 
-      <section className="liquid-glass-neon dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl">
+      <section className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl">
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
@@ -364,8 +364,8 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             {runState === "running" ? "Running..." : "Run"}
           </button>
         </div>
-        <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_176px]">
-          <div className="scanline min-h-0 bg-black/30 p-3">
+        <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(220px,28vh)]">
+          <div className="min-h-0 overflow-hidden bg-black/30 p-3">
             <MonacoCodeEditor
               assessmentId={assessment.assessment_id}
               questionId={activeQuestionId}
@@ -375,24 +375,12 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
               onChange={updateCode}
             />
           </div>
-          <div className="border-t border-white/10 bg-black/25 p-3">
-            <div className="mb-2 flex items-center justify-between">
+          <div className="flex min-h-0 flex-col overflow-hidden border-t border-white/10 bg-black/25 p-3">
+            <div className="mb-2 flex shrink-0 items-center justify-between">
               <h2 className="font-semibold">Output console</h2>
               <span className="text-xs text-white/40">Public/sample tests only</span>
             </div>
-            {buildRunFailureSummary(runResult, error) ? (
-              <div className="mb-3 rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 p-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
-                <p className="mt-2 text-sm leading-6 text-white/70">
-                  The last run exposed a problem. Ask the assistant to debug the current output and code path.
-                </p>
-                <button className="btn-secondary mt-3 px-3 py-2 text-xs" onClick={() => sendAi("debug", buildDebugPrompt(runResult, error))}>
-                  <Sparkles size={14} />
-                  Ask AI to debug this run
-                </button>
-              </div>
-            ) : null}
-            <div className="scrollbar-soft scanline h-[116px] overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
+            <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
               {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
               {runResult ? (
                 <div className="space-y-3">
@@ -407,6 +395,18 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                 <p className="text-white/35">Run code to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
               )}
             </div>
+            {buildRunFailureSummary(runResult, error) ? (
+              <div className="mt-2 shrink-0 rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
+                <p className="mt-1 text-xs leading-5 text-white/65">
+                  The last run exposed a problem. Ask the assistant for a focused debugging hint.
+                </p>
+                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debug", buildDebugPrompt(runResult, error))}>
+                  <Sparkles size={14} />
+                  Ask AI to debug this run
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -422,8 +422,10 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["hint", "explain", "debug", "code_review"] as AiInteractionType[]).map((type) => (
             <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45" onClick={() => sendAi(type)}>
-              <Sparkles size={14} />
-              {type.replace("_", " ")}
+              <span className="ml-8 grid w-[132px] grid-cols-[18px_96px] items-center gap-3 text-left">
+                <Sparkles size={14} className="justify-self-center" />
+                <span className="block">{type.replace("_", " ")}</span>
+              </span>
             </button>
           ))}
         </div>

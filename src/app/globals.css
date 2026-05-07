@@ -108,12 +108,31 @@ textarea {
 
   .page-shell {
     min-height: 100vh;
+    background-color: hsl(var(--background));
+    isolation: isolate;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .page-shell::before {
+    content: "";
+    position: fixed;
+    inset: -18%;
+    z-index: 0;
     background:
-      radial-gradient(ellipse 70% 55% at 14% 18%, rgba(0, 229, 255, 0.12), transparent 58%),
-      radial-gradient(ellipse 65% 50% at 86% 72%, rgba(168, 85, 247, 0.14), transparent 60%),
-      radial-gradient(ellipse 45% 35% at 56% 8%, rgba(236, 72, 153, 0.08), transparent 56%),
-      hsl(var(--background));
+      radial-gradient(ellipse 52% 44% at 16% 20%, rgba(0, 229, 255, 0.34), transparent 62%),
+      radial-gradient(ellipse 54% 46% at 86% 68%, rgba(168, 85, 247, 0.36), transparent 64%),
+      radial-gradient(ellipse 36% 30% at 56% 8%, rgba(236, 72, 153, 0.22), transparent 58%),
+      radial-gradient(ellipse 42% 32% at 42% 92%, rgba(0, 229, 255, 0.18), transparent 62%);
+    filter: blur(18px) saturate(1.22);
+    opacity: 0.72;
     animation: ambientShift 34s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  .page-shell > * {
+    position: relative;
+    z-index: 1;
   }
 
   .panel {
@@ -283,16 +302,19 @@ textarea {
 
 @keyframes ambientShift {
   0% {
-    background-position: 0% 0%, 100% 100%, 50% 0%, 0 0;
-    filter: hue-rotate(0deg) saturate(1);
+    background-position: 0% 0%, 100% 100%, 50% 0%, 42% 92%;
+    filter: blur(18px) hue-rotate(0deg) saturate(1.18);
+    transform: scale(1) translate3d(0, 0, 0);
   }
   50% {
-    background-position: 12% 10%, 88% 82%, 56% 8%, 0 0;
-    filter: hue-rotate(8deg) saturate(1.08);
+    background-position: 18% 12%, 74% 84%, 62% 14%, 34% 78%;
+    filter: blur(22px) hue-rotate(16deg) saturate(1.42);
+    transform: scale(1.08) translate3d(-2%, 1%, 0);
   }
   100% {
-    background-position: 4% 18%, 96% 74%, 46% 14%, 0 0;
-    filter: hue-rotate(-6deg) saturate(1.04);
+    background-position: 6% 28%, 94% 56%, 42% 20%, 58% 88%;
+    filter: blur(20px) hue-rotate(-14deg) saturate(1.32);
+    transform: scale(1.04) translate3d(2%, -1%, 0);
   }
 }
 
