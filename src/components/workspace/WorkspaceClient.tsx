@@ -10,7 +10,6 @@ import type { AiInteractionType, Assessment, Language, Question, RunResult, Work
 interface WorkspaceClientProps {
   assessment: Assessment;
   workspace: WorkspaceState;
-  backendAttemptId: string;
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
@@ -101,7 +100,7 @@ function mergeQuestionStates(current: WorkspaceState["questions"], saved: Worksp
   }), current);
 }
 
-export function WorkspaceClient({ assessment, workspace, backendAttemptId }: WorkspaceClientProps) {
+export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const router = useRouter();
   const firstQuestion = assessment.questions[0];
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "q-two-sum");
@@ -130,7 +129,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
       try {
         const activeFile = getFileNameForLanguage(language);
         const savedWorkspace = await autosaveWorkspace(
-          backendAttemptId,
+          assessment.assessment_id,
           activeQuestionId,
           language,
           activeFile,
@@ -147,7 +146,7 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [activeQuestionId, backendAttemptId, code, language]);
+  }, [activeQuestionId, assessment.assessment_id, code, language]);
 
   function persistCurrentCode(nextQuestionStates = questionStates) {
     const activeFile = getFileNameForLanguage(language);
@@ -233,7 +232,6 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     setError(null);
     try {
       setRunResult(await runCode({
-        backend_attempt_id: backendAttemptId,
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         selected_language: language,
@@ -251,7 +249,6 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     try {
       const response = await getAiResponse({
-        backend_attempt_id: backendAttemptId,
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         interaction_type: type,
@@ -277,10 +274,10 @@ export function WorkspaceClient({ assessment, workspace, backendAttemptId }: Wor
     try {
       const nextQuestionStates = persistCurrentCode();
       setQuestionStates(nextQuestionStates);
-      const savedWorkspace = await saveWorkspace(backendAttemptId, nextQuestionStates);
+      const savedWorkspace = await saveWorkspace(assessment.assessment_id, nextQuestionStates);
       setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
       setSaveState("saved");
-      await finalizeSubmission(backendAttemptId);
+      await finalizeSubmission(assessment.assessment_id);
       router.push(`/student/assessments/${assessment.assessment_id}/review`);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");

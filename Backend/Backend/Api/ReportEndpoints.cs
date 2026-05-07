@@ -93,7 +93,7 @@ public static class ReportEndpoints
                 user_id = session.UserId,
                 student_name = session.User!.FullName,
                 student_email = session.User.Email,
-                session_status = session.Status,
+                attempt_status = session.Status,
                 submission_status = summary?.Status,
                 score = summary?.Score ?? 0,
                 max_score = summary?.MaxScore ?? 0,
@@ -139,7 +139,7 @@ public static class ReportEndpoints
             .FirstOrDefaultAsync(item => item.AssessmentId == assessmentId && item.UserId == studentId, cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
         var submissions = await dbContext.Submissions
@@ -174,8 +174,8 @@ public static class ReportEndpoints
             assessment_id = assessmentId,
             assessment_title = session.Assessment!.Title,
             student = AuthEndpoints.ToUserDto(session.User!),
-            session_id = session.Id,
-            session_status = session.Status,
+            attempt_id = session.Id,
+            attempt_status = session.Status,
             submissions,
             ai_interactions = interactions
         });

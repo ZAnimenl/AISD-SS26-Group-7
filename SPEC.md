@@ -158,10 +158,10 @@ MVP clarification: first MVP student languages are Python and JavaScript only. T
 ### 6.13 Assessment Attempt and Identity Scope
 - **REQ-53** The backend shall identify the current user from the authentication context, such as JWT or another secure token, rather than relying on a frontend-supplied user identifier.
 - **REQ-54** When a student starts or resumes an assessment, the backend shall resolve the active assessment attempt from the authenticated user and assessment identifier.
-- **REQ-55** The frontend shall not be responsible for creating, storing, or trusting a real `session_id`; any frontend-held attempt/session value shall be either mock-only state or a backend-returned transient compatibility value kept in memory only.
+- **REQ-55** The frontend shall not be responsible for creating, storing, trusting, or sending a real `session_id`; backend-connected assessment flows shall use assessment-scoped APIs where the backend resolves the active attempt from authentication context.
 - **REQ-56** Workspace code shall be scoped to the authenticated user, assessment, and question so that each student sees only their own in-progress code.
 
-Terminology clarification: older architecture material may use `session_id` for the assessment attempt identifier. In the current requirements, that concept is backend-owned and should be treated as an assessment attempt/session resolved from authenticated user + assessment_id. The frontend must not create, persist, or trust this identifier as authoritative state. If an interim backend endpoint still requires a session-shaped value, the frontend may hold the backend-returned attempt identifier in memory only for the duration of the page flow.
+Terminology clarification: older architecture material may use `session_id` for the assessment attempt identifier. In the current requirements, that concept is backend-owned and should be treated as an assessment attempt resolved from authenticated user + assessment_id. The frontend must not create, persist, send, or trust this identifier as authoritative state.
 ---
 
 ## 7. Non-Functional Requirements

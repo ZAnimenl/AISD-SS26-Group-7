@@ -180,7 +180,6 @@ public static class AssessmentEndpoints
 
     private static async Task<IResult> ContextAsync(
         Guid assessmentId,
-        Guid sessionId,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
@@ -202,11 +201,14 @@ public static class AssessmentEndpoints
         }
 
         var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.Id == sessionId && item.AssessmentId == assessmentId && item.UserId == user!.Id,
+            item => item.AssessmentId == assessmentId
+                    && item.UserId == user!.Id
+                    && item.Status == SessionStatuses.Active
+                    && item.ExpiresAt > DateTimeOffset.UtcNow,
             cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
         return ApiResults.Success(projectionService.ToStudentContext(assessment, session));

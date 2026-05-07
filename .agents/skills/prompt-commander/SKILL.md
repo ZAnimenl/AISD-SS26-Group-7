@@ -25,6 +25,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -93,10 +94,10 @@ The architecture has four non-overlapping modules:
 The architecture PDF contains older schema examples using `session_id`.
 However, the current requirements/API alignment decision says:
 
-- The frontend must not create, store, or trust a real `session_id`.
+- The frontend must not create, store, trust, or send a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Frontend-only first-MVP attempt/session state may be mock-only; backend-connected work may use backend-returned attempt identifiers only as transient in-memory compatibility values.
+- Frontend-only first-MVP attempt/session state may be mock-only. Backend-connected workspace, run, submit, and AI flows are assessment-scoped and must not send `session_id` or `attempt_id`.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 

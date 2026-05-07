@@ -10,13 +10,27 @@ public static class SessionEndpoints
 {
     public static void Map(RouteGroupBuilder api)
     {
-        api.MapPost("/sessions/initiate", InitiateAsync);
-        api.MapGet("/sessions/{sessionId:guid}", GetAsync);
-        api.MapPost("/sessions/{sessionId:guid}/complete", CompleteAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/attempts/start", StartAttemptAsync);
+        api.MapGet("/assessments/{assessmentId:guid}/attempt", GetActiveAttemptAsync);
     }
 
-    private static async Task<IResult> InitiateAsync(
-        InitiateSessionRequest request,
+    private static async Task<IResult> StartAttemptAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        return await StartAttemptForAssessmentAsync(
+            assessmentId,
+            httpContext,
+            dbContext,
+            currentUserAccessor,
+            cancellationToken);
+    }
+
+    private static async Task<IResult> StartAttemptForAssessmentAsync(
+        Guid assessmentId,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
@@ -30,7 +44,7 @@ public static class SessionEndpoints
 
         var assessment = await dbContext.Assessments
             .Include(item => item.Questions)
-            .FirstOrDefaultAsync(item => item.Id == request.AssessmentId, cancellationToken);
+            .FirstOrDefaultAsync(item => item.Id == assessmentId, cancellationToken);
         if (assessment is null)
         {
             return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
@@ -38,14 +52,14 @@ public static class SessionEndpoints
 
         if (assessment.Status != AssessmentStatuses.Active)
         {
-            return ApiResults.Error("ASSESSMENT_CLOSED", "Assessment is not open for new sessions.", StatusCodes.Status409Conflict);
+            return ApiResults.Error("ASSESSMENT_CLOSED", "Assessment is not open for new attempts.", StatusCodes.Status409Conflict);
         }
 
         var now = DateTimeOffset.UtcNow;
         var session = await dbContext.AssessmentSessions
             .Include(item => item.WorkspaceStates)
             .FirstOrDefaultAsync(
-                item => item.AssessmentId == request.AssessmentId
+                item => item.AssessmentId == assessmentId
                         && item.UserId == user!.Id
                         && item.Status == SessionStatuses.Active
                         && item.ExpiresAt > now,
@@ -68,48 +82,15 @@ public static class SessionEndpoints
 
         await EnsureWorkspaceAsync(dbContext, session, assessment, now, cancellationToken);
 
-        return ApiResults.Success(ToSessionDto(session, now));
+        return ApiResults.Success(ToAttemptDto(session, now));
     }
 
-    private static async Task<IResult> GetAsync(
-        Guid sessionId,
+    private static async Task<IResult> GetActiveAttemptAsync(
+        Guid assessmentId,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
         SessionClock sessionClock,
-        CancellationToken cancellationToken)
-    {
-        var (user, error) = await currentUserAccessor.RequireUserAsync(httpContext, dbContext, cancellationToken);
-        if (error is not null)
-        {
-            return error;
-        }
-
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(item => item.Id == sessionId, cancellationToken);
-        if (session is null)
-        {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
-        }
-
-        if (user!.Role == UserRoles.Student && session.UserId != user.Id)
-        {
-            return ApiResults.Error("FORBIDDEN", "The current user cannot access this session.", StatusCodes.Status403Forbidden);
-        }
-
-        if (session.Status == SessionStatuses.Active && sessionClock.GetEffectiveStatus(session) == SessionStatuses.Expired)
-        {
-            session.Status = SessionStatuses.Expired;
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        return ApiResults.Success(ToSessionDto(session, DateTimeOffset.UtcNow));
-    }
-
-    private static async Task<IResult> CompleteAsync(
-        Guid sessionId,
-        HttpContext httpContext,
-        OjSharpDbContext dbContext,
-        CurrentUserAccessor currentUserAccessor,
         CancellationToken cancellationToken)
     {
         var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
@@ -118,16 +99,22 @@ public static class SessionEndpoints
             return error;
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.UserId == user!.Id, cancellationToken);
+        var session = await dbContext.AssessmentSessions
+            .FirstOrDefaultAsync(
+                item => item.AssessmentId == assessmentId && item.UserId == user!.Id && item.Status == SessionStatuses.Active,
+                cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        session.Status = SessionStatuses.Closed;
-        session.CompletedAt = DateTimeOffset.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return ApiResults.Success(ToSessionDto(session, DateTimeOffset.UtcNow));
+        if (sessionClock.GetEffectiveStatus(session) == SessionStatuses.Expired)
+        {
+            session.Status = SessionStatuses.Expired;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return ApiResults.Success(ToAttemptDto(session, DateTimeOffset.UtcNow));
     }
 
     private static async Task EnsureWorkspaceAsync(
@@ -176,13 +163,13 @@ public static class SessionEndpoints
         };
     }
 
-    private static object ToSessionDto(AssessmentSession session, DateTimeOffset now)
+    private static object ToAttemptDto(AssessmentSession session, DateTimeOffset now)
     {
         return new
         {
-            session_id = session.Id,
+            attempt_id = session.Id,
             assessment_id = session.AssessmentId,
-            session_status = session.Status,
+            attempt_status = session.Status,
             started_at = session.StartedAt,
             expires_at = session.ExpiresAt,
             server_time = now

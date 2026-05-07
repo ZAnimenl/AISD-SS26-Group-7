@@ -10,12 +10,14 @@ public static class ExecutionEndpoints
 {
     public static void Map(RouteGroupBuilder api)
     {
-        api.MapPost("/executions/run", RunAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/questions/{questionId:guid}/run", RunByAssessmentAsync);
         api.MapGet("/executions/{executionId:guid}", GetAsync);
     }
 
-    private static async Task<IResult> RunAsync(
-        RunCodeRequest request,
+    private static async Task<IResult> RunByAssessmentAsync(
+        Guid assessmentId,
+        Guid questionId,
+        AssessmentRunCodeRequest request,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
@@ -30,34 +32,66 @@ public static class ExecutionEndpoints
         }
 
         var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.Id == request.SessionId && item.UserId == user!.Id,
+            item => item.AssessmentId == assessmentId
+                    && item.UserId == user!.Id
+                    && item.Status == SessionStatuses.Active
+                    && item.ExpiresAt > DateTimeOffset.UtcNow,
             cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
         if (sessionClock.IsClosed(session))
         {
-            return ApiResults.Error("SESSION_EXPIRED", "The assessment session has expired.", StatusCodes.Status409Conflict);
+            return ApiResults.Error("ATTEMPT_EXPIRED", "The assessment attempt has expired.", StatusCodes.Status409Conflict);
+        }
+
+        return await RunForSessionAsync(
+            session.Id,
+            session.AssessmentId,
+            questionId,
+            request.SelectedLanguage,
+            request.ActiveFileContent,
+            dbContext,
+            evaluationService,
+            cancellationToken);
+    }
+
+    private static async Task<IResult> RunForSessionAsync(
+        Guid sessionId,
+        Guid assessmentId,
+        Guid questionId,
+        string selectedLanguage,
+        string activeFileContent,
+        OjSharpDbContext dbContext,
+        CodeEvaluationService evaluationService,
+        CancellationToken cancellationToken)
+    {
+        var questionExists = await dbContext.Questions.AnyAsync(
+            question => question.Id == questionId && question.AssessmentId == assessmentId,
+            cancellationToken);
+        if (!questionExists)
+        {
+            return ApiResults.Error("QUESTION_NOT_FOUND", "Question was not found for this assessment.", StatusCodes.Status404NotFound);
         }
 
         var publicTests = await dbContext.TestCases
-            .Where(testCase => testCase.QuestionId == request.QuestionId && testCase.Visibility == TestCaseVisibilities.Public)
+            .Where(testCase => testCase.QuestionId == questionId && testCase.Visibility == TestCaseVisibilities.Public)
             .ToListAsync(cancellationToken);
         var executionId = Guid.NewGuid();
         var result = await evaluationService.EvaluateAsync(
             executionId,
             publicTests,
-            request.ActiveFileContent,
-            request.SelectedLanguage,
+            activeFileContent,
+            selectedLanguage,
             cancellationToken);
 
         dbContext.ExecutionRecords.Add(new ExecutionRecord
         {
             Id = executionId,
-            SessionId = request.SessionId,
-            QuestionId = request.QuestionId,
+            SessionId = sessionId,
+            QuestionId = questionId,
             Status = result.Status,
             Stdout = result.Stdout,
             Stderr = result.Stderr,

@@ -24,6 +24,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -511,7 +512,7 @@ Must not:
 - call external LLM APIs directly
 - execute student code locally
 - expose hidden test cases in student UI
-- create/store/trust a real frontend-managed `session_id`
+- create/store/trust/send a real frontend-managed `session_id`
 
 ---
 
@@ -625,11 +626,11 @@ The architecture PDF may contain older schema examples using `session_id`.
 
 For the current implementation, follow the newer requirements/API alignment decision:
 
-1. Frontend must not create, store, or trust a real `session_id`.
+1. Frontend must not create, store, trust, or send a real `session_id`.
 2. Backend should identify the user from authentication context, such as JWT or another secure token.
 3. Backend should resolve the active assessment attempt from authenticated user + `assessment_id`.
-4. Frontend mock state is allowed only for visual/MVP behavior.
-5. If an interim backend endpoint still requires a session-shaped value, the frontend may pass the backend-returned attempt identifier as a transient in-memory compatibility value only. Do not persist it or treat it as authoritative identity/session state.
+4. Frontend mock state is allowed only for visual/frontend-only MVP behavior.
+5. Public backend-connected assessment flows are assessment-scoped. Frontend workspace, run, submit, and AI calls must not send a `session_id` or `attempt_id`; the backend resolves the active attempt internally.
 
 If a task appears to require frontend-managed `session_id`, stop and ask for clarification.
 

@@ -7,7 +7,7 @@ AI-assisted online coding assessment platform for browser-based coding assessmen
 This repository contains a Next.js frontend and an ASP.NET backend:
 
 - `src/` - Next.js App Router frontend, student/admin pages, browser IDE workspace, frontend API client, shared frontend types.
-- `Backend/Backend/` - ASP.NET backend API, auth, assessments, sessions/attempts, workspace persistence, submissions, reports, AI endpoint stubs, and execution endpoints.
+- `Backend/Backend/` - ASP.NET backend API, auth, assessments, backend-owned attempts, workspace persistence, submissions, reports, AI endpoint stubs, and execution endpoints.
 - `Backend/OjSharp.Tests/` - backend contract and service tests.
 - `.agents/skills/` - local agent skills for planning, implementation, integration, review, and handoff.
 - `.agents/mcp-usage.md` - MCP server usage guidance for coding-agent workflows.
@@ -20,6 +20,8 @@ Authoritative project documents:
 - `ui-style-reference.md`
 
 Do not edit those specification files unless the task explicitly asks for documentation/spec changes.
+
+Note: the architecture PDF is still useful for module boundaries, but some API examples in it are older. Use `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md` for the current backend-connected attempt/workspace/run/submit/AI routes.
 
 
 ## Architecture Boundaries
@@ -43,7 +45,7 @@ Security rules:
 - Student frontend must never receive hidden test inputs, hidden expected outputs, or grading implementation.
 - Frontend must not access the database, sandbox, or external AI providers directly.
 - Do not execute student submissions locally with `eval`, `child_process`, Docker, or unrestricted runtimes.
-- Frontend must not create, store, or trust a real `session_id`; current backend session-shaped values are treated as transient backend attempt IDs only.
+- Frontend must not create, store, trust, or send a real `session_id`; backend-connected assessment flows use assessment-scoped APIs and the backend resolves the active attempt from auth context.
 
 ## Prerequisites
 
@@ -182,8 +184,8 @@ Important connected flows include:
 Known contract bridge:
 
 - The alignment docs prefer auth-context + `assessment_id` attempt resolution.
-- The current backend still exposes some session-shaped endpoints.
-- The frontend must keep backend attempt IDs transient in memory and must not persist them as authoritative frontend session state.
+- The current public backend API no longer exposes session-shaped routes for attempt/workspace/run/submit/AI flows.
+- Frontend workspace, run, submit, and AI calls are assessment-scoped; the backend resolves the active attempt internally from the authenticated user and `assessment_id`.
 
 ## Agent Skills
 
@@ -240,7 +242,7 @@ rg "eval\(|child_process|docker|openai|anthropic|gemini" src Backend
 Expected safety posture:
 
 - No runtime mock API imports.
-- No frontend-managed stored assessment session ID.
+- No frontend-managed or frontend-sent assessment session ID.
 - No local execution of student submissions.
 - No direct external AI provider calls from frontend.
 - No hidden test input/output in student UI.
