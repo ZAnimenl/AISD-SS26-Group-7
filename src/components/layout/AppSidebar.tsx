@@ -34,11 +34,11 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
   return (
     <aside className={`liquid-glass sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 py-5 lg:flex ${compact ? "w-16 px-2" : "w-64 px-4"}`}>
       <Link href={role === "student" ? "/student/dashboard" : "/admin/dashboard"} className={`relative flex items-center ${compact ? "justify-center" : "gap-3"}`}>
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow shadow-[0_0_20px_rgba(0,229,255,0.22)]">
+        <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow shadow-[0_0_20px_rgba(0,229,255,0.22)]">
           <Sparkles size={20} />
         </span>
         <span className={compact ? "sr-only" : ""}>
-          <span className="block text-sm font-semibold text-white">AI Coding</span>
+          <span className="live-gradient-text block text-sm font-semibold">AI Coding</span>
           <span className="block text-xs text-white/40">Assessment Platform</span>
         </span>
       </Link>
@@ -53,10 +53,10 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
               href={item.href}
               title={compact ? item.label : undefined}
               className={`relative flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm transition ${
-                active ? "border-cyanGlow/20 bg-white/8 text-cyanGlow" : "border-transparent text-white/55 hover:bg-white/5 hover:text-white"
+                active ? "border-cyanGlow/30 bg-white/8 text-cyanGlow shadow-[0_0_22px_rgba(0,229,255,0.10)]" : "border-transparent text-white/55 hover:bg-white/5 hover:text-white"
               } ${compact ? "justify-center px-0" : ""}`}
             >
-              {active ? <span className="absolute left-0 top-2 h-6 w-0.5 rounded-full bg-cyanGlow" /> : null}
+              {active ? <span className="absolute left-0 top-2 h-6 w-0.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.8)]" /> : null}
               <Icon size={18} />
               <span className={compact ? "sr-only" : ""}>{item.label}</span>
             </Link>
@@ -65,7 +65,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
       </nav>
 
       <div className="relative mt-auto space-y-3">
-        <div className={`rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-white/45 ${compact ? "hidden" : ""}`}>
+        <div className={`scanline rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-white/45 ${compact ? "hidden" : ""}`}>
           Role: <span className="text-white/75">{role === "student" ? "Student" : "Administrator"}</span>
         </div>
         <button

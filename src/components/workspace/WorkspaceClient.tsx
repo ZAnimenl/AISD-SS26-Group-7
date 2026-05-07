@@ -289,7 +289,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
 
   return (
     <div className="grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
-      <aside className="panel flex min-h-0 min-w-0 flex-col rounded-xl p-3">
+      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3">
         <div className="relative flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Question list</p>
@@ -302,8 +302,8 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             <button
               key={question.question_id}
               onClick={() => switchQuestion(question)}
-              className={`w-full rounded-xl border p-3 text-left transition ${
-                question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+              className={`dynamic-surface w-full rounded-xl border p-3 text-left transition ${
+                question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10 shadow-[0_0_18px_rgba(0,229,255,0.08)]" : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
             >
               <p className="text-xs text-white/40">Question {index + 1}</p>
@@ -311,7 +311,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             </button>
           ))}
         </div>
-        <div className="scrollbar-soft relative mt-4 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="scrollbar-soft scanline relative mt-4 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           <p className="text-xs uppercase tracking-[0.16em] text-white/35">Problem statement</p>
           <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
           <p className="mt-3 leading-7 text-white/65">{activeQuestion?.problem_description_markdown}</p>
@@ -338,19 +338,19 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
       </aside>
 
-      <section className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl">
+      <section className="liquid-glass-neon dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl">
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
             <h1 className="truncate text-lg font-semibold xl:text-xl">{assessment.title}</h1>
           </div>
           <span className="badge hidden xl:inline-flex"><Clock size={14} /> 01:08:42</span>
-          <span className="badge"><UploadCloud size={14} /> {saveState}</span>
+          <span className="badge"><UploadCloud className={saveState === "saving" ? "animate-pulse" : ""} size={14} /> {saveState}</span>
           <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)}>Submit</button>
         </div>
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
-          <span className="rounded-t-xl border border-b-0 border-cyanGlow/30 bg-black/30 px-4 py-2 font-mono text-xs text-cyanGlow">
+          <span className="rounded-t-xl border border-b-0 border-cyanGlow/30 bg-black/30 px-4 py-2 font-mono text-xs text-cyanGlow shadow-[0_-8px_24px_rgba(0,229,255,0.06)]">
             {activeFile}
           </span>
           <label className="ml-auto hidden text-xs text-white/40 xl:inline" htmlFor="language">Language</label>
@@ -365,7 +365,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           </button>
         </div>
         <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_176px]">
-          <div className="min-h-0 bg-black/30 p-3">
+          <div className="scanline min-h-0 bg-black/30 p-3">
             <MonacoCodeEditor
               assessmentId={assessment.assessment_id}
               questionId={activeQuestionId}
@@ -392,7 +392,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                 </button>
               </div>
             ) : null}
-            <div className="scrollbar-soft h-[116px] overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
+            <div className="scrollbar-soft scanline h-[116px] overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
               {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
               {runResult ? (
                 <div className="space-y-3">
@@ -411,9 +411,9 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
       </section>
 
-      <aside className="panel flex min-h-0 min-w-0 flex-col rounded-xl p-3">
+      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3">
         <div className="relative flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
+          <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
           <div className="min-w-0">
             <h2 className="font-semibold">AI assistant</h2>
             <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
@@ -421,7 +421,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["hint", "explain", "debug", "code_review"] as AiInteractionType[]).map((type) => (
-            <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs" onClick={() => sendAi(type)}>
+            <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45" onClick={() => sendAi(type)}>
               <Sparkles size={14} />
               {type.replace("_", " ")}
             </button>
@@ -429,7 +429,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
         <div className="scrollbar-soft relative mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           {messages.map((message, index) => (
-            <div key={`${message.role}-${index}`} className={`rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
+            <div key={`${message.role}-${index}`} className={`reveal-up rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
               {message.text}
             </div>
           ))}

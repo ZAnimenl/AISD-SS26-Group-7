@@ -24,7 +24,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
       : "Start";
 
   return (
-    <article className="panel">
+    <article className="panel dynamic-surface">
       <div className="relative flex h-full flex-col">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -39,7 +39,10 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
           <span className="badge">{assessment.ai_enabled ? <Sparkles size={13} /> : null}{assessment.ai_enabled ? "AI enabled" : "AI disabled"}</span>
         </div>
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/8">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyanGlow to-purpleGlow" style={{ width: `${assessment.progress_percent ?? 0}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cyanGlow via-purpleGlow to-pinkGlow shadow-[0_0_18px_rgba(0,229,255,0.28)] transition-[width] duration-700"
+            style={{ width: `${assessment.progress_percent ?? 0}%` }}
+          />
         </div>
         <div className="mt-5 flex items-center justify-between">
           <p className="text-xs text-white/40">Closes {new Date(assessment.closes_at).toLocaleDateString()}</p>
