@@ -46,16 +46,16 @@ public static class StudentEndpoints
             summary = new
             {
                 available_assessments = activeAssessments,
-                in_progress_sessions = sessions.Count(session => sessionClock.GetEffectiveStatus(session) == SessionStatuses.Active),
+                in_progress_attempts = sessions.Count(session => sessionClock.GetEffectiveStatus(session) == SessionStatuses.Active),
                 completed_assessments = sessions.Count(session => session.Status == SessionStatuses.Submitted),
                 average_score = completedScores.Count == 0 ? 0 : completedScores.Average(submission => submission.Score)
             },
             recent_activity = sessions.Take(5).Select(session => new
             {
-                session_id = session.Id,
+                attempt_id = session.Id,
                 assessment_id = session.AssessmentId,
                 assessment_title = session.Assessment?.Title,
-                session_status = sessionClock.GetEffectiveStatus(session),
+                attempt_status = sessionClock.GetEffectiveStatus(session),
                 session.StartedAt,
                 session.ExpiresAt
             })
@@ -93,8 +93,8 @@ public static class StudentEndpoints
                 duration_minutes = assessment.DurationMinutes,
                 assessment.Status,
                 question_count = assessment.Questions.Count,
-                session_id = session?.Id,
-                session_status = session is null ? SessionStatuses.NotStarted : sessionClock.GetEffectiveStatus(session)
+                attempt_id = session?.Id,
+                attempt_status = session is null ? SessionStatuses.NotStarted : sessionClock.GetEffectiveStatus(session)
             };
         }));
     }
@@ -134,7 +134,7 @@ public static class StudentEndpoints
 
                 return new StudentResultSummary(
                     SubmissionId: latestSubmission.Id,
-                    SessionId: latestSubmission.SessionId,
+                    AttemptId: latestSubmission.SessionId,
                     AssessmentId: latestSubmission.Session!.AssessmentId,
                     AssessmentTitle: latestSubmission.Session.Assessment!.Title,
                     EvaluationStatus: BuildResultStatus(submissions, score, maxScore),
@@ -161,7 +161,7 @@ public static class StudentEndpoints
 
     internal sealed record StudentResultSummary(
         Guid SubmissionId,
-        Guid SessionId,
+        Guid AttemptId,
         Guid AssessmentId,
         string AssessmentTitle,
         string EvaluationStatus,

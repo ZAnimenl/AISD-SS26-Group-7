@@ -4,11 +4,11 @@ namespace Backend.Services;
 
 public sealed class WorkspaceProjectionService
 {
-    public object ToWorkspace(Guid sessionId, IEnumerable<WorkspaceQuestionState> states)
+    public object ToWorkspace(Guid attemptId, IEnumerable<WorkspaceQuestionState> states)
     {
         return new
         {
-            session_id = sessionId,
+            attempt_id = attemptId,
             questions = states.ToDictionary(
                 state => state.QuestionId.ToString(),
                 state => new

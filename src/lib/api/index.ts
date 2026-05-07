@@ -69,24 +69,6 @@ interface BackendUser {
   created_at?: string;
 }
 
-interface BackendAttemptResponse {
-  session_id: string;
-  assessment_id: string;
-  session_status: string;
-  started_at: string;
-  expires_at: string;
-  server_time: string;
-}
-
-interface BackendAttempt {
-  backend_attempt_id: string;
-  assessment_id: string;
-  attempt_status: string;
-  started_at: string;
-  expires_at: string;
-  server_time: string;
-}
-
 function getToken() {
   if (typeof window === "undefined") {
     return null;
@@ -251,13 +233,13 @@ export async function getStudentDashboard() {
   return {
     summary: {
       available_assessments: raw.summary?.available_assessments ?? 0,
-      in_progress_attempts: raw.summary?.in_progress_attempts ?? raw.summary?.in_progress_sessions ?? 0,
+      in_progress_attempts: raw.summary?.in_progress_attempts ?? 0,
       completed_assessments: raw.summary?.completed_assessments ?? 0,
       average_score: Math.round(raw.summary?.average_score ?? 0)
     },
     recent_activity: (raw.recent_activity ?? []).map((item: any) => ({
-      label: item.assessment_title ?? "Assessment session",
-      detail: item.session_status ?? "updated",
+      label: item.assessment_title ?? "Assessment attempt",
+      detail: item.attempt_status ?? "updated",
       timestamp: item.started_at ?? item.expires_at ?? ""
     }))
   } satisfies StudentDashboard;
@@ -275,7 +257,7 @@ export async function getStudentResults() {
       assessment_id: item.assessment_id,
       title: item.assessment_title,
       status: "closed",
-      session_status: "submitted",
+      attempt_status: "submitted",
       score: item.max_score ? Math.round((item.score / item.max_score) * 100) : item.score,
       question_count: item.question_count,
       ai_enabled: false
@@ -394,7 +376,7 @@ export async function getAggregateReport(assessmentId: string) {
       user_id: student.user_id,
       student_name: student.student_name,
       student_email: student.student_email,
-      attempt_status: normalizeAttemptStatus(student.attempt_status ?? student.session_status),
+      attempt_status: normalizeAttemptStatus(student.attempt_status),
       submission_status: student.submission_status ?? "submitted",
       score: student.score ?? 0,
       max_score: student.max_score ?? 0,
@@ -410,37 +392,28 @@ export async function getAssessment(assessmentId: string) {
 }
 
 export async function startAssessment(assessmentId: string) {
-  const response = await apiRequest<BackendAttemptResponse>("/sessions/initiate", {
-    method: "POST",
-    body: JSON.stringify({ assessment_id: assessmentId })
+  await apiRequest<unknown>(`/assessments/${assessmentId}/attempts/start`, {
+    method: "POST"
   });
-  return normalizeBackendAttempt(response);
 }
 
-export async function getAssessmentAttempt(backendAttemptId: string) {
-  return normalizeBackendAttempt(await apiRequest<BackendAttemptResponse>(`/sessions/${backendAttemptId}`));
+export async function getWorkspaceContext(assessmentId: string) {
+  return normalizeAssessment(await apiRequest<any>(`/assessments/${assessmentId}/context`));
 }
 
-export async function getWorkspaceContext(assessmentId: string, backendAttemptId: string) {
-  // Backend gap: current backend context endpoint still requires a sessionId query value.
-  // Keep this transient ID in memory only; do not persist it as frontend-owned assessment state.
-  const query = new URLSearchParams({ sessionId: backendAttemptId });
-  return normalizeAssessment(await apiRequest<any>(`/assessments/${assessmentId}/context?${query}`));
-}
-
-export async function getWorkspace(backendAttemptId: string) {
-  return apiRequest<WorkspaceState>(`/sessions/${backendAttemptId}/workspace`);
+export async function getWorkspace(assessmentId: string) {
+  return apiRequest<WorkspaceState>(`/assessments/${assessmentId}/workspace`);
 }
 
 export async function autosaveWorkspace(
-  backendAttemptId: string,
+  assessmentId: string,
   questionId: string,
   selectedLanguage: Language,
   activeFile: string,
   content: string,
   version?: number
 ) {
-  return saveWorkspace(backendAttemptId, {
+  return saveWorkspace(assessmentId, {
     [questionId]: {
       selected_language: selectedLanguage,
       active_file: activeFile,
@@ -457,10 +430,10 @@ export async function autosaveWorkspace(
 }
 
 export async function saveWorkspace(
-  backendAttemptId: string,
+  assessmentId: string,
   questions: Record<string, WorkspaceQuestionState>
 ) {
-  return apiRequest<WorkspaceState>(`/sessions/${backendAttemptId}/workspace`, {
+  return apiRequest<WorkspaceState>(`/assessments/${assessmentId}/workspace`, {
     method: "PUT",
     body: JSON.stringify({
       questions: Object.fromEntries(Object.entries(questions).map(([questionId, state]) => [
@@ -477,33 +450,27 @@ export async function saveWorkspace(
 }
 
 export async function runCode(input: {
-  backend_attempt_id: string;
   assessment_id: string;
   question_id: string;
   selected_language: Language;
   active_file_content: string;
 }) {
-  return apiRequest<RunResult>("/executions/run", {
+  return apiRequest<RunResult>(`/assessments/${input.assessment_id}/questions/${input.question_id}/run`, {
     method: "POST",
     body: JSON.stringify({
-      session_id: input.backend_attempt_id,
-      assessment_id: input.assessment_id,
-      question_id: input.question_id,
       selected_language: input.selected_language,
       active_file_content: input.active_file_content
     })
   });
 }
 
-export async function finalizeSubmission(backendAttemptId: string) {
-  return apiRequest<SubmissionResult>("/submissions/finalize", {
-    method: "POST",
-    body: JSON.stringify({ session_id: backendAttemptId })
+export async function finalizeSubmission(assessmentId: string) {
+  return apiRequest<SubmissionResult>(`/assessments/${assessmentId}/submit`, {
+    method: "POST"
   });
 }
 
 export async function getAiResponse(input: {
-  backend_attempt_id: string;
   assessment_id: string;
   question_id: string;
   interaction_type: AiInteractionType;
@@ -511,12 +478,9 @@ export async function getAiResponse(input: {
   selected_language: Language;
   active_file_content: string;
 }) {
-  const response = await apiRequest<{ response_markdown: string }>("/ai/chat", {
+  const response = await apiRequest<{ response_markdown: string }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/chat`, {
     method: "POST",
     body: JSON.stringify({
-      session_id: input.backend_attempt_id,
-      assessment_id: input.assessment_id,
-      question_id: input.question_id,
       interaction_type: input.interaction_type,
       message: input.message,
       selected_language: input.selected_language,
@@ -568,6 +532,8 @@ function normalizeRole(role: string | undefined): Role {
 }
 
 function normalizeAssessment(raw: any): Assessment {
+  const attemptStatus = raw.attempt_status;
+
   return {
     assessment_id: raw.assessment_id,
     title: raw.title ?? raw.assessment_title ?? "Assessment",
@@ -577,8 +543,8 @@ function normalizeAssessment(raw: any): Assessment {
     ai_enabled: Boolean(raw.ai_enabled),
     closes_at: raw.closes_at ?? raw.expires_at ?? new Date().toISOString(),
     question_count: raw.question_count ?? raw.questions?.length ?? 0,
-    attempt_status: normalizeAttemptStatus(raw.attempt_status ?? raw.session_status),
-    progress_percent: raw.session_status === "active" ? 25 : raw.session_status === "submitted" ? 100 : 0,
+    attempt_status: normalizeAttemptStatus(attemptStatus),
+    progress_percent: attemptStatus === "active" ? 25 : attemptStatus === "submitted" ? 100 : 0,
     score: raw.score,
     questions: (raw.questions ?? []).map(normalizeQuestion)
   };
@@ -643,15 +609,4 @@ function normalizeAttemptStatus(value: string | undefined): AttemptStatus {
   }
 
   return "not_started";
-}
-
-function normalizeBackendAttempt(response: BackendAttemptResponse): BackendAttempt {
-  return {
-    backend_attempt_id: response.session_id,
-    assessment_id: response.assessment_id,
-    attempt_status: response.session_status,
-    started_at: response.started_at,
-    expires_at: response.expires_at,
-    server_time: response.server_time
-  };
 }

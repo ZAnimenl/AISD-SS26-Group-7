@@ -10,13 +10,13 @@ public static class SubmissionEndpoints
 {
     public static void Map(RouteGroupBuilder api)
     {
-        api.MapPost("/submissions/finalize", FinalizeAsync);
-        api.MapGet("/sessions/{sessionId:guid}/submissions", HistoryAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/submit", FinalizeByAssessmentAsync);
+        api.MapGet("/assessments/{assessmentId:guid}/submissions", HistoryByAssessmentAsync);
         api.MapGet("/admin/submissions/{submissionId:guid}", AdminDetailAsync);
     }
 
-    private static async Task<IResult> FinalizeAsync(
-        FinalizeSubmissionRequest request,
+    private static async Task<IResult> FinalizeByAssessmentAsync(
+        Guid assessmentId,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
@@ -34,17 +34,31 @@ public static class SubmissionEndpoints
             .Include(item => item.Assessment)
             .ThenInclude(assessment => assessment!.Questions)
             .Include(item => item.WorkspaceStates)
-            .FirstOrDefaultAsync(item => item.Id == request.SessionId && item.UserId == user!.Id, cancellationToken);
+            .FirstOrDefaultAsync(
+                item => item.AssessmentId == assessmentId
+                        && item.UserId == user!.Id
+                        && item.Status == SessionStatuses.Active
+                        && item.ExpiresAt > DateTimeOffset.UtcNow,
+                cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
         if (sessionClock.IsClosed(session))
         {
-            return ApiResults.Error("SESSION_EXPIRED", "The assessment session has expired.", StatusCodes.Status409Conflict);
+            return ApiResults.Error("ATTEMPT_EXPIRED", "The assessment attempt has expired.", StatusCodes.Status409Conflict);
         }
 
+        return await FinalizeSessionAsync(session, dbContext, evaluationService, cancellationToken);
+    }
+
+    private static async Task<IResult> FinalizeSessionAsync(
+        AssessmentSession session,
+        OjSharpDbContext dbContext,
+        CodeEvaluationService evaluationService,
+        CancellationToken cancellationToken)
+    {
         var now = DateTimeOffset.UtcNow;
         var addedStates = EnsureWorkspaceStates(session, now);
         dbContext.WorkspaceQuestionStates.AddRange(addedStates);
@@ -180,8 +194,8 @@ public static class SubmissionEndpoints
             : ExecutionStatuses.Failed;
     }
 
-    private static async Task<IResult> HistoryAsync(
-        Guid sessionId,
+    private static async Task<IResult> HistoryByAssessmentAsync(
+        Guid assessmentId,
         Guid? questionId,
         HttpContext httpContext,
         OjSharpDbContext dbContext,
@@ -194,13 +208,15 @@ public static class SubmissionEndpoints
             return error;
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.UserId == user!.Id, cancellationToken);
+        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
+            item => item.AssessmentId == assessmentId && item.UserId == user!.Id,
+            cancellationToken);
         if (session is null)
         {
-            return ApiResults.Error("SESSION_NOT_FOUND", "Session was not found.", StatusCodes.Status404NotFound);
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        var query = dbContext.Submissions.Where(submission => submission.SessionId == sessionId);
+        var query = dbContext.Submissions.Where(submission => submission.SessionId == session.Id);
         if (questionId.HasValue)
         {
             query = query.Where(submission => submission.QuestionId == questionId.Value);
@@ -248,7 +264,7 @@ public static class SubmissionEndpoints
         return ApiResults.Success(new
         {
             submission_id = submission.Id,
-            session_id = submission.SessionId,
+            attempt_id = submission.SessionId,
             question_id = submission.QuestionId,
             student = AuthEndpoints.ToUserDto(submission.Session!.User!),
             assessment_id = submission.Session.AssessmentId,

@@ -32,7 +32,7 @@ public sealed class StudentResultsTests
         ]);
 
         var summary = Assert.Single(summaries);
-        Assert.Equal(sessionId, summary.SessionId);
+        Assert.Equal(sessionId, summary.AttemptId);
         Assert.Equal(assessmentId, summary.AssessmentId);
         Assert.Equal("Assessment", summary.AssessmentTitle);
         Assert.Equal(75, summary.Score);

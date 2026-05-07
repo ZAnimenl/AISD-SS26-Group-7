@@ -26,8 +26,6 @@ public sealed record QuestionRequest(
 
 public sealed record TestCaseRequest(string Name, string Visibility, Dictionary<string, string> TestCode);
 
-public sealed record InitiateSessionRequest(Guid AssessmentId);
-
 public sealed record WorkspaceUpdateRequest(Dictionary<string, WorkspaceQuestionUpdateRequest> Questions);
 
 public sealed record WorkspaceQuestionUpdateRequest(
@@ -38,19 +36,9 @@ public sealed record WorkspaceQuestionUpdateRequest(
 
 public sealed record WorkspaceFileRequest(string Language, string Content);
 
-public sealed record RunCodeRequest(
-    Guid SessionId,
-    Guid AssessmentId,
-    Guid QuestionId,
-    string SelectedLanguage,
-    string ActiveFileContent);
+public sealed record AssessmentRunCodeRequest(string SelectedLanguage, string ActiveFileContent);
 
-public sealed record FinalizeSubmissionRequest(Guid SessionId);
-
-public sealed record AiChatRequest(
-    Guid SessionId,
-    Guid AssessmentId,
-    Guid QuestionId,
+public sealed record AssessmentAiChatRequest(
     string InteractionType,
     string Message,
     string SelectedLanguage,

@@ -10,7 +10,9 @@ It includes first frontend-only MVP decisions because the project started with m
 2. Inspect the current backend routes, DTOs, frontend API client, and tests before changing integration code.
 3. If this document and the implementation disagree, stop and report the mismatch instead of inventing a third contract.
 4. Use mock data and `TODO(API)` comments only for frontend-only or not-yet-connected surfaces.
-5. Preserve the security boundaries: frontend must never receive hidden test details, call the sandbox directly, call external LLM APIs directly, or create/store/trust a real `session_id`.
+5. Preserve the security boundaries: frontend must never receive hidden test details, call the sandbox directly, call external LLM APIs directly, or create/store/trust/send a real `session_id`.
+
+The architecture PDF remains authoritative for the four-module boundaries and security separation, but some of its endpoint/schema examples are older. For the current backend-connected API contract, this document supersedes older PDF examples such as `/api/v1/sessions/initiate`, `/api/v1/submissions/autosave`, and student-facing `session_id` request fields.
 
 ## 0. Purpose
 
@@ -37,7 +39,7 @@ These decisions remove ambiguity for the first frontend-only MVP. For backend-co
 - API behavior for backend-connected work: call the real backend through the existing frontend API client. Do not invent endpoints; report mismatches.
 - Authentication: mock role selection only for the first visual MVP. Future backend auth should identify the current user from JWT or another secure token; frontend should not manually manage user identity.
 - Student languages: Python and JavaScript only. Do not show TypeScript as a student submission language in the first MVP.
-- Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns the active attempt internally.
+- Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns and resolves the active attempt internally.
 - Run behavior: mock public/sample test output only. Run does not affect score.
 - Submit behavior: mock final result modal. Do not execute hidden tests. Student UI may show hidden test summary counts only, never hidden inputs or expected outputs.
 - AI behavior: mock chat, hint, explain, debug, and code-review responses only. Do not call external AI APIs from the frontend. Inline completion is out of scope for the first visual MVP.
@@ -198,7 +200,7 @@ INTERNAL_ERROR
 | P1 | PUT | `/api/v1/admin/assessments/{assessment_id}` | Update assessment |
 | P2 | POST | `/api/v1/admin/assessments/{assessment_id}/archive` | Archive assessment |
 | P2 | DELETE | `/api/v1/admin/assessments/{assessment_id}` | Delete assessment |
-| P0 | GET | `/api/v1/student/assessments/{assessment_id}/context` | Student workspace context for the authenticated user. Backend derives the active attempt from JWT/auth context. |
+| P0 | GET | `/api/v1/assessments/{assessment_id}/context` | Student workspace context for the authenticated user. Backend derives the active attempt from JWT/auth context. |
 
 ### Student assessment context must include
 
@@ -274,29 +276,29 @@ Student-facing assessment context must never return:
 
 ## 7. Assessment Attempt APIs
 
-Frontend should not manually manage or persist `session_id`. The backend should identify the current user from JWT/auth context and resolve the active assessment attempt internally from `user_id + assessment_id`.
+Frontend must not manually manage, persist, or send `session_id`. The backend identifies the current user from JWT/auth context and resolves the active assessment attempt internally from `user_id + assessment_id`.
 
 ### Session/attempt terminology alignment
 
-The architecture PDF uses `session_id` in some schemas to describe the assessment-session identifier. For the current frontend/backend contract, use `attempt` as the product concept and treat any `session_id` field as a backend-owned compatibility name for the same active assessment attempt.
+The architecture PDF uses `session_id` in some schemas to describe the assessment-session identifier. For the current frontend/backend contract, use `attempt` as the product concept. `session_id` may still exist internally in backend/database code, but it is not part of the frontend public API contract.
 
 Canonical rule:
-- One authenticated user may have one active attempt/session for a given assessment in the MVP.
-- The backend creates, resumes, validates, and owns that attempt/session.
-- The frontend must not create, store, or trust a real `session_id`.
+- One authenticated user may have one active attempt for a given assessment in the MVP.
+- The backend creates, resumes, validates, and owns that attempt.
+- The frontend must not create, store, trust, or send a real `session_id`.
 - The frontend should use assessment-scoped APIs where the backend derives the active attempt from auth context.
-- If the current backend still requires a session-shaped identifier for workspace/run/submit endpoints, the frontend may pass the backend-returned attempt id as a transient in-memory `backendAttemptId`. It must not be stored in localStorage, exposed as trusted state, or treated as a replacement for backend authorization.
+- The frontend may read returned `attempt_id`/`attempt_status` for display or timer state, but normal workspace/run/submit/AI calls remain assessment-scoped and do not send the attempt id.
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | POST | `/api/v1/student/assessments/{assessment_id}/start` | Start or resume the authenticated user's assessment attempt |
-| P0 | GET | `/api/v1/student/assessments/{assessment_id}/attempt` | Get timer and active attempt state for the authenticated user |
-| P2 | POST | `/api/v1/student/assessments/{assessment_id}/complete` | End the authenticated user's attempt manually, optional |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/attempts/start` | Start or resume the authenticated user's assessment attempt |
+| P0 | GET | `/api/v1/assessments/{assessment_id}/attempt` | Get timer and active attempt state for the authenticated user |
 
 ### Start/resume attempt response
 
 ```json
 {
+  "attempt_id": "uuid",
   "assessment_id": "uuid",
   "attempt_status": "active",
   "started_at": "2026-04-30T13:00:00Z",
@@ -307,8 +309,8 @@ Canonical rule:
 
 ### Attempt decisions
 
-- Target contract: frontend does not send or store a real `session_id`; the backend derives the active attempt from auth context.
-- Interim compatibility: frontend may pass a backend-returned attempt/session-shaped id only when an existing backend endpoint still requires it. Keep it in memory only.
+- Frontend does not send or store a real `session_id`; the backend derives the active attempt from auth context.
+- The public API no longer exposes session-shaped routes for attempt/workspace/run/submit/AI flows.
 - Backend resolves the active attempt from authenticated user + assessment_id.
 - Future backend decision: whether one user can have multiple attempts for the same assessment. MVP UI assumes one active attempt at a time and does not expose an attempt identifier.
 - Timer source of truth: backend `expires_at` and `server_time`.
@@ -317,17 +319,18 @@ Canonical rule:
 
 ## 8. Workspace APIs
 
-Workspace APIs are assessment-scoped. The backend uses JWT/auth context to identify the user and resolve the active attempt. In the target contract, the frontend sends `assessment_id` and `question_id`, but not `session_id`. During backend compatibility work, a transient in-memory `backendAttemptId` may be passed only to endpoints that still require the older session-shaped parameter.
+Workspace APIs are assessment-scoped. The backend uses JWT/auth context to identify the user and resolve the active attempt. The frontend sends `assessment_id` and question workspace data, but not `session_id` or `attempt_id`.
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | GET | `/api/v1/student/assessments/{assessment_id}/workspace` | Restore the authenticated user's code after refresh |
-| P0 | PUT | `/api/v1/student/assessments/{assessment_id}/workspace` | Debounced autosave for the authenticated user's workspace |
+| P0 | GET | `/api/v1/assessments/{assessment_id}/workspace` | Restore the authenticated user's code after refresh |
+| P0 | PUT | `/api/v1/assessments/{assessment_id}/workspace` | Debounced autosave for the authenticated user's workspace |
 
 ### Workspace shape
 
 ```json
 {
+  "attempt_id": "uuid",
   "assessment_id": "uuid",
   "questions": {
     "question_uuid_1": {
@@ -359,10 +362,21 @@ Workspace APIs are assessment-scoped. The backend uses JWT/auth context to ident
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | POST | `/api/v1/executions/run` | Run current code |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/questions/{question_id}/run` | Run current code for public/sample tests |
 | P2 | GET | `/api/v1/executions/{execution_id}` | Poll async execution result, if needed |
 
 ### Run response shape
+
+Request body:
+
+```json
+{
+  "selected_language": "python",
+  "active_file_content": "def solve(arr):\n    return sum(arr)\n"
+}
+```
+
+Response body:
 
 ```json
 {
@@ -413,8 +427,8 @@ internal_error
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P0 | POST | `/api/v1/submissions/finalize` | Final submit and grading |
-| P1 | GET | `/api/v1/student/assessments/{assessment_id}/submissions?question_id={question_id}` | Authenticated student submission history |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/submit` | Final submit and grading for the authenticated user's active attempt |
+| P1 | GET | `/api/v1/assessments/{assessment_id}/submissions?question_id={question_id}` | Authenticated student submission history |
 | P1 | GET | `/api/v1/admin/submissions/{submission_id}` | Admin submission detail |
 
 ### Final submission response shape
@@ -455,17 +469,15 @@ internal_error
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P1 | POST | `/api/v1/ai/chat` | AI chat/hint/explain/debug/code review |
+| P1 | POST | `/api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat` | AI chat/hint/explain/debug/code review |
 | P2 | POST | `/api/v1/ai/inline-completion` | Monaco ghost text |
-| P1 | GET | `/api/v1/student/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage summary |
-| P2 | GET | `/api/v1/admin/assessments/{assessment_id}/attempts/{attempt_id}/ai-interactions` | Admin AI interaction logs for a stored backend attempt |
+| P1 | GET | `/api/v1/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage summary |
+| P2 | GET | `/api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions` | Admin AI interaction logs for a student's assessment attempt |
 
 ### AI chat request
 
 ```json
 {
-  "assessment_id": "uuid",
-  "question_id": "uuid",
   "interaction_type": "hint",
   "message": "Can you give me a small hint?",
   "selected_language": "python",
@@ -590,8 +602,8 @@ code_review
 | `/student/dashboard` | `GET /api/v1/student/dashboard`, `GET /api/v1/student/assessments`, `GET /api/v1/student/results` |
 | `/student/assessments` | `GET /api/v1/student/assessments` |
 | `/student/results` | `GET /api/v1/student/results` |
-| `/student/assessments/{assessment_id}/start` | `POST /api/v1/student/assessments/{assessment_id}/start` |
-| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/student/assessments/{assessment_id}/context`, `GET /api/v1/student/assessments/{assessment_id}/attempt`, `GET /api/v1/student/assessments/{assessment_id}/workspace`, `PUT /api/v1/student/assessments/{assessment_id}/workspace`, `POST /api/v1/executions/run`, `POST /api/v1/submissions/finalize`, `POST /api/v1/ai/chat` |
+| `/student/assessments/{assessment_id}/start` | `POST /api/v1/assessments/{assessment_id}/attempts/start` |
+| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/assessments/{assessment_id}/attempt`, `GET /api/v1/assessments/{assessment_id}/workspace`, `PUT /api/v1/assessments/{assessment_id}/workspace`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run`, `POST /api/v1/assessments/{assessment_id}/submit`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat` |
 
 ### Admin Pages
 
@@ -623,13 +635,13 @@ POST /api/v1/auth/logout
 
 GET  /api/v1/student/dashboard
 GET  /api/v1/student/assessments
-POST /api/v1/student/assessments/{assessment_id}/start
-GET  /api/v1/student/assessments/{assessment_id}/context
-GET  /api/v1/student/assessments/{assessment_id}/attempt
-GET  /api/v1/student/assessments/{assessment_id}/workspace
-PUT  /api/v1/student/assessments/{assessment_id}/workspace
-POST /api/v1/executions/run
-POST /api/v1/submissions/finalize
+POST /api/v1/assessments/{assessment_id}/attempts/start
+GET  /api/v1/assessments/{assessment_id}/context
+GET  /api/v1/assessments/{assessment_id}/attempt
+GET  /api/v1/assessments/{assessment_id}/workspace
+PUT  /api/v1/assessments/{assessment_id}/workspace
+POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run
+POST /api/v1/assessments/{assessment_id}/submit
 
 GET  /api/v1/admin/dashboard
 GET  /api/v1/admin/assessments
@@ -651,9 +663,9 @@ PUT  /api/v1/admin/questions/{question_id}
 GET  /api/v1/admin/questions/{question_id}/test-cases
 POST /api/v1/admin/questions/{question_id}/test-cases
 
-GET  /api/v1/student/assessments/{assessment_id}/submissions
-POST /api/v1/ai/chat
-GET  /api/v1/student/assessments/{assessment_id}/ai-usage
+GET  /api/v1/assessments/{assessment_id}/submissions
+POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat
+GET  /api/v1/assessments/{assessment_id}/ai-usage
 GET  /api/v1/admin/submissions/{submission_id}
 ```
 
@@ -661,7 +673,7 @@ GET  /api/v1/admin/submissions/{submission_id}
 
 ```text
 POST /api/v1/ai/inline-completion
-GET  /api/v1/admin/assessments/{assessment_id}/attempts/{attempt_id}/ai-interactions
+GET  /api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions
 GET  /api/v1/admin/reports/{assessment_id}/students/{student_id}
 
 POST /api/v1/admin/users
@@ -688,16 +700,16 @@ GET    /api/v1/executions/{execution_id}
 ```
 
 ```ts
-// TODO(API): POST /api/v1/executions/run
+// TODO(API): POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run
 // Purpose: Send current code, language, assessment_id, and question_id. Backend derives user and active attempt from auth context.
 // Expected response: status, stdout, stderr, test_results, metrics.
 ```
 
 ```ts
-// TODO(API): PUT /api/v1/student/assessments/{assessment_id}/workspace
+// TODO(API): PUT /api/v1/assessments/{assessment_id}/workspace
 // Purpose: Debounced autosave for Monaco editor content.
 // Save unit: authenticated user + assessment + question.
-// Debounce: 1000â€“1500ms after typing stops.
+// Debounce: 1000-1500ms after typing stops.
 ```
 
 ---
