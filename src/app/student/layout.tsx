@@ -14,7 +14,7 @@ export default function StudentLayout({ children }: Readonly<{ children: React.R
       <ParticleBackground />
       <AppSidebar role="student" />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {isWorkspace ? null : <TopBar label="Student workspace, assessments, and results" />}
+        {isWorkspace ? null : <TopBar label="Search student pages..." role="student" />}
         <main className={`relative min-w-0 flex-1 ${isWorkspace ? "overflow-hidden p-2 lg:p-3" : "p-3 lg:p-4"}`}>{children}</main>
       </div>
     </div>
