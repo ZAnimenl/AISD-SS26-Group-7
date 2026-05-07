@@ -23,6 +23,7 @@
 
 html {
   background: hsl(var(--background));
+  scroll-behavior: smooth;
 }
 
 body {
@@ -46,14 +47,16 @@ textarea {
 
 @layer components {
   .bg-grid {
-  background-image:
-    radial-gradient(ellipse 70% 50% at 10% 30%, rgba(0, 229, 255, 0.30) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 50% at 90% 60%, rgba(168, 85, 247, 0.30) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 80%, rgba(168, 85, 247, 0.20) 0%, transparent 50%),
-    radial-gradient(ellipse 40% 30% at 50% 10%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
-  background-size: auto, auto, auto, auto, 28px 28px;
-}
+    background-image:
+      radial-gradient(ellipse 70% 50% at 10% 30%, rgba(0, 229, 255, 0.30) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 90% 60%, rgba(168, 85, 247, 0.30) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 50% 80%, rgba(168, 85, 247, 0.20) 0%, transparent 50%),
+      radial-gradient(ellipse 40% 30% at 50% 10%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
+    background-size: auto, auto, auto, auto, 28px 28px;
+    animation: gridDrift 26s ease-in-out infinite alternate;
+  }
 
   .liquid-glass {
     background: rgba(255, 255, 255, 0.04);
@@ -63,6 +66,7 @@ textarea {
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.06);
     position: relative;
     overflow: hidden;
+    transition: transform 220ms ease, border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
   }
 
   .liquid-glass::before {
@@ -85,6 +89,7 @@ textarea {
     box-shadow: 0 0 0 1.5px rgba(0, 229, 255, 0.48), 0 0 30px rgba(0, 229, 255, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.08);
     position: relative;
     overflow: hidden;
+    transition: transform 220ms ease, box-shadow 220ms ease;
   }
 
   .liquid-glass-neon::before {
@@ -103,37 +108,192 @@ textarea {
 
   .page-shell {
     min-height: 100vh;
-    background-color: hsl(var(--background));
+    background:
+      radial-gradient(ellipse 70% 55% at 14% 18%, rgba(0, 229, 255, 0.12), transparent 58%),
+      radial-gradient(ellipse 65% 50% at 86% 72%, rgba(168, 85, 247, 0.14), transparent 60%),
+      radial-gradient(ellipse 45% 35% at 56% 8%, rgba(236, 72, 153, 0.08), transparent 56%),
+      hsl(var(--background));
+    animation: ambientShift 34s ease-in-out infinite alternate;
   }
 
   .panel {
     @apply liquid-glass rounded-2xl p-5;
+    animation: riseIn 520ms ease both;
+  }
+
+  .panel:hover {
+    transform: translateY(-2px);
+    border-color: rgba(0, 229, 255, 0.18);
+    background: rgba(255, 255, 255, 0.055);
+    box-shadow: 0 10px 38px rgba(0, 0, 0, 0.34), 0 0 28px rgba(0, 229, 255, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.08);
   }
 
   .metric-card {
     @apply liquid-glass rounded-2xl p-5;
+    animation: riseIn 520ms ease both;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(168, 85, 247, 0.24);
+    box-shadow: 0 12px 42px rgba(0, 0, 0, 0.36), 0 0 32px rgba(168, 85, 247, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.08);
   }
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-cyanGlow px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_0_20px_rgba(0,229,255,0.25)] transition hover:brightness-110;
+    position: relative;
+    overflow: hidden;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::after,
+  .btn-secondary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.28) 45%, transparent 70%);
+    pointer-events: none;
+    transform: translateX(-120%);
+    transition: transform 520ms ease;
+  }
+
+  .btn-primary:hover,
+  .btn-secondary:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:hover::after,
+  .btn-secondary:hover::after {
+    transform: translateX(120%);
   }
 
   .badge {
     @apply inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70;
+    transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
   }
 
   .field {
     @apply rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyanGlow/70;
+  }
+
+  .dynamic-surface {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .dynamic-surface::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    z-index: -1;
+    background: conic-gradient(from 180deg, transparent, rgba(0, 229, 255, 0.08), transparent, rgba(168, 85, 247, 0.08), transparent);
+    opacity: 0;
+    transform: rotate(0deg);
+    transition: opacity 220ms ease;
+    animation: auraSpin 12s linear infinite;
+  }
+
+  .dynamic-surface:hover::after {
+    opacity: 1;
+  }
+
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -30%;
+    height: 28%;
+    background: linear-gradient(180deg, transparent, rgba(0, 229, 255, 0.08), transparent);
+    animation: scanSweep 5.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .pulse-dot {
+    animation: pulseDot 2.4s ease-in-out infinite;
+  }
+
+  .float-soft {
+    animation: floatSoft 6s ease-in-out infinite;
+  }
+
+  .reveal-up {
+    animation: riseIn 560ms ease both;
+  }
+
+  .live-gradient-text {
+    background: linear-gradient(90deg, #ffffff, #00e5ff, #a855f7, #ffffff);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: textSheen 7s ease-in-out infinite;
   }
 }
 
 @keyframes borderGlow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.58; }
+}
+
+@keyframes gridDrift {
+  0% { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  100% { background-position: 24px -18px, -28px 24px, 18px 30px, -12px -18px, 28px 28px; }
+}
+
+@keyframes auraSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes scanSweep {
+  0%, 22% { transform: translateY(-120%); opacity: 0; }
+  36% { opacity: 1; }
+  64%, 100% { transform: translateY(520%); opacity: 0; }
+}
+
+@keyframes floatSoft {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.55; }
+  50% { transform: translate3d(0, -14px, 0); opacity: 0.95; }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.45; transform: scale(1); box-shadow: 0 0 0 rgba(0, 229, 255, 0); }
+  50% { opacity: 1; transform: scale(1.35); box-shadow: 0 0 18px rgba(0, 229, 255, 0.45); }
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes textSheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes ambientShift {
+  0% {
+    background-position: 0% 0%, 100% 100%, 50% 0%, 0 0;
+    filter: hue-rotate(0deg) saturate(1);
+  }
+  50% {
+    background-position: 12% 10%, 88% 82%, 56% 8%, 0 0;
+    filter: hue-rotate(8deg) saturate(1.08);
+  }
+  100% {
+    background-position: 4% 18%, 96% 74%, 46% 14%, 0 0;
+    filter: hue-rotate(-6deg) saturate(1.04);
+  }
 }
 
 @keyframes blink {
@@ -143,6 +303,17 @@ textarea {
 
 .code-cursor {
   animation: blink 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .scrollbar-soft::-webkit-scrollbar {
