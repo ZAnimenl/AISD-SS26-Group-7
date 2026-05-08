@@ -55,7 +55,6 @@ textarea {
       radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
     background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
     background-size: auto, auto, auto, auto, 28px 28px;
-    animation: gridDrift 26s ease-in-out infinite alternate;
   }
 
   .liquid-glass {
@@ -103,7 +102,6 @@ textarea {
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    animation: borderGlow 3s ease-in-out infinite;
   }
 
   .page-shell {
@@ -126,7 +124,6 @@ textarea {
       radial-gradient(ellipse 42% 32% at 42% 92%, rgba(0, 229, 255, 0.18), transparent 62%);
     filter: blur(18px) saturate(1.22);
     opacity: 0.72;
-    animation: ambientShift 34s ease-in-out infinite alternate;
     pointer-events: none;
   }
 
@@ -214,7 +211,6 @@ textarea {
     opacity: 0;
     transform: rotate(0deg);
     transition: opacity 220ms ease;
-    animation: auraSpin 12s linear infinite;
   }
 
   .dynamic-surface:hover::after {
@@ -234,16 +230,13 @@ textarea {
     top: -30%;
     height: 28%;
     background: linear-gradient(180deg, transparent, rgba(0, 229, 255, 0.08), transparent);
-    animation: scanSweep 5.5s ease-in-out infinite;
     pointer-events: none;
   }
 
   .pulse-dot {
-    animation: pulseDot 2.4s ease-in-out infinite;
   }
 
   .float-soft {
-    animation: floatSoft 6s ease-in-out infinite;
   }
 
   .reveal-up {
@@ -256,7 +249,6 @@ textarea {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: textSheen 7s ease-in-out infinite;
   }
 }
 
