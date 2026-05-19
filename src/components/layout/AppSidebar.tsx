@@ -46,7 +46,14 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
       <nav className="relative mt-10 flex flex-col gap-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          let active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          if (pathname.includes("/review")) {
+            if (item.href === "/student/results") {
+              active = true;
+            } else if (item.href === "/student/assessments") {
+              active = false;
+            }
+          }
           return (
             <Link
               key={item.href}

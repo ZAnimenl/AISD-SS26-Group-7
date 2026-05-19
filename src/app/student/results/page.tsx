@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
@@ -38,7 +39,15 @@ export default function StudentResultsPage() {
                   <td className="py-4"><StatusBadge status="submitted" /></td>
                   <td className="py-4 text-cyanGlow">{result.score}%</td>
                   <td className="py-4 text-white/55">{result.ai_enabled ? "3 interactions used" : "AI disabled"}</td>
-                  <td className="py-4 text-white/45"><BarChart3 size={18} /></td>
+                  <td className="py-4">
+                    <Link
+                      href={`/student/assessments/${result.assessment_id}/review?submissionId=${result.submission_id}`}
+                      className="btn-secondary px-2.5 py-1.5 text-xs"
+                    >
+                      <BarChart3 size={14} />
+                      Report
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

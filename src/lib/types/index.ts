@@ -63,6 +63,7 @@ export interface Assessment {
   progress_percent?: number;
   score?: number;
   questions: Question[];
+  submission_id?: string;
 }
 
 export interface WorkspaceFile {

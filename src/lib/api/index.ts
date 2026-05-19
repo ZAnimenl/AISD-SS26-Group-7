@@ -252,8 +252,8 @@ export async function getStudentAssessments() {
 
 export async function getStudentResults() {
   const raw = await apiRequest<any[]>("/student/results");
-  return raw.map((item) =>
-    normalizeAssessment({
+  return raw.map((item) => {
+    const normalized = normalizeAssessment({
       assessment_id: item.assessment_id,
       title: item.assessment_title,
       status: "closed",
@@ -261,8 +261,10 @@ export async function getStudentResults() {
       score: item.max_score ? Math.round((item.score / item.max_score) * 100) : item.score,
       question_count: item.question_count,
       ai_enabled: false
-    })
-  );
+    });
+    normalized.submission_id = item.submission_id;
+    return normalized;
+  });
 }
 
 export async function getAdminDashboard() {

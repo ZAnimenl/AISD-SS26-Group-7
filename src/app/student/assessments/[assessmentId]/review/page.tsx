@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "lucide-react";
 import { getStudentAssessments, getStudentResults } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -11,6 +11,8 @@ import type { Assessment } from "@/lib/types";
 
 export default function StudentAssessmentReviewPage({ params }: { params: { assessmentId: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const submissionId = searchParams.get("submissionId");
   const [results, setResults] = useState<Assessment[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +37,9 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
   }, [router]);
 
   const result = useMemo(() => {
-    const nextResult = results.find((item) => item.assessment_id === params.assessmentId);
+    const nextResult = submissionId
+      ? results.find((item) => item.submission_id === submissionId)
+      : results.find((item) => item.assessment_id === params.assessmentId);
     const assessment = assessments.find((item) => item.assessment_id === params.assessmentId);
 
     if (!nextResult) {
@@ -46,7 +50,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
       ...nextResult,
       question_count: nextResult.question_count || assessment?.question_count || assessment?.questions.length || 0
     };
-  }, [assessments, params.assessmentId, results]);
+  }, [assessments, params.assessmentId, results, submissionId]);
   const canStartAnotherAttempt = assessments.some((assessment) => assessment.assessment_id === params.assessmentId);
 
   if (isLoading) {
