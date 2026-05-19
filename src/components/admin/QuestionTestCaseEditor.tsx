@@ -205,18 +205,18 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     </button>
                   </div>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-[1fr_120px_120px]">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-[2fr_1fr_1fr]">
                   <label className="grid gap-2 text-sm text-white/60">
                     Title
-                    <input className="field" value={question.title} onChange={(event) => updateQuestionState(question.question_id, { title: event.target.value })} />
+                    <input className="field w-full" value={question.title} onChange={(event) => updateQuestionState(question.question_id, { title: event.target.value })} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Sort order
-                    <input className="field" type="number" value={question.sort_order ?? 0} onChange={(event) => updateQuestionState(question.question_id, { sort_order: Number(event.target.value) })} />
+                    <input className="field w-full" type="number" value={question.sort_order ?? 0} onChange={(event) => updateQuestionState(question.question_id, { sort_order: Number(event.target.value) })} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Max score
-                    <input className="field" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
+                    <input className="field w-full" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
                   </label>
                 </div>
                 <label className="grid gap-2 text-sm text-white/60">
@@ -258,42 +258,42 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                         const testCode = normalizeTestCode(testCase.test_code);
                         return (
                           <>
-                      <div className="grid gap-3 lg:grid-cols-[1fr_140px_auto]">
-                        <label className="grid gap-2 text-sm text-white/60">
-                          Name
-                          <input className="field" value={testCase.name} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { name: event.target.value })} />
-                        </label>
-                        <label className="grid gap-2 text-sm text-white/60">
-                          Visibility
-                          <select className="field" value={testCase.visibility} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { visibility: event.target.value as AdminTestCase["visibility"] })}>
-                            <option value="public">public</option>
-                            <option value="hidden">hidden</option>
-                          </select>
-                        </label>
-                        <div className="flex items-end gap-2">
-                          <button className="btn-secondary px-3 py-2" type="button" onClick={() => runEditorAction(() => saveTestCase(testCase), "Test case saved.")}>
-                            <Save size={15} />
-                            Save
-                          </button>
-                          <button className="btn-secondary px-3 py-2" type="button" onClick={() => runEditorAction(() => removeTestCase(question.question_id, testCase.test_case_id), "Test case deleted.")}>
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-3">
-                        <label className="grid gap-2 text-sm text-white/60">
-                          Python pytest code
-                          <textarea className="field min-h-40 font-mono" value={testCode.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
-                        </label>
-                        <label className="grid gap-2 text-sm text-white/60">
-                          JavaScript Jest code
-                          <textarea className="field min-h-40 font-mono" value={testCode.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
-                        </label>
-                        <label className="grid gap-2 text-sm text-white/60">
-                          TypeScript Jest code
-                          <textarea className="field min-h-40 font-mono" value={testCode.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
-                        </label>
-                      </div>
+                            <div className="grid gap-3 grid-cols-1 sm:grid-cols-[2fr_1fr_auto]">
+                              <label className="grid gap-2 text-sm text-white/60">
+                                Name
+                                <input className="field w-full" value={testCase.name} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { name: event.target.value })} />
+                              </label>
+                              <label className="grid gap-2 text-sm text-white/60">
+                                Visibility
+                                <select className="field w-full" value={testCase.visibility} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { visibility: event.target.value as AdminTestCase["visibility"] })}>
+                                  <option value="public">public</option>
+                                  <option value="hidden">hidden</option>
+                                </select>
+                              </label>
+                              <div className="flex items-end gap-2">
+                                <button className="btn-secondary px-3 py-2" type="button" onClick={() => runEditorAction(() => saveTestCase(testCase), "Test case saved.")}>
+                                  <Save size={15} />
+                                  Save
+                                </button>
+                                <button className="btn-secondary px-3 py-2" type="button" onClick={() => runEditorAction(() => removeTestCase(question.question_id, testCase.test_case_id), "Test case deleted.")}>
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-3 grid gap-3">
+                              <label className="grid gap-2 text-sm text-white/60">
+                                Python pytest code
+                                <textarea className="field min-h-40 font-mono" value={testCode.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
+                              </label>
+                              <label className="grid gap-2 text-sm text-white/60">
+                                JavaScript Jest code
+                                <textarea className="field min-h-40 font-mono" value={testCode.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
+                              </label>
+                              <label className="grid gap-2 text-sm text-white/60">
+                                TypeScript Jest code
+                                <textarea className="field min-h-40 font-mono" value={testCode.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
+                              </label>
+                            </div>
                           </>
                         );
                       })()}

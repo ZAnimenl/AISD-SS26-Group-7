@@ -92,6 +92,7 @@ public static class StudentEndpoints
                 assessment.Description,
                 duration_minutes = assessment.DurationMinutes,
                 assessment.Status,
+                ai_enabled = assessment.AiEnabled,
                 question_count = assessment.Questions.Count,
                 attempt_id = session?.Id,
                 attempt_status = session is null ? SessionStatuses.NotStarted : sessionClock.GetEffectiveStatus(session)
