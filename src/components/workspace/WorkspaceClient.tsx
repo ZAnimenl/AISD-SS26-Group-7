@@ -100,6 +100,65 @@ function mergeQuestionStates(current: WorkspaceState["questions"], saved: Worksp
   }), current);
 }
 
+function parseInlineCode(text: string) {
+  const parts = text.split("`");
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return (
+        <code key={index} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
+          {part}
+        </code>
+      );
+    }
+    return part;
+  });
+}
+
+function renderMarkdown(text: string) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  return lines.map((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("### ")) {
+      return (
+        <h4 key={index} className="mt-4 text-xs font-semibold uppercase tracking-wider text-cyanGlow/90">
+          {parseInlineCode(trimmed.slice(4))}
+        </h4>
+      );
+    }
+    if (trimmed.startsWith("## ")) {
+      return (
+        <h3 key={index} className="mt-5 text-sm font-bold uppercase tracking-wider text-white">
+          {parseInlineCode(trimmed.slice(3))}
+        </h3>
+      );
+    }
+    if (trimmed.startsWith("# ")) {
+      return (
+        <h2 key={index} className="mt-6 text-base font-extrabold text-white">
+          {parseInlineCode(trimmed.slice(2))}
+        </h2>
+      );
+    }
+    if (trimmed.startsWith("- ")) {
+      return (
+        <div key={index} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
+          <span className="text-cyanGlow select-none">•</span>
+          <span>{parseInlineCode(trimmed.slice(2))}</span>
+        </div>
+      );
+    }
+    if (trimmed === "") {
+      return <div key={index} className="h-1.5" />;
+    }
+    return (
+      <p key={index} className="mt-1 text-sm leading-6 text-white/65">
+        {parseInlineCode(line)}
+      </p>
+    );
+  });
+}
+
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const router = useRouter();
   const firstQuestion = assessment.questions[0];
@@ -314,7 +373,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         <div className="scrollbar-soft scanline relative mt-4 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           <p className="text-xs uppercase tracking-[0.16em] text-white/35">Problem statement</p>
           <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
-          <p className="mt-3 leading-7 text-white/65">{activeQuestion?.problem_description_markdown}</p>
+          <div className="mt-3 space-y-2">{renderMarkdown(activeQuestion?.problem_description_markdown ?? "")}</div>
           <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Constraints</h4>
           {activeQuestion?.constraints.length ? (
             <ul className="mt-2 space-y-2 text-sm text-white/55">
