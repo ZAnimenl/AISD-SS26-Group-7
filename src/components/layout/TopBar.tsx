@@ -108,7 +108,7 @@ export function TopBar({ label, role }: { label: string; role: TopBarRole }) {
   }
 
   return (
-    <header className="liquid-glass dynamic-surface reveal-up relative z-50 m-4 mb-0 flex items-center gap-3 overflow-visible rounded-2xl px-4 py-3 lg:m-6 lg:mb-0">
+    <header className="liquid-glass reveal-up relative z-50 mb-4 flex items-center gap-3 overflow-visible rounded-2xl px-4 py-3 lg:mb-6">
       <form className="relative min-w-0 flex-1" onSubmit={handleSubmit}>
         <div className="flex items-center gap-3">
           <Search className="shrink-0 text-white/30" size={18} />

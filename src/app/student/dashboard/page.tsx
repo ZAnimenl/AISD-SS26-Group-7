@@ -67,7 +67,7 @@ export default function StudentDashboardPage() {
                 <div key={item.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="text-sm text-white">{item.label}</p>
                   <p className="text-xs text-white/45">{item.detail}</p>
-                  <p className="mt-2 text-xs text-cyanGlow/70">{item.timestamp}</p>
+                  <p className="mt-2 text-xs text-cyanGlow/70">{formatDateTime(item.timestamp)}</p>
                 </div>
               ))}
             </div>
@@ -85,4 +85,18 @@ export default function StudentDashboardPage() {
       </div>
     </div>
   );
+}
+
+function formatDateTime(timestamp: string) {
+  if (!timestamp) return "";
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return timestamp;
+    return date.toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "medium"
+    });
+  } catch {
+    return timestamp;
+  }
 }
