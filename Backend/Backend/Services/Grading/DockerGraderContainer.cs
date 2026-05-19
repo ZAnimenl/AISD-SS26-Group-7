@@ -5,8 +5,8 @@ namespace Backend.Services.Grading;
 
 internal sealed class DockerGraderContainer
 {
-    private const string ImageTag = "ojsharp-grader:python-js-ts-v1";
-    private const string ContainerName = "ojsharp-grader-python-js-ts-v1";
+    private const string ImageTag = "ojsharp-grader:python-js-ts-v2";
+    private const string ContainerName = "ojsharp-grader-python-js-ts-v2";
     private readonly DockerClient dockerClient;
     private readonly string workspaceHostRoot;
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -140,10 +140,14 @@ internal sealed class DockerGraderContainer
                     Image = ImageTag,
                     Name = ContainerName,
                     Cmd = ["sleep", "infinity"],
+                    NetworkDisabled = true,
                     HostConfig = new HostConfig
                     {
                         AutoRemove = false,
-                        Binds = [$"{workspaceHostRoot}:/workspace"]
+                        Binds = [$"{workspaceHostRoot}:/workspace"],
+                        Memory = 256 * 1024 * 1024, // 256 MB memory limit
+                        NanoCPUs = 1000000000,      // 1 CPU Core limit
+                        CapDrop = new[] { "ALL" }    // Drop all Linux capabilities
                     }
                 },
                 cancellationToken);

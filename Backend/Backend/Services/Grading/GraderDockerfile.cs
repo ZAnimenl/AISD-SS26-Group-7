@@ -11,8 +11,13 @@ RUN apt-get update \
     && npm install -g jest typescript \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m -s /bin/bash sandbox \
+    && mkdir -p /workspace \
+    && chown -R sandbox:sandbox /workspace
+
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /workspace
+USER sandbox
 CMD ["sleep", "infinity"]
 """;
 }

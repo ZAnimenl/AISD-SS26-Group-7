@@ -16,6 +16,7 @@ public sealed class DemoDataSeeder(
     public static readonly Guid PythonAssessmentId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     public static readonly Guid ArraySumQuestionId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     public static readonly Guid ReverseStringQuestionId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+    public static readonly Guid FibonacciQuestionId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
@@ -24,9 +25,14 @@ public sealed class DemoDataSeeder(
         var now = DateTimeOffset.UtcNow;
         await EnsureSeedAdminAsync(now, cancellationToken);
 
-        if (await dbContext.Assessments.AnyAsync(cancellationToken))
+        var existingAssessment = await dbContext.Assessments.Include(a => a.Questions).FirstOrDefaultAsync(a => a.Id == PythonAssessmentId, cancellationToken);
+        if (existingAssessment is not null)
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            if (!existingAssessment.Questions.Any(q => q.Id == FibonacciQuestionId))
+            {
+                dbContext.Questions.Add(CreateFibonacciQuestion(now));
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
             return;
         }
 
@@ -165,8 +171,53 @@ public sealed class DemoDataSeeder(
             ]
         });
 
+        assessment.Questions.Add(CreateFibonacciQuestion(now));
+
         dbContext.Assessments.Add(assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private Question CreateFibonacciQuestion(DateTimeOffset now)
+    {
+        return new Question
+        {
+            Id = FibonacciQuestionId,
+            AssessmentId = PythonAssessmentId,
+            Title = "Fibonacci Number",
+            ProblemDescriptionMarkdown = "## Task\nWrite a function that returns the n-th Fibonacci number.\n\nThe sequence is defined as:\n- F(0) = 0\n- F(1) = 1\n- F(n) = F(n-1) + F(n-2) for n > 1.\n\n### Examples\n- `n = 5` -> returns `5`\n- `n = 8` -> returns `21`",
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript", "typescript" }),
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["python"] = "def solve(n):\n    # TODO: return the n-th Fibonacci number\n    pass\n",
+                ["javascript"] = "function solve(n) {\n  // TODO: return the n-th Fibonacci number\n}\n",
+                ["typescript"] = "function solve(n: number): number {\n  // TODO: return the n-th Fibonacci number\n  return 0;\n}\n"
+            }),
+            SortOrder = 3,
+            MaxScore = 50,
+            TestCases =
+            [
+                new TestCase
+                {
+                    Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    Name = "sample test 1",
+                    Visibility = TestCaseVisibilities.Public,
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_fib_5():\n    assert solve(5) == 5\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"fib 5\", () => {\n  expect(solve(5)).toBe(5);\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"fib 5\", () => {\n  expect(solve(5)).toBe(5);\n});\n"))
+                },
+                new TestCase
+                {
+                    Id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                    Name = "hidden large number",
+                    Visibility = TestCaseVisibilities.Hidden,
+                    TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
+                        "from solution import solve\n\n\ndef test_fib_8():\n    assert solve(8) == 21\n",
+                        "const { solve } = require(\"./solution.js\");\n\ntest(\"fib 8\", () => {\n  expect(solve(8)).toBe(21);\n});\n",
+                        "const solve = globalThis.__ojsharpSolve;\n\ntest(\"fib 8\", () => {\n  expect(solve(8)).toBe(21);\n});\n"))
+                }
+            ]
+        };
     }
 
     private static Dictionary<string, string> TestCode(string python, string javascript, string typescript)
