@@ -116,47 +116,123 @@ function parseInlineCode(text: string) {
 
 function renderMarkdown(text: string) {
   if (!text) return null;
+
+  const elements: React.ReactNode[] = [];
   const lines = text.split("\n");
-  return lines.map((line, index) => {
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+  let codeBlockLang = "";
+
+  const parseBoldAndInlineCode = (str: string): React.ReactNode => {
+    const boldParts = str.split("**");
+    return boldParts.map((boldPart, bIdx) => {
+      const isBold = bIdx % 2 === 1;
+      const codeParts = boldPart.split("`");
+      const renderedCodeParts = codeParts.map((codePart, cIdx) => {
+        if (cIdx % 2 === 1) {
+          return (
+            <code key={`code-${bIdx}-${cIdx}`} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
+              {codePart}
+            </code>
+          );
+        }
+        return codePart;
+      });
+
+      if (isBold) {
+        return <strong key={`bold-${bIdx}`} className="font-semibold text-white">{renderedCodeParts}</strong>;
+      }
+      return <span key={`text-${bIdx}`}>{renderedCodeParts}</span>;
+    });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      if (inCodeBlock) {
+        const codeContent = codeBlockLines.join("\n");
+        elements.push(
+          <div key={`code-${i}`} className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
+            {codeBlockLang && (
+              <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40">
+                <span>{codeBlockLang}</span>
+              </div>
+            )}
+            <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
+              {codeContent}
+            </pre>
+          </div>
+        );
+        inCodeBlock = false;
+        codeBlockLines = [];
+        codeBlockLang = "";
+      } else {
+        inCodeBlock = true;
+        codeBlockLang = trimmed.slice(3).trim();
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
     if (trimmed.startsWith("### ")) {
-      return (
-        <h4 key={index} className="mt-4 text-xs font-semibold uppercase tracking-wider text-cyanGlow/90">
-          {parseInlineCode(trimmed.slice(4))}
+      elements.push(
+        <h4 key={i} className="mt-4 text-xs font-semibold uppercase tracking-wider text-cyanGlow/90">
+          {parseBoldAndInlineCode(trimmed.slice(4))}
         </h4>
       );
-    }
-    if (trimmed.startsWith("## ")) {
-      return (
-        <h3 key={index} className="mt-5 text-sm font-bold uppercase tracking-wider text-white">
-          {parseInlineCode(trimmed.slice(3))}
+    } else if (trimmed.startsWith("## ")) {
+      elements.push(
+        <h3 key={i} className="mt-5 text-sm font-bold uppercase tracking-wider text-white">
+          {parseBoldAndInlineCode(trimmed.slice(3))}
         </h3>
       );
-    }
-    if (trimmed.startsWith("# ")) {
-      return (
-        <h2 key={index} className="mt-6 text-base font-extrabold text-white">
-          {parseInlineCode(trimmed.slice(2))}
+    } else if (trimmed.startsWith("# ")) {
+      elements.push(
+        <h2 key={i} className="mt-6 text-base font-extrabold text-white">
+          {parseBoldAndInlineCode(trimmed.slice(2))}
         </h2>
       );
-    }
-    if (trimmed.startsWith("- ")) {
-      return (
-        <div key={index} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
-          <span className="text-cyanGlow select-none">•</span>
-          <span>{parseInlineCode(trimmed.slice(2))}</span>
+    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      elements.push(
+        <div key={i} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
+          <span className="text-cyanGlow select-none mt-0.5">•</span>
+          <span>{parseBoldAndInlineCode(trimmed.slice(2))}</span>
         </div>
       );
+    } else if (trimmed.startsWith("> ")) {
+      elements.push(
+        <blockquote key={i} className="my-2 border-l-2 border-cyanGlow/40 bg-cyanGlow/5 py-1.5 pl-3 pr-2 text-xs italic leading-5 text-white/60 rounded-r-lg">
+          {parseBoldAndInlineCode(trimmed.slice(2))}
+        </blockquote>
+      );
+    } else if (trimmed === "") {
+      elements.push(<div key={i} className="h-2" />);
+    } else {
+      elements.push(
+        <p key={i} className="mt-1 text-sm leading-6 text-white/65">
+          {parseBoldAndInlineCode(line)}
+        </p>
+      );
     }
-    if (trimmed === "") {
-      return <div key={index} className="h-1.5" />;
-    }
-    return (
-      <p key={index} className="mt-1 text-sm leading-6 text-white/65">
-        {parseInlineCode(line)}
-      </p>
+  }
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    elements.push(
+      <div key="code-unclosed" className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
+        <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
+          {codeBlockLines.join("\n")}
+        </pre>
+      </div>
     );
-  });
+  }
+
+  return elements;
 }
 
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
@@ -491,7 +567,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         <div className="scrollbar-soft relative mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`reveal-up rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
-              {message.text}
+              {renderMarkdown(message.text)}
             </div>
           ))}
         </div>

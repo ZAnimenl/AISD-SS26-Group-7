@@ -21,6 +21,7 @@ public sealed class AiMockService
         var tags = DeriveSemanticTags(interactionType, message, activeFileContent);
         var context = new AiGenerationContext(interactionType, message, selectedLanguage, activeFileContent);
 
+        // 1. Attempt using registered providers (like the local LLM if configured and enabled)
         foreach (var responseProvider in _responseProviders)
         {
             var providerResponse = await responseProvider.TryGenerateAsync(context, tags, cancellationToken);
@@ -30,8 +31,43 @@ public sealed class AiMockService
             }
         }
 
+        // 2. Placeholder / Hook for direct external AI integration (OpenAI, Gemini, Anthropic, etc.)
+        var realResponse = await GenerateRealAiResponseAsync(context, tags, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(realResponse))
+        {
+            return (realResponse, tags);
+        }
+
+        // 3. Fallback to mock responses if no real AI is configured/responding
         var response = BuildResponse(interactionType, message, selectedLanguage, activeFileContent);
         return (response, tags);
+    }
+
+    private async Task<string?> GenerateRealAiResponseAsync(
+        AiGenerationContext context,
+        string[] semanticTags,
+        CancellationToken cancellationToken)
+    {
+        // ==========================================
+        // PLACEHOLDER / STUB FOR REAL AI INTEGRATION
+        // ==========================================
+        // To integrate a real AI model (e.g. OpenAI GPT-4, Anthropic Claude, or Google Gemini) directly here:
+        // 1. Install the official SDK package or use HttpClient.
+        // 2. Set up your API credentials / connection keys.
+        // 3. Make the API call, pass the context prompts, and extract the generated response string.
+        // 
+        // Example with a generic client or direct API request:
+        // /*
+        // var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        // var response = await myAiClient.ChatAsync(
+        //     systemPrompt: "You are a professional coding assessment assistant...",
+        //     userPrompt: $"Student request: {context.Message}\nCode: {context.ActiveFileContent}",
+        //     cancellationToken: cancellationToken);
+        // return response.Text;
+        // */
+
+        await Task.CompletedTask; // Keep compiler happy for the stub
+        return null; // By default return null to fall back to the mock
     }
 
     private static string[] DeriveSemanticTags(string interactionType, string message, string activeFileContent)
