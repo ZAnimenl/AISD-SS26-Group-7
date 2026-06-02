@@ -1,4 +1,4 @@
-﻿---
+---
 name: prompt-commander
 description: Use this as the planning commander before coding. It reads specs, routes the task to the correct module(s), creates safe prompt for implementation, and produces exact prompts for the coding agent and reviewer.
 ---
@@ -25,7 +25,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
-   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, structured AI, reflection, report-release, and scoring API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -68,13 +68,13 @@ The architecture has four non-overlapping modules:
    - Authentication, RBAC, users, assessments, questions/test cases, attempt/session lifecycle, workspace persistence, submissions, results, reports, and database-backed authoritative state.
 
 2. **Module 2 - Interactive Browser-Based Workspace / Frontend IDE**
-   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, AI assistant UI, frontend API clients, and visual interaction layer.
+   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, structured AI assistance UI, frontend API clients, and visual interaction layer.
 
 3. **Module 3 - Sandboxed Code Execution and Evaluation Engine**
    - Isolated execution of untrusted code, resource limits, hidden test evaluation, stdout/stderr capture, execution result schema, workers/queues, cleanup.
 
 4. **Module 4 - AI Telemetry and Assistance Service**
-   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured AI responses, rate/error handling.
+   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured hint levels, AI credit accounting, AI Rescue, task generation, reflection evaluation, process-aware scoring support, structured AI responses, rate/error handling.
 
 ### Global security boundaries
 
@@ -97,7 +97,7 @@ However, the current requirements/API alignment decision says:
 - The frontend must not create, store, trust, or send a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Frontend-only first-MVP attempt/session state may be mock-only. Backend-connected workspace, run, submit, and AI flows are assessment-scoped and must not send `session_id` or `attempt_id`.
+- Frontend-only prototype or historical mock state may be mock-only. Current backend-connected workspace, run, submit, structured AI, reflection, and report-result flows are assessment-scoped and must not send `session_id` or `attempt_id`.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 
@@ -115,10 +115,10 @@ When implementing current frontend/backend integration, follow the newer require
 
 ## Planning model
 
-- Module 1: identity, RBAC, assessment management, attempts, submissions, reports, DB persistence.
-- Module 2: browser UI, frontend IDE, Monaco/editor, dashboards, frontend API calls, visual flows.
+- Module 1: identity, RBAC, assessment management, attempts, submissions, reflections, report release, process-score/report persistence, DB persistence.
+- Module 2: browser UI, frontend IDE, Monaco/editor, dashboards, structured AI/Rescue/reflection/task-generation/report-release UI, frontend API calls, visual flows.
 - Module 3: sandboxed execution and evaluation engine.
-- Module 4: AI telemetry and assistance service.
+- Module 4: structured AI telemetry and assistance service, AI credits, AI Rescue generation, task generation, reflection/process evaluation, provider integration.
 - Cross-module integration: frontend/backend/API/auth/data-flow alignment.
 
 ## Skill orchestration model
@@ -146,7 +146,7 @@ Default companion skill rules:
 - If the frontend task touches live backend contracts, add companion `fullstack-integration-coder` for API alignment checks.
 - If the task is backend API/data ownership, primary skill is `module1-identity-assessment-coder`; add `fullstack-integration-coder` when frontend consumers must be verified.
 - If the task touches sandboxed execution, primary skill is `module3-sandbox-execution-coder`; do not involve frontend skills unless an API/UI integration is requested.
-- If the task touches AI provider/proxy/telemetry backend, primary skill is `module4-ai-telemetry-coder`; add `fullstack-integration-coder` only when frontend/backend integration is part of the request.
+- If the task touches AI provider/proxy/telemetry backend, structured hints, AI credits, AI Rescue generation, task generation, or reflection/process evaluation, primary skill is `module4-ai-telemetry-coder`; add `fullstack-integration-coder` when frontend/backend integration or persistence/reporting contracts are part of the request.
 - If ownership is unclear, use `module-router` first.
 
 ## Required output format
@@ -168,6 +168,6 @@ Default companion skill rules:
 
 - Agent prompts should be in English.
 - Keep prompts scoped and complete enough for the coder to finish the requested implementation in one pass.
-- Split into separate stages only when the user asks for staged work or the task is too risky to implement in one pass.
+- Split into separate stages when updated SPEC features span schema/contracts, structured AI credits, AI Rescue, reflection, reporting/release, and task generation; do not bundle those into one risky implementation pass unless explicitly requested.
 - Include companion skills directly inside the generated prompt when cross-boundary awareness is useful.
 - If repo/framework details are unknown, tell the coder to inspect first.

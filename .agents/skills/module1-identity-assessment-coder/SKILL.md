@@ -1,6 +1,6 @@
-﻿---
+---
 name: module1-identity-assessment-coder
-description: Use this for Module 1 work: backend identity, authentication, RBAC, assessment management, questions/test cases persistence, attempts/session lifecycle, workspace persistence, submissions, results, reports, EF Core/PostgreSQL, and related API endpoints.
+description: Use this for Module 1 work: backend identity, authentication, RBAC, assessment management, questions/test cases persistence, AI feature settings, credit/rescue/reflection state, attempts lifecycle, workspace persistence, submissions, results, reports, report release, process-score persistence, EF Core/PostgreSQL, and related API endpoints.
 ---
 
 # Module 1 - Identity and Assessment Management Coder Skill
@@ -15,7 +15,7 @@ Also include these companion skills when the task needs them:
 
 - `fullstack-integration-coder`: use as a companion when backend API changes must preserve or update frontend consumers, auth flow, dashboard data loading, workspace/run/submit flows, or request/response shapes.
 - `module3-sandbox-execution-coder`: use when assessment/submission work crosses into isolated code execution or grading-engine behavior.
-- `module4-ai-telemetry-coder`: use when assessment/session/reporting work crosses into AI provider, AI logging, semantic tags, or telemetry behavior.
+- `module4-ai-telemetry-coder`: use when assessment/attempt/reporting work crosses into AI provider behavior, structured hints, AI credit telemetry, AI Rescue generation, task generation, reflection evaluation, semantic tags, or telemetry behavior.
 - `strict-code-reviewer`: use after implementation to review auth/RBAC, hidden-test protection, API contracts, and tests.
 - `module-router`: use before coding if ownership is unclear.
 
@@ -37,7 +37,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
-   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, structured AI, reflection, report-release, and scoring API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -80,13 +80,13 @@ The architecture has four non-overlapping modules:
    - Authentication, RBAC, users, assessments, questions/test cases, attempt/session lifecycle, workspace persistence, submissions, results, reports, and database-backed authoritative state.
 
 2. **Module 2 - Interactive Browser-Based Workspace / Frontend IDE**
-   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, AI assistant UI, frontend API clients, and visual interaction layer.
+   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, structured AI assistance UI, frontend API clients, and visual interaction layer.
 
 3. **Module 3 - Sandboxed Code Execution and Evaluation Engine**
    - Isolated execution of untrusted code, resource limits, hidden test evaluation, stdout/stderr capture, execution result schema, workers/queues, cleanup.
 
 4. **Module 4 - AI Telemetry and Assistance Service**
-   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured AI responses, rate/error handling.
+   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured hint levels, AI credit accounting, AI Rescue, task generation, reflection evaluation, process-aware scoring support, structured AI responses, rate/error handling.
 
 ### Global security boundaries
 
@@ -109,7 +109,7 @@ However, the current requirements/API alignment decision says:
 - The frontend must not create, store, trust, or send a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Frontend-only first-MVP attempt/session state may be mock-only. Backend-connected workspace, run, submit, and AI flows are assessment-scoped and must not send `session_id` or `attempt_id`.
+- Frontend-only prototype or historical mock state may be mock-only. Current backend-connected workspace, run, submit, structured AI, reflection, and report-result flows are assessment-scoped and must not send `session_id` or `attempt_id`.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 
@@ -119,13 +119,13 @@ When implementing current frontend/backend integration, follow the newer require
 - Authentication
 - Authorization / RBAC
 - User accounts and roles
-- Assessment CRUD backend
-- Question and test case persistence
+- Assessment CRUD backend and AI feature settings
+- Question, difficulty, AI credit override, and test case persistence
 - Attempt/session lifecycle
 - Workspace autosave persistence endpoints
-- Submission storage
-- Evaluation result storage
-- Report aggregation
+- Submission and reflection storage
+- Evaluation result, process-evaluation, and process-score storage
+- Report aggregation and controlled student report release
 - Database persistence
 - EF Core / PostgreSQL models and migrations when explicitly part of the task
 - Backend API contracts for these responsibilities
@@ -135,9 +135,9 @@ When implementing current frontend/backend integration, follow the newer require
 - Hidden test cases and expected outputs
 - Admin-only notes
 - User identity and role permissions
-- Scores and report data
+- Scores, process-score breakdowns, AI usage details, reflections, Rescue correctness labels, and report data
 - Active attempt lifecycle
-- Submission history
+- Submission history and released-result visibility
 
 ## Module 1 must not
 
@@ -158,12 +158,12 @@ When implementing current frontend/backend integration, follow the newer require
 
 - Implement/fix auth endpoints.
 - Implement/fix student/admin role authorization.
-- Implement/fix assessment CRUD backend.
-- Implement/fix question/test-case persistence.
+- Implement/fix assessment CRUD backend and AI feature settings.
+- Implement/fix question/test-case persistence, difficulty, and AI credit override fields.
 - Implement/fix attempt start/resume/expiry behavior.
 - Implement/fix workspace persistence endpoints.
-- Implement/fix submission storage and result storage.
-- Implement/fix report aggregation.
+- Implement/fix submission, reflection, result, process-evaluation, and process-score storage.
+- Implement/fix report aggregation and controlled student report release.
 - Add/update EF Core migrations when explicitly required.
 - Add/update backend tests.
 
@@ -184,6 +184,6 @@ When implementing current frontend/backend integration, follow the newer require
 3. Report files changed.
 4. Report API contract changes.
 5. Report migrations, if any.
-6. Confirm hidden-test protection.
-7. Confirm auth/RBAC behavior.
+6. Confirm hidden-test protection and student/report release visibility rules.
+7. Confirm auth/RBAC behavior, including admin-only access to Rescue correctness labels and full AI logs.
 8. Finish with review status: run `strict-code-reviewer` or provide the exact reviewer prompt/checklist for a separate review pass.

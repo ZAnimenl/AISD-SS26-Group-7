@@ -1,4 +1,4 @@
-﻿---
+---
 name: strict-code-reviewer
 description: Use this to review latest changes. It checks spec compliance, module ownership, frontend/backend contracts, auth/RBAC, hidden-test protection, sandbox safety, AI safety, and build/test results. It must not modify code.
 ---
@@ -20,7 +20,7 @@ When reviewing a skill chain, check that each skill stayed in its lane:
 - Module coder changed only its owned surface unless cross-module scope was explicit.
 - `fullstack-integration-coder` preserved API contracts and did not collapse module boundaries.
 - Frontend work did not introduce backend/database/sandbox/AI-provider behavior.
-- Backend work did not leak hidden tests or require frontend-managed real `session_id`.
+- Backend work did not leak hidden tests, Rescue correctness labels, unreleased student reports, or require frontend-managed real `session_id`.
 
 
 ## Shared Project Rules
@@ -36,7 +36,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
-   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, structured AI, reflection, report-release, and scoring API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -79,13 +79,13 @@ The architecture has four non-overlapping modules:
    - Authentication, RBAC, users, assessments, questions/test cases, attempt/session lifecycle, workspace persistence, submissions, results, reports, and database-backed authoritative state.
 
 2. **Module 2 - Interactive Browser-Based Workspace / Frontend IDE**
-   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, AI assistant UI, frontend API clients, and visual interaction layer.
+   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, structured AI assistance UI, frontend API clients, and visual interaction layer.
 
 3. **Module 3 - Sandboxed Code Execution and Evaluation Engine**
    - Isolated execution of untrusted code, resource limits, hidden test evaluation, stdout/stderr capture, execution result schema, workers/queues, cleanup.
 
 4. **Module 4 - AI Telemetry and Assistance Service**
-   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured AI responses, rate/error handling.
+   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured hint levels, AI credit accounting, AI Rescue, task generation, reflection evaluation, process-aware scoring support, structured AI responses, rate/error handling.
 
 ### Global security boundaries
 
@@ -108,7 +108,7 @@ However, the current requirements/API alignment decision says:
 - The frontend must not create, store, trust, or send a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Frontend-only first-MVP attempt/session state may be mock-only. Backend-connected workspace, run, submit, and AI flows are assessment-scoped and must not send `session_id` or `attempt_id`.
+- Frontend-only prototype or historical mock state may be mock-only. Current backend-connected workspace, run, submit, structured AI, reflection, and report-result flows are assessment-scoped and must not send `session_id` or `attempt_id`.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 
@@ -147,18 +147,20 @@ If a command cannot be run, report why.
 - Active attempt resolved safely?
 - Hidden tests protected?
 - DB/migrations reasonable?
-- API contracts consistent?
+- API contracts consistent with structured AI, reflection, scoring, and report-release contract where touched?
+- AI settings, credit budgets, Rescue settings, reflections, and release flags persisted safely where touched?
+- Admin-only data such as Rescue correctness labels and full AI logs protected?
 
 ### Module 2 checks
 
-- UI follows requirements?
+- UI follows requirements, including structured hint levels, remaining AI credits, remaining Rescue chances, reflection flow, and report-release visibility where touched?
 - Frontend does not access DB/sandbox/LLM directly?
 - No frontend-managed or frontend-sent real `session_id` unless approved?
-- Student UI does not expose hidden tests?
+- Student UI does not expose hidden tests, Rescue correctness labels, grading implementation, other students' reports, or unreleased final reports?
 - Error handling is useful?
 - Next.js not converted to Vite?
 - No `react-router-dom` added to Next.js?
-- Python/JavaScript language scope respected unless changed?
+- Python/JavaScript/TypeScript language scope respected unless changed?
 
 ### Module 3 checks
 
@@ -173,13 +175,16 @@ If a command cannot be run, report why.
 - Provider secrets not exposed?
 - Frontend does not call external LLM APIs directly?
 - System prompts and hidden criteria protected?
-- AI interactions logged where required?
+- Structured AI interactions logged where required, including hint level, credit cost, Rescue suggestion metadata, decision time, and reflection/process-evaluation context where touched?
+- Normal AI hints enforce credit budgets and configured hint levels?
+- AI Rescue remains separate from normal credits and hides correctness labels from students?
+- LLM evaluation and process-aware scoring are presented as decision support, not autonomous final decisions?
 - Rate/error handling reasonable?
 
 ### Integration checks
 
 - Frontend API calls match backend endpoints?
-- Request/response shapes align?
+- Request/response shapes align for workspace/run/submit/structured-AI/reflection/report-release flows?
 - Auth token/cookie handling consistent?
 - 401/403/error responses handled?
 - Cross-module boundaries respected?

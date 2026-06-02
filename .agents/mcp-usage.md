@@ -1,4 +1,4 @@
-﻿# MCP Server Usage
+# MCP Server Usage
 
 MCP servers are part of the coding-agent workflow for phases that need live documentation, external review context, browser verification, or database/schema inspection. Configure them in the user's coding-agent environment, not as project runtime dependencies.
 
@@ -33,7 +33,7 @@ postgres / database, read-only when possible
   Use during: backend and fullstack integration checks. Do not use it to bypass migrations, specs, or review.
 
 mcp-code-analyzer
-  Purpose: Run the project-provided scan_requirements_compliance tool against SPEC.md and local code heuristics.
+  Purpose: Run the project-provided scan_requirements_compliance tool against the updated SPEC.md and local code heuristics, including feature-scoped requirement IDs such as REQ-HINT, REQ-CREDIT, REQ-RESCUE, REQ-REFLECT, REQ-TASKGEN, and REQ-SCORE.
   Use during: planning, review, and handoff as an advisory requirements sanity check only.
   Location: mcp-code-analyzer/
 ```
@@ -52,7 +52,7 @@ mcp-code-analyzer
 
 ```text
 Use AGENTS.md and the local skills.
-Use Context7 MCP for current Next.js and Monaco documentation.
+Use Context7 MCP for current Next.js, React, Monaco, Tailwind, ASP.NET, EF Core, provider SDK, and LLM API documentation when implementation depends on version-sensitive behavior.
 Do not edit specification documents.
 Keep frontend changes inside Module 2 unless the router says this is cross-module integration.
 ```

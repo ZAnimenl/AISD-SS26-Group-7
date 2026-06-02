@@ -1,4 +1,4 @@
-﻿# UI Style Reference
+# UI Style Reference
 
 
 
@@ -388,7 +388,7 @@ SECTION-BY-SECTION BREAKDOWN
 
 * Badge pill top-right: assessment attempt status such as "Active" or "Mock attempt" liquid-glass rounded-full px-3 py-1 text-xs text-white/70 + overflow menu
 
-* Container: liquid-glass-neon rounded-2xl p-4, two-column layout (70% code / 30% AI chat)
+* Container: liquid-glass-neon rounded-2xl p-4, two-column layout (70% code / 30% structured AI assistance panel)
 
 * LEFT: Code editor area
 
@@ -620,9 +620,3 @@ DESIGN PATTERNS USED THROUGHOUT
 * Dot/pixel decorative elements: scattered absolute-positioned 4px or 6px squares in cyan/purple/white at low opacity around the IDE panel
 
 * Scrollbar styling: scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10
-
-
-
-
-
-

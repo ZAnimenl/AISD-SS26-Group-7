@@ -2,9 +2,13 @@
 
 The checker is the backend grading flow that evaluates a student's submission against the question's test cases.
 
+## Current Status
+
+The checker is currently implemented as a backend-controlled Docker grading pipeline. It is not a frontend mock and it is not called directly by the frontend. The ASP.NET API owns authentication, attempt resolution, persistence, and response shaping; the Docker grader owns isolated code execution.
+
 ## Purpose
 
-The checker answers one question: does the submitted solution produce the expected result for the available test cases? It runs the code in the grading pipeline, collects execution output, and turns the result into a submission status and score.
+The checker answers one core question: does the submitted solution produce the expected result for the available test cases? It runs the code in the grading pipeline, collects execution output, and turns the result into a submission status and code-correctness score. Process-aware scoring is a separate reporting concern that can combine checker output with AI usage, reflection, and AI Rescue behavior.
 
 ## Where It Lives
 
@@ -27,7 +31,7 @@ The checker currently supports:
 
 - Python
 - JavaScript
-- TypeScript for backend grading support where configured
+- TypeScript
 
 ## Inputs
 
@@ -46,19 +50,20 @@ The checker can produce:
 - standard output
 - standard error
 - per-test pass or fail results
-- score or pass/fail submission status
+- code-correctness score or pass/fail submission status
 
 ## Security Notes
 
 - Student code is not executed in the frontend.
 - The checker runs through the backend grading pipeline.
 - Hidden test cases must stay private and must not be exposed to the student UI.
-- The checker should remain isolated from the normal API process.
+- The untrusted student code should remain isolated from the normal API process. The API may orchestrate grading, but execution happens in the Docker grader.
 
 ## Operational Notes
 
 - The grading command currently uses a short timeout to avoid hanging checks.
 - The local development backend is wired to Docker-based execution through the grading service.
+- Docker must be available for real run/submit grading in local development. If Docker is unavailable, grading should fail safely and preserve existing persisted state.
 - If a language is not supported, the checker should fail safely instead of guessing.
 
 ## Related Files

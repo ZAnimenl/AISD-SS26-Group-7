@@ -1,4 +1,4 @@
-﻿# AGENTS.md
+# AGENTS.md
 
 This file is the global orchestration guide for coding agents working in this repository.
 
@@ -8,6 +8,27 @@ It defines:
 2. How agents should route work to the correct module.
 3. Which skills should be used for planning, coding, review, and handoff.
 4. Global coding and project rules that apply to all work.
+
+---
+
+# 0. Current Implementation Baseline
+
+This repository is currently a backend-connected full-stack demo, not only a frontend visual MVP.
+
+Current as-is structure:
+
+- Next.js App Router frontend under `src/`
+- ASP.NET backend API under `Backend/Backend/`
+- PostgreSQL persistence through EF Core
+- Bearer-token authentication with student and administrator roles
+- Backend-owned assessment attempts resolved from authenticated user + assessment
+- Backend-backed workspace restore/autosave
+- Docker-based grading for Python, JavaScript, and TypeScript
+- AI assistance endpoints with interaction logging, optional OpenAI-compatible provider configuration such as DeepSeek, and fallback mock guidance; the updated spec adds structured hint levels, AI credits, AI Rescue, task generation, reflection, process-aware scoring, and controlled report release
+- Admin reports, assessment/question/test-case management, and user-management endpoints
+- Local one-command dev startup through `npm run dev`
+
+Historical first-MVP notes about mock-only frontend behavior remain useful for context, but current coding agents should follow the connected implementation unless a task is explicitly frontend-only or asks to restore historical mock behavior.
 
 ---
 
@@ -24,7 +45,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
-   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, structured AI, reflection, report-release, and scoring API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -187,7 +208,7 @@ Before implementation, consider every local skill and activate only the ones tha
    - Activate for sandboxed execution, grading, hidden test evaluation, stdout/stderr capture, workers/queues, resource limits, timeouts, or execution result schema.
 
 7. `module4-ai-telemetry-coder`
-   - Activate for AI backend service, provider integration, secure AI proxy, telemetry, semantic tags, structured AI responses, inline completion backend, system prompts, or AI provider error handling.
+   - Activate for AI backend service, provider integration, secure AI proxy, telemetry, semantic tags, structured hint levels, AI credit accounting, AI Rescue generation, task generation, reflection/process evaluation, structured AI responses, inline completion backend, system prompts, or AI provider error handling.
 
 8. `fullstack-integration-coder`
    - Activate as primary when the task requires coordinated frontend/backend implementation.
@@ -502,7 +523,7 @@ Owns:
 - autosave indicator
 - run/submit UI
 - output console
-- AI assistant UI
+- structured AI assistance UI
 - frontend API clients
 
 Must not:
@@ -624,13 +645,13 @@ Do not add migrations unless the task explicitly requires database schema change
 
 The architecture PDF may contain older schema examples using `session_id`.
 
-For the current implementation, follow the newer requirements/API alignment decision:
+For the current implementation and future spec work, follow the newer requirements/API alignment decision:
 
 1. Frontend must not create, store, trust, or send a real `session_id`.
 2. Backend should identify the user from authentication context, such as JWT or another secure token.
 3. Backend should resolve the active assessment attempt from authenticated user + `assessment_id`.
-4. Frontend mock state is allowed only for visual/frontend-only MVP behavior.
-5. Public backend-connected assessment flows are assessment-scoped. Frontend workspace, run, submit, and AI calls must not send a `session_id` or `attempt_id`; the backend resolves the active attempt internally.
+4. Frontend mock state is allowed only for explicitly visual/frontend-only work or intentionally deferred surfaces.
+5. Public backend-connected assessment flows are assessment-scoped. Frontend workspace, run, submit, structured AI, reflection, and report-result calls must not send a `session_id` or `attempt_id`; the backend resolves the active attempt internally.
 
 If a task appears to require frontend-managed `session_id`, stop and ask for clarification.
 
@@ -661,13 +682,13 @@ Do not execute student code through:
 - normal backend request handlers
 - unrestricted local Python/Node/.NET runtimes
 
-Untrusted code execution belongs to Module 3 and must follow the sandbox architecture.
+Untrusted code execution belongs to Module 3 and must follow the sandbox architecture. In the current implementation, that means the backend-controlled Docker grading pipeline, not ad hoc local execution from frontend or ordinary application code.
 
 ---
 
-# 11. AI Provider Rule
+# 11. AI Provider and AI Feature Rule
 
-Frontend must not call external AI providers directly.
+Frontend must not call external AI providers directly. During assessments, student AI help must follow the configured structured modes in `SPEC.md`; unrestricted free-form AI chat is not part of the assessment workflow.
 
 AI provider calls belong to Module 4 and must protect:
 
@@ -677,5 +698,8 @@ AI provider calls belong to Module 4 and must protect:
 - grading criteria
 - user/assessment context
 - telemetry logging
+- AI credit accounting
+- AI Rescue correctness labels
+- reflection and process-evaluation context
 
 For frontend-only work, use mock AI responses unless explicitly instructed otherwise.

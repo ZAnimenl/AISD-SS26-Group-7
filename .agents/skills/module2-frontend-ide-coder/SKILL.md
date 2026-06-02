@@ -1,6 +1,6 @@
-﻿---
+---
 name: module2-frontend-ide-coder
-description: Use this for Module 2 work: frontend UI, browser-based IDE, Monaco/editor, dashboards, admin/student pages, frontend API integration, mock data, visual polish, and frontend-only workspace behavior.
+description: Use this for Module 2 work: frontend UI, browser-based IDE, Monaco/editor, dashboards, admin/student pages, structured AI hint UI, AI credit and Rescue UI, reflection UI, report-release/result UI, task-generation UI, frontend API integration, visual polish, and frontend-only workspace behavior.
 ---
 
 # Module 2 - Frontend IDE Coder Skill
@@ -13,7 +13,7 @@ Use this skill as the primary skill for frontend IDE/UI work.
 
 Also include these companion skills when the task needs them:
 
-- `fullstack-integration-coder`: use as a companion when frontend changes touch live backend API contracts, auth flow, workspace/run/submit/AI request shapes, or frontend/backend mismatch fixes.
+- `fullstack-integration-coder`: use as a companion when frontend changes touch live backend API contracts, auth flow, workspace/run/submit/structured-AI/reflection/report request shapes, or frontend/backend mismatch fixes.
 - `strict-code-reviewer`: use after implementation to review spec compliance, hidden-test protection, frontend/backend contracts, and build results.
 - `module-router`: use before coding if ownership is unclear.
 
@@ -35,7 +35,7 @@ Follow this priority order when documents or implementation choices conflict:
 2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
-   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
+   - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, structured AI, reflection, report-release, and scoring API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.
 
 3. `complete_frontend_api_list_and_backend_alignment.md`
    - Frontend/backend API contract and integration alignment document.
@@ -78,13 +78,13 @@ The architecture has four non-overlapping modules:
    - Authentication, RBAC, users, assessments, questions/test cases, attempt/session lifecycle, workspace persistence, submissions, results, reports, and database-backed authoritative state.
 
 2. **Module 2 - Interactive Browser-Based Workspace / Frontend IDE**
-   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, AI assistant UI, frontend API clients, and visual interaction layer.
+   - Browser UI, student/admin pages, Monaco/editor, workspace state UI, autosave UI, run/submit UI, structured AI assistance UI, frontend API clients, and visual interaction layer.
 
 3. **Module 3 - Sandboxed Code Execution and Evaluation Engine**
    - Isolated execution of untrusted code, resource limits, hidden test evaluation, stdout/stderr capture, execution result schema, workers/queues, cleanup.
 
 4. **Module 4 - AI Telemetry and Assistance Service**
-   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured AI responses, rate/error handling.
+   - Secure AI backend/proxy, LLM provider calls, server-side prompts, AI interaction logging, telemetry, semantic tagging, structured hint levels, AI credit accounting, AI Rescue, task generation, reflection evaluation, process-aware scoring support, structured AI responses, rate/error handling.
 
 ### Global security boundaries
 
@@ -107,7 +107,7 @@ However, the current requirements/API alignment decision says:
 - The frontend must not create, store, trust, or send a real `session_id`.
 - Backend should identify the user from auth context, such as JWT or another secure token.
 - Backend should resolve the active attempt from authenticated user + `assessment_id`.
-- Frontend-only first-MVP attempt/session state may be mock-only. Backend-connected workspace, run, submit, and AI flows are assessment-scoped and must not send `session_id` or `attempt_id`.
+- Frontend-only prototype or historical mock state may be mock-only. Current backend-connected workspace, run, submit, structured AI, reflection, and report-result flows are assessment-scoped and must not send `session_id` or `attempt_id`.
 
 When implementing current frontend/backend integration, follow the newer requirements/API alignment decision unless the user/team explicitly changes it.
 
@@ -117,7 +117,7 @@ When implementing current frontend/backend integration, follow the newer require
 - Browser UI
 - Student dashboard
 - Student assessment list
-- Student result page
+- Student result page with release-gated final report visibility
 - Student assessment start page
 - Embedded browser IDE workspace
 - Monaco/editor integration
@@ -128,11 +128,11 @@ When implementing current frontend/backend integration, follow the newer require
 - Autosave indicator
 - Output console
 - Run and Submit UI
-- AI assistant UI
+- structured AI assistance UI
 - Admin dashboard UI
-- Assessment/question/test-case/report UI
+- Assessment/question/test-case/report UI, including AI feature settings, task-generation review UI, process-score breakdowns, and report release controls
 - Frontend API clients
-- Mock data during MVP/frontend-only phases
+- Mock data during explicitly frontend-only or not-yet-connected phases
 - TODO(API) comments
 
 ## Module 2 must not
@@ -143,10 +143,10 @@ When implementing current frontend/backend integration, follow the newer require
 - Execute student code locally
 - Use `eval`
 - Use `child_process`
-- Use Docker/runtime execution for submissions
+- Start Docker/runtime execution from the frontend
 - Directly call sandbox
 - Directly call external LLM APIs
-- Expose hidden test cases in student UI
+- Expose hidden test cases, hidden expected outputs, grading implementation, Rescue correctness labels, or unreleased reports in student UI
 - Trust, create, or send a real frontend-managed `session_id`
 
 ## Frontend/backend integration rules
@@ -173,7 +173,7 @@ The IDE should have clear frontend boundaries:
 - autosave state
 - output console
 - run/submit controls
-- AI assistant panel
+- structured AI assistance panel
 - frontend API/mock API layer
 - shared types
 
@@ -190,12 +190,13 @@ If Monaco is not feasible:
 
 ## Student language rule
 
-First MVP student submission languages:
+Current student submission languages:
 
 - Python
 - JavaScript
+- TypeScript
 
-Do not show TypeScript as a student submission language unless the team explicitly expands scope.
+Earlier frontend-only MVP notes limited the UI to Python and JavaScript. The current backend-connected implementation includes TypeScript in frontend types, seeded assessment constraints, system config, and backend grading support.
 
 ## Hidden test rule
 
@@ -215,7 +216,7 @@ Student UI must never show:
 - Create/improve frontend pages.
 - Create/improve browser IDE UI.
 - Add Monaco integration or editor fallback.
-- Add frontend API client integration.
+- Add frontend API client integration for assessment-scoped workspace/run/submit/structured-AI/reflection/report flows.
 - Improve frontend error/loading/empty states.
 - Add role-aware frontend navigation.
 - Add UI polish based on `ui-style-reference.md`.
@@ -236,5 +237,5 @@ Student UI must never show:
 2. Report files changed.
 3. Report pages/components changed.
 4. Report API integration or TODO(API) points.
-5. Confirm no forbidden backend/database/sandbox/real AI changes.
+5. Confirm no forbidden backend/database/sandbox/provider changes and no student exposure of hidden tests, Rescue labels, or unreleased reports.
 6. Finish with review status: run `strict-code-reviewer` or provide the exact reviewer prompt/checklist for a separate review pass.

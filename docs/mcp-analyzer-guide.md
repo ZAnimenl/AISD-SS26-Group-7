@@ -61,7 +61,8 @@ If you use the official Claude Desktop app, you can add the analyzer to its MCP 
 Once connected, you can ask the AI model prompts like:
 
 - *"Use the `scan_requirements_compliance` tool to check this project. The workspace root is `/ABSOLUTE/PATH/TO/YOUR/AISD-SS26-Group-7/`."*
-- *"I just added a new endpoint for Inline Completions. Can you run the requirements scanner and verify what remaining AI capabilities are missing from the SPEC?"*
+- *"I just added structured AI hint credits. Can you run the requirements scanner and verify which REQ-HINT and REQ-CREDIT items are still missing?"*
+- *"I implemented AI Rescue logging. Can you scan the project against REQ-RESCUE and reporting requirements?"*
 - *"Scan the project for compliance. Identify all requirements mapped to the 'Workspace' category that still need manual checks."*
 
-The AI will execute the local JavaScript codebase, parse the `SPEC.md`, correlate the file system heuristics, and give you intelligent advice based on the output.
+The AI will execute the local JavaScript codebase, parse the updated `SPEC.md`, correlate the file system heuristics with numbered and feature-scoped requirement IDs, and give you advisory findings based on the output.

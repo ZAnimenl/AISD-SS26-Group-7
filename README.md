@@ -1,6 +1,6 @@
 # AISD-SS26 Group 7
 
-AI-assisted online coding assessment platform for browser-based coding assessments, role-based administration, backend-backed workspace persistence, submission evaluation, AI assistance, and reporting.
+AI-assisted online coding assessment platform for browser-based coding assessments, role-based administration, backend-backed workspace persistence, submission evaluation, structured AI assistance, AI credits, AI Rescue, reflection, process-aware scoring, and reporting.
 
 ## Project Shape
 
@@ -19,9 +19,14 @@ Authoritative project documents:
 - `complete_frontend_api_list_and_backend_alignment.md`
 - `ui-style-reference.md`
 
+Presentation/status documents:
+
+- `docs/midterm-status.md` - current as-is implementation summary for the mid-term presentation.
+- `docs/deepseek-provider.md` - DeepSeek/OpenAI-compatible AI provider setup.
+
 Do not edit those specification files unless the task explicitly asks for documentation/spec changes.
 
-Note: the architecture PDF is still useful for module boundaries, but some API examples in it are older. Use `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md` for the current backend-connected attempt/workspace/run/submit/AI routes.
+Note: the architecture PDF is still useful for module boundaries, but some API examples in it are older. Use `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md` for the current backend-connected attempt/workspace/run/submit/structured-AI/reporting routes.
 
 
 ## Architecture Boundaries
@@ -32,19 +37,19 @@ The project follows four module boundaries:
    Auth, RBAC, users, assessments, questions/test cases, attempts, workspace persistence, submissions, reports, and database-backed state.
 
 2. Module 2 - Interactive Browser-Based Workspace / Frontend IDE
-   Browser UI, Monaco/editor integration, student/admin pages, autosave UI, run/submit UI, output console, AI assistant UI, and frontend API clients.
+   Browser UI, Monaco/editor integration, student/admin pages, autosave UI, run/submit UI, output console, structured AI assistance UI, and frontend API clients.
 
 3. Module 3 - Sandboxed Code Execution and Evaluation
    Isolated execution, resource limits, hidden test evaluation, stdout/stderr capture, workers/queues, and cleanup.
 
 4. Module 4 - AI Telemetry and Assistance
-   Secure AI proxy/service, provider calls, AI logging, telemetry, semantic tags, structured AI responses, and rate/error handling.
+   Secure AI proxy/service, provider calls, structured hint levels, AI credit accounting, AI Rescue generation, reflection evaluation, process-aware scoring support, AI logging, telemetry, semantic tags, and rate/error handling.
 
 Security rules:
 
 - Student frontend must never receive hidden test inputs, hidden expected outputs, or grading implementation.
 - Frontend must not access the database, sandbox, or external AI providers directly.
-- Do not execute student submissions locally with `eval`, `child_process`, Docker, or unrestricted runtimes.
+- Do not execute student submissions in the frontend, through `eval`, through `child_process`, or through unrestricted local runtimes. Student code execution belongs to the backend-controlled Docker grading pipeline.
 - Frontend must not create, store, trust, or send a real `session_id`; backend-connected assessment flows use assessment-scoped APIs and the backend resolves the active attempt from auth context.
 
 ## Prerequisites
@@ -96,11 +101,17 @@ Things users may configure:
 - `ConnectionStrings__DefaultConnection` - PostgreSQL connection string.
 - `SeedAdmin__Email` and `SeedAdmin__Password` - required for published/production environments because production `appsettings.json` intentionally omits seed admin credentials.
 
-AI provider keys:
+AI provider configuration:
 
-- No AI provider API key is required today.
-- The current backend AI chat endpoint is an MVP stub that logs interactions and returns canned guidance.
-- Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
+- No external AI provider API key is required for the default local demo.
+- Backend AI endpoints log interactions and can support structured hints, task generation, AI Rescue, and reflection evaluation through an optional OpenAI-compatible provider or fallback mock guidance where implemented.
+- DeepSeek can be used through the existing OpenAI-compatible provider settings:
+  - `LocalLlm__Enabled=true`
+  - `LocalLlm__BaseUrl=https://api.deepseek.com`
+  - `LocalLlm__Model=deepseek-chat` or `deepseek-reasoner`
+  - `LocalLlm__ApiKey=<your DeepSeek API key>`
+- DeepSeek examples often use `DEEPSEEK_API_KEY`, but the current ASP.NET backend reads `LocalLlm__ApiKey` unless an alias mapping is added later.
+- Future dedicated hosted-provider adapters may introduce keys such as `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
 
 ## Frontend
 
@@ -110,10 +121,19 @@ Install dependencies:
 npm install
 ```
 
-Run the Next.js dev server:
+Run the local development stack:
 
 ```powershell
 npm run dev
+```
+
+This starts the ASP.NET backend on `http://localhost:5140`, waits for `/api/v1/health`, then starts the Next.js frontend on `http://localhost:3000`. Backend logs are written to `backend-dev.log` and `backend-dev.err.log`.
+
+Run only one side when needed:
+
+```powershell
+npm run dev:frontend
+npm run dev:backend
 ```
 
 Verify the frontend:
@@ -152,7 +172,7 @@ Run backend tests:
 dotnet test Backend\Backend.sln -v:minimal
 ```
 
-Run the backend API:
+Run the backend API directly:
 
 ```powershell
 dotnet run --project Backend\Backend\Backend.csproj
@@ -178,14 +198,14 @@ Important connected flows include:
 - student dashboard, assessments, results
 - admin dashboard, assessments, users, reports
 - workspace context/load/autosave
-- run, submit, AI chat
+- run, submit, structured AI hints, AI credits, AI Rescue, reflection, task generation, scoring/report release where implemented
 - question and test case management
 
 Known contract bridge:
 
 - The alignment docs prefer auth-context + `assessment_id` attempt resolution.
 - The current public backend API no longer exposes session-shaped routes for attempt/workspace/run/submit/AI flows.
-- Frontend workspace, run, submit, and AI calls are assessment-scoped; the backend resolves the active attempt internally from the authenticated user and `assessment_id`.
+- Frontend workspace, run, submit, structured AI, reflection, and report-result calls are assessment-scoped; the backend resolves the active attempt internally from the authenticated user and `assessment_id`.
 
 ## Agent Skills
 
@@ -236,13 +256,15 @@ Safety scans:
 
 ```powershell
 rg "mock-api|@/mocks|ojsharp.assessment.session" src
-rg "eval\(|child_process|docker|openai|anthropic|gemini" src Backend
+rg "eval\(|child_process|docker|openai|anthropic|gemini" src
+rg "eval\(|child_process" Backend
 ```
 
 Expected safety posture:
 
 - No runtime mock API imports.
 - No frontend-managed or frontend-sent assessment session ID.
-- No local execution of student submissions.
+- No frontend or unrestricted local execution of student submissions.
+- Student code execution is backend-controlled through the Docker grading pipeline.
 - No direct external AI provider calls from frontend.
-- No hidden test input/output in student UI.
+- No hidden test input/output, AI Rescue correctness labels, grading implementation, or other students' reports in student UI.
