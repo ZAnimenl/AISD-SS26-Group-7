@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "dev:frontend": "next dev",
+    "dev:backend": "dotnet run --project Backend\\Backend\\Backend.csproj",
     "build": "next build",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
