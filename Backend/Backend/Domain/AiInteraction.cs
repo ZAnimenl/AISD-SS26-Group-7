@@ -12,6 +12,18 @@ public sealed class AiInteraction
 
     public string InteractionType { get; set; } = "chat";
 
+    public string? HintLevel { get; set; }
+
+    public int CreditCost { get; set; }
+
+    public bool IsRescue { get; set; }
+
+    public string? RescueCorrectnessLabel { get; set; }
+
+    public string? RescueDecision { get; set; }
+
+    public int? RescueDecisionTimeMs { get; set; }
+
     public string Message { get; set; } = string.Empty;
 
     public string SelectedLanguage { get; set; } = "python";

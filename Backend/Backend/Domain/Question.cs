@@ -18,6 +18,10 @@ public sealed class Question
 
     public string? AdminNotes { get; set; }
 
+    public string Difficulty { get; set; } = QuestionDifficulties.Medium;
+
+    public int? AiCreditBudgetOverride { get; set; }
+
     public int SortOrder { get; set; }
 
     public int MaxScore { get; set; } = 100;

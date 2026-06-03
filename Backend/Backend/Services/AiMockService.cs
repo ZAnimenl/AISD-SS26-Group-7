@@ -76,10 +76,12 @@ public sealed class AiMockService
 
         tags.Add(interactionType switch
         {
-            "debug" => "debugging",
-            "code_review" => "code_review",
+            AiHintLevels.DebuggingHint or "debug" => "debugging",
+            AiHintLevels.CodeLevelSuggestion or "code_review" => "code_level_suggestion",
+            AiHintLevels.StrategyHint => "strategy_hint",
+            AiHintLevels.PseudocodeHint => "pseudocode_hint",
+            AiHintLevels.ConceptHint or "hint" => "conceptual_hint",
             "explain" => "explanation",
-            "hint" => "conceptual_hint",
             _ => "general_help"
         });
 
@@ -112,10 +114,12 @@ public sealed class AiMockService
 
         return interactionType switch
         {
-            "debug" => BuildDebugResponse(message, lang, hasCode),
-            "code_review" => BuildCodeReviewResponse(message, lang, hasCode),
+            AiHintLevels.DebuggingHint or "debug" => BuildDebugResponse(message, lang, hasCode),
+            AiHintLevels.CodeLevelSuggestion or "code_review" => BuildCodeLevelSuggestionResponse(message, lang, hasCode),
+            AiHintLevels.StrategyHint => BuildStrategyResponse(message, lang),
+            AiHintLevels.PseudocodeHint => BuildPseudocodeResponse(message, lang, hasCode),
+            AiHintLevels.ConceptHint or "hint" => BuildHintResponse(message, lang),
             "explain" => BuildExplainResponse(message, lang),
-            "hint" => BuildHintResponse(message, lang),
             _ => BuildGeneralResponse(message, lang)
         };
     }
@@ -187,6 +191,65 @@ public sealed class AiMockService
         lines.Add("> A clean, readable solution is easier to debug and maintain.");
 
         return string.Join("\n", lines);
+    }
+
+    private static string BuildCodeLevelSuggestionResponse(string message, string lang, bool hasCode)
+    {
+        var lines = new List<string>
+        {
+            "## Code-Level Suggestion",
+            "",
+            "Focus your next edit on the smallest part of the solution that is currently uncertain.",
+            "",
+            "- Compare your function signature with the required signature.",
+            "- Keep the public sample case visible and trace how each variable changes.",
+            "- Make one local change, run the sample tests, then decide whether to continue."
+        };
+
+        if (hasCode)
+        {
+            lines.Add("- Look for a branch that returns too early, mutates shared state unexpectedly, or skips an edge case.");
+        }
+
+        lines.Add("");
+        lines.Add("> This is a strong implementation nudge, but you should still verify it against the public tests.");
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildStrategyResponse(string message, string lang)
+    {
+        return string.Join("\n",
+        [
+            "## Strategy Hint",
+            "",
+            "Choose a simple plan before changing code:",
+            "",
+            "1. Restate what the function must return for the public sample.",
+            "2. Identify the data structure that keeps the least extra state.",
+            "3. Write the simplest correct loop or conditional flow first.",
+            "",
+            "> Spend this hint on direction, not implementation detail."
+        ]);
+    }
+
+    private static string BuildPseudocodeResponse(string message, string lang, bool hasCode)
+    {
+        return string.Join("\n",
+        [
+            "## Pseudocode Hint",
+            "",
+            "Sketch the solution before editing:",
+            "",
+            "```text",
+            "read the input values",
+            "initialize the smallest state needed",
+            "for each relevant value:",
+            "  update state or detect the answer",
+            "return the required output format",
+            "```",
+            "",
+            "> Translate this outline into your selected language and test one public example at a time."
+        ]);
     }
 
     private static string BuildExplainResponse(string message, string lang)

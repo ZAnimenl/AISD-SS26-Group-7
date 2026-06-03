@@ -14,6 +14,20 @@ public sealed class Assessment
 
     public bool AiEnabled { get; set; }
 
+    public bool StructuredHintsEnabled { get; set; } = true;
+
+    public bool AiCreditsEnabled { get; set; } = true;
+
+    public bool AiRescueEnabled { get; set; } = true;
+
+    public bool ReflectionEnabled { get; set; } = true;
+
+    public double RescueCorrectnessProbability { get; set; } = 0.5;
+
+    public int? AiCreditBudgetOverride { get; set; }
+
+    public bool ReportsReleased { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? ArchivedAt { get; set; }

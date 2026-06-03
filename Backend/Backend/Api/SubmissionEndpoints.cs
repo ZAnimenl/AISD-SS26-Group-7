@@ -12,6 +12,9 @@ public static class SubmissionEndpoints
     {
         api.MapPost("/assessments/{assessmentId:guid}/submit", FinalizeByAssessmentAsync);
         api.MapGet("/assessments/{assessmentId:guid}/submissions", HistoryByAssessmentAsync);
+        api.MapGet("/assessments/{assessmentId:guid}/reflection", GetReflectionAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/reflection", SubmitReflectionAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/reflection/auto-submit", AutoSubmitReflectionAsync);
         api.MapGet("/admin/submissions/{submissionId:guid}", AdminDetailAsync);
     }
 
@@ -109,8 +112,19 @@ public static class SubmissionEndpoints
             dbContext.Submissions.Add(submission);
         }
 
-        session.Status = SessionStatuses.Submitted;
-        session.CompletedAt = now;
+        UpdateSessionScoreFoundation(session, allSubmissions);
+        if (session.Assessment!.ReflectionEnabled)
+        {
+            session.Status = SessionStatuses.ReflectionPending;
+            session.ReflectionStatus = ReflectionStatuses.Pending;
+            session.ReflectionStartedAt = now;
+            session.ReflectionExpiresAt = now.AddMinutes(5);
+        }
+        else
+        {
+            session.Status = SessionStatuses.Submitted;
+            session.CompletedAt = now;
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var totalScore = allSubmissions.Sum(submission => submission.Score);
@@ -125,6 +139,8 @@ public static class SubmissionEndpoints
             stdout = status == ExecutionStatuses.Passed ? "All tests passed." : null,
             stderr = status == ExecutionStatuses.Passed ? null : "One or more questions failed.",
             submitted_at = session.CompletedAt,
+            reflection_required = session.ReflectionStatus == ReflectionStatuses.Pending,
+            reflection_expires_at = session.ReflectionExpiresAt,
             visible_test_summary = new
             {
                 passed = allSubmissions.Sum(submission => submission.VisiblePassed),
@@ -138,6 +154,60 @@ public static class SubmissionEndpoints
                 total = allSubmissions.Sum(submission => submission.HiddenTotal)
             }
         });
+    }
+
+    private static async Task<IResult> GetReflectionAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (session, error) = await RequireStudentSessionAsync(assessmentId, httpContext, dbContext, currentUserAccessor, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        return ApiResults.Success(ToReflectionDto(session!));
+    }
+
+    private static async Task<IResult> SubmitReflectionAsync(
+        Guid assessmentId,
+        ReflectionRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (session, error) = await RequireStudentSessionAsync(assessmentId, httpContext, dbContext, currentUserAccessor, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        CompleteReflection(session!, request.ReflectionText, autoSubmitted: false);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(ToReflectionDto(session!));
+    }
+
+    private static async Task<IResult> AutoSubmitReflectionAsync(
+        Guid assessmentId,
+        ReflectionRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (session, error) = await RequireStudentSessionAsync(assessmentId, httpContext, dbContext, currentUserAccessor, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        CompleteReflection(session!, request.ReflectionText, autoSubmitted: true);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(ToReflectionDto(session!));
     }
 
     internal static IReadOnlyCollection<WorkspaceQuestionState> EnsureWorkspaceStates(AssessmentSession session, DateTimeOffset now)
@@ -162,7 +232,8 @@ public static class SubmissionEndpoints
                     [activeFile] = new WorkspaceFileDto(language, starterCode.GetValueOrDefault(language, string.Empty))
                 }),
                 LastSavedAt = now,
-                Version = 1
+                Version = 1,
+                AiCreditsRemaining = AssessmentProjectionService.ResolveAiCreditBudget(session.Assessment!, question)
             };
 
             session.WorkspaceStates.Add(state);
@@ -192,6 +263,83 @@ public static class SubmissionEndpoints
         return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)
             ? ExecutionStatuses.RuntimeError
             : ExecutionStatuses.Failed;
+    }
+
+    private static void UpdateSessionScoreFoundation(AssessmentSession session, IReadOnlyCollection<Submission> submissions)
+    {
+        var score = submissions.Sum(submission => submission.Score);
+        var maxScore = submissions.Sum(submission => submission.MaxScore);
+        session.CodeCorrectnessScore = maxScore == 0 ? 0 : (int)Math.Round(score * 100.0 / maxScore);
+        session.ProcessAwareScore = session.CodeCorrectnessScore;
+        session.ProcessScoreExplanationJson = JsonDocumentSerializer.Serialize(new
+        {
+            note = "Foundation score uses code correctness until AI usage, reflection, and critical AI judgment scoring are implemented.",
+            code_correctness_weight = 100
+        });
+    }
+
+    private static async Task<(AssessmentSession? Session, IResult? Error)> RequireStudentSessionAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
+        if (error is not null)
+        {
+            return (null, error);
+        }
+
+        var session = await dbContext.AssessmentSessions
+            .Include(item => item.Assessment)
+            .FirstOrDefaultAsync(
+                item => item.AssessmentId == assessmentId
+                        && item.UserId == user!.Id
+                        && (item.Status == SessionStatuses.ReflectionPending || item.Status == SessionStatuses.Submitted),
+                cancellationToken);
+        if (session is null)
+        {
+            return (null, ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound));
+        }
+
+        return (session, null);
+    }
+
+    private static void CompleteReflection(AssessmentSession session, string? reflectionText, bool autoSubmitted)
+    {
+        if (!session.Assessment!.ReflectionEnabled)
+        {
+            session.ReflectionStatus = ReflectionStatuses.NotStarted;
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        session.ReflectionText = reflectionText ?? session.ReflectionText;
+        session.ReflectionSubmittedAt = now;
+        session.ReflectionStatus = autoSubmitted ? ReflectionStatuses.AutoSubmitted : ReflectionStatuses.Submitted;
+        session.Status = SessionStatuses.Submitted;
+        session.CompletedAt ??= now;
+
+        if (autoSubmitted && string.IsNullOrWhiteSpace(session.ReflectionText))
+        {
+            session.ReflectionUnderstandingScore = 0;
+        }
+    }
+
+    private static object ToReflectionDto(AssessmentSession session)
+    {
+        return new
+        {
+            assessment_id = session.AssessmentId,
+            attempt_id = session.Id,
+            reflection_enabled = session.Assessment!.ReflectionEnabled,
+            reflection_status = session.ReflectionStatus,
+            reflection_started_at = session.ReflectionStartedAt,
+            reflection_expires_at = session.ReflectionExpiresAt,
+            reflection_submitted_at = session.ReflectionSubmittedAt,
+            reflection_text = session.ReflectionText
+        };
     }
 
     private static async Task<IResult> HistoryByAssessmentAsync(

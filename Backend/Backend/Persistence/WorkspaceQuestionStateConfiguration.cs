@@ -14,6 +14,7 @@ public static class WorkspaceQuestionStateConfiguration
             entity.Property(state => state.SelectedLanguage).HasMaxLength(64).IsRequired();
             entity.Property(state => state.ActiveFile).HasMaxLength(200).IsRequired();
             entity.Property(state => state.FilesJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(state => state.AiCreditsRemaining);
             entity.HasIndex(state => new { state.SessionId, state.QuestionId }).IsUnique();
             entity.HasOne(state => state.Session)
                 .WithMany(session => session.WorkspaceStates)

@@ -81,6 +81,7 @@ public static class SessionEndpoints
         }
 
         await EnsureWorkspaceAsync(dbContext, session, assessment, now, cancellationToken);
+        session.Assessment ??= assessment;
 
         return ApiResults.Success(ToAttemptDto(session, now));
     }
@@ -100,6 +101,7 @@ public static class SessionEndpoints
         }
 
         var session = await dbContext.AssessmentSessions
+            .Include(item => item.Assessment)
             .FirstOrDefaultAsync(
                 item => item.AssessmentId == assessmentId && item.UserId == user!.Id && item.Status == SessionStatuses.Active,
                 cancellationToken);
@@ -146,7 +148,8 @@ public static class SessionEndpoints
                     [activeFile] = new WorkspaceFileDto(language, starterCode.GetValueOrDefault(language, string.Empty))
                 }),
                 LastSavedAt = now,
-                Version = 1
+                Version = 1,
+                AiCreditsRemaining = AssessmentProjectionService.ResolveAiCreditBudget(assessment, question)
             });
         }
 
@@ -172,6 +175,15 @@ public static class SessionEndpoints
             attempt_status = session.Status,
             started_at = session.StartedAt,
             expires_at = session.ExpiresAt,
+            rescue_chances_remaining = session.RescueChancesRemaining,
+            reflection = new
+            {
+                status = session.ReflectionStatus,
+                started_at = session.ReflectionStartedAt,
+                expires_at = session.ReflectionExpiresAt,
+                submitted_at = session.ReflectionSubmittedAt
+            },
+            ai_settings = session.Assessment is null ? null : AssessmentProjectionService.ToAiSettings(session.Assessment),
             server_time = now
         };
     }

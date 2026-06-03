@@ -12,6 +12,9 @@ public static class AssessmentSessionConfiguration
             entity.ToTable("assessment_sessions");
             entity.HasKey(session => session.Id);
             entity.Property(session => session.Status).HasMaxLength(64).IsRequired();
+            entity.Property(session => session.ReflectionStatus).HasMaxLength(64).IsRequired();
+            entity.Property(session => session.ReflectionEvaluationJson).HasColumnType("jsonb");
+            entity.Property(session => session.ProcessScoreExplanationJson).HasColumnType("jsonb");
             entity.HasOne(session => session.Assessment)
                 .WithMany(assessment => assessment.Sessions)
                 .HasForeignKey(session => session.AssessmentId)

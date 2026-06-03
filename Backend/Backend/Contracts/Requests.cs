@@ -13,7 +13,17 @@ public sealed record AssessmentRequest(
     string Description,
     int DurationMinutes,
     string Status,
-    bool AiEnabled);
+    bool AiEnabled,
+    AssessmentAiSettingsRequest? AiSettings = null,
+    int? AiCreditBudgetOverride = null,
+    bool? ReportsReleased = null);
+
+public sealed record AssessmentAiSettingsRequest(
+    bool? StructuredHintsEnabled,
+    bool? AiCreditsEnabled,
+    bool? AiRescueEnabled,
+    bool? ReflectionEnabled,
+    double? RescueCorrectnessProbability);
 
 public sealed record QuestionRequest(
     string Title,
@@ -22,7 +32,9 @@ public sealed record QuestionRequest(
     Dictionary<string, string> StarterCode,
     string? AdminNotes,
     int SortOrder,
-    int MaxScore);
+    int MaxScore,
+    string? Difficulty = null,
+    int? AiCreditBudgetOverride = null);
 
 public sealed record TestCaseRequest(string Name, string Visibility, Dictionary<string, string> TestCode);
 
@@ -43,3 +55,11 @@ public sealed record AssessmentAiChatRequest(
     string Message,
     string SelectedLanguage,
     string ActiveFileContent);
+
+public sealed record AssessmentAiHintRequest(
+    string HintLevel,
+    string? Message,
+    string SelectedLanguage,
+    string ActiveFileContent);
+
+public sealed record ReflectionRequest(string? ReflectionText);

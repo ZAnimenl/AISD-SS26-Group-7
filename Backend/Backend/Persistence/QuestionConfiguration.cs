@@ -16,6 +16,7 @@ public static class QuestionConfiguration
             entity.Property(question => question.LanguageConstraintsJson).HasColumnType("jsonb").IsRequired();
             entity.Property(question => question.StarterCodeJson).HasColumnType("jsonb").IsRequired();
             entity.Property(question => question.AdminNotes).HasMaxLength(2000);
+            entity.Property(question => question.Difficulty).HasMaxLength(64).IsRequired();
             entity.HasOne(question => question.Assessment)
                 .WithMany(assessment => assessment.Questions)
                 .HasForeignKey(question => question.AssessmentId)

@@ -12,6 +12,9 @@ public static class AiInteractionConfiguration
             entity.ToTable("ai_interactions");
             entity.HasKey(interaction => interaction.Id);
             entity.Property(interaction => interaction.InteractionType).HasMaxLength(64).IsRequired();
+            entity.Property(interaction => interaction.HintLevel).HasMaxLength(64);
+            entity.Property(interaction => interaction.RescueCorrectnessLabel).HasMaxLength(64);
+            entity.Property(interaction => interaction.RescueDecision).HasMaxLength(64);
             entity.Property(interaction => interaction.Message).IsRequired();
             entity.Property(interaction => interaction.SelectedLanguage).HasMaxLength(64).IsRequired();
             entity.Property(interaction => interaction.ActiveFileContent).IsRequired();

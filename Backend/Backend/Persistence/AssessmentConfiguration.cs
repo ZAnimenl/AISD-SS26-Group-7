@@ -14,6 +14,7 @@ public static class AssessmentConfiguration
             entity.Property(assessment => assessment.Title).HasMaxLength(300).IsRequired();
             entity.Property(assessment => assessment.Description).IsRequired();
             entity.Property(assessment => assessment.Status).HasMaxLength(64).IsRequired();
+            entity.Property(assessment => assessment.RescueCorrectnessProbability).HasPrecision(5, 4);
         });
     }
 }

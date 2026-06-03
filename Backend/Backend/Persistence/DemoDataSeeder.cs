@@ -28,11 +28,26 @@ public sealed class DemoDataSeeder(
         var existingAssessment = await dbContext.Assessments.Include(a => a.Questions).FirstOrDefaultAsync(a => a.Id == PythonAssessmentId, cancellationToken);
         if (existingAssessment is not null)
         {
+            existingAssessment.AiEnabled = true;
+            existingAssessment.StructuredHintsEnabled = true;
+            existingAssessment.AiCreditsEnabled = true;
+            existingAssessment.AiRescueEnabled = true;
+            existingAssessment.ReflectionEnabled = true;
+            existingAssessment.RescueCorrectnessProbability = 0.5;
+            existingAssessment.ReportsReleased = false;
+
+            foreach (var question in existingAssessment.Questions)
+            {
+                question.Difficulty = question.Id == ArraySumQuestionId
+                    ? QuestionDifficulties.Easy
+                    : QuestionDifficulties.Medium;
+            }
+
             if (!existingAssessment.Questions.Any(q => q.Id == FibonacciQuestionId))
             {
                 dbContext.Questions.Add(CreateFibonacciQuestion(now));
-                await dbContext.SaveChangesAsync(cancellationToken);
             }
+            await dbContext.SaveChangesAsync(cancellationToken);
             return;
         }
 
@@ -88,6 +103,12 @@ public sealed class DemoDataSeeder(
             DurationMinutes = 60,
             Status = AssessmentStatuses.Active,
             AiEnabled = true,
+            StructuredHintsEnabled = true,
+            AiCreditsEnabled = true,
+            AiRescueEnabled = true,
+            ReflectionEnabled = true,
+            RescueCorrectnessProbability = 0.5,
+            ReportsReleased = false,
             CreatedAt = now
         };
 
@@ -104,6 +125,7 @@ public sealed class DemoDataSeeder(
                 ["javascript"] = "function solve(arr) {\n  // TODO\n}\n",
                 ["typescript"] = "function solve(arr: number[]): number {\n  return 0;\n}\n"
             }),
+            Difficulty = QuestionDifficulties.Easy,
             SortOrder = 1,
             MaxScore = 50,
             TestCases =
@@ -144,6 +166,7 @@ public sealed class DemoDataSeeder(
                 ["javascript"] = "function solve(value) {\n  // TODO\n}\n",
                 ["typescript"] = "function solve(value: string): string {\n  return \"\";\n}\n"
             }),
+            Difficulty = QuestionDifficulties.Medium,
             SortOrder = 2,
             MaxScore = 50,
             TestCases =
@@ -192,6 +215,7 @@ public sealed class DemoDataSeeder(
                 ["javascript"] = "function solve(n) {\n  // TODO: return the n-th Fibonacci number\n}\n",
                 ["typescript"] = "function solve(n: number): number {\n  // TODO: return the n-th Fibonacci number\n  return 0;\n}\n"
             }),
+            Difficulty = QuestionDifficulties.Medium,
             SortOrder = 3,
             MaxScore = 50,
             TestCases =

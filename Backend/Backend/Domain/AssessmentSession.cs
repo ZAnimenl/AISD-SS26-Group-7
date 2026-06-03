@@ -20,6 +20,32 @@ public sealed class AssessmentSession
 
     public DateTimeOffset? CompletedAt { get; set; }
 
+    public int RescueChancesRemaining { get; set; } = 4;
+
+    public string ReflectionStatus { get; set; } = ReflectionStatuses.NotStarted;
+
+    public DateTimeOffset? ReflectionStartedAt { get; set; }
+
+    public DateTimeOffset? ReflectionExpiresAt { get; set; }
+
+    public DateTimeOffset? ReflectionSubmittedAt { get; set; }
+
+    public string? ReflectionText { get; set; }
+
+    public string? ReflectionEvaluationJson { get; set; }
+
+    public int? CodeCorrectnessScore { get; set; }
+
+    public int? AiUsageQualityScore { get; set; }
+
+    public int? ReflectionUnderstandingScore { get; set; }
+
+    public int? CriticalAiJudgmentScore { get; set; }
+
+    public int? ProcessAwareScore { get; set; }
+
+    public string? ProcessScoreExplanationJson { get; set; }
+
     public List<WorkspaceQuestionState> WorkspaceStates { get; set; } = [];
 
     public List<Submission> Submissions { get; set; } = [];

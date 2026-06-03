@@ -3,7 +3,7 @@ export type Language = "python" | "javascript" | "typescript";
 export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
-export type AiInteractionType = "chat" | "hint" | "explain" | "debug" | "code_review";
+export type AiHintLevel = "concept_hint" | "strategy_hint" | "debugging_hint" | "pseudocode_hint" | "code_level_suggestion";
 
 export interface AuthUser {
   user_id: string;
@@ -48,6 +48,8 @@ export interface Question {
   starter_code: StarterCode;
   public_examples: PublicTestCase[];
   admin_test_cases?: AdminTestCase[];
+  difficulty?: "easy" | "medium" | "hard";
+  ai_credit_budget?: number;
 }
 
 export interface Assessment {
@@ -64,6 +66,15 @@ export interface Assessment {
   score?: number;
   questions: Question[];
   submission_id?: string;
+  ai_settings?: AssessmentAiSettings;
+}
+
+export interface AssessmentAiSettings {
+  structured_hints_enabled: boolean;
+  ai_credits_enabled: boolean;
+  ai_rescue_enabled: boolean;
+  reflection_enabled: boolean;
+  rescue_correctness_probability: number;
 }
 
 export interface WorkspaceFile {
@@ -77,11 +88,31 @@ export interface WorkspaceQuestionState {
   files: Record<string, WorkspaceFile>;
   last_saved_at: string;
   version: number;
+  ai_credits_remaining?: number | null;
 }
 
 export interface WorkspaceState {
   assessment_id?: string;
   questions: Record<string, WorkspaceQuestionState>;
+}
+
+export interface AiState {
+  assessment_id: string;
+  ai_enabled: boolean;
+  ai_settings: AssessmentAiSettings;
+  hint_levels: Array<{ hint_level: AiHintLevel; credit_cost: number }>;
+  rescue_chances_remaining: number;
+  questions: Record<string, { ai_credit_budget: number; ai_credits_remaining: number | null }>;
+}
+
+export interface AiHintResponse {
+  interaction_id: string;
+  response_markdown: string;
+  hint_level: AiHintLevel;
+  credit_cost: number;
+  credits_remaining: number | null;
+  semantic_tags: string[];
+  created_at: string;
 }
 
 export interface RunResult {

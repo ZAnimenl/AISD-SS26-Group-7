@@ -17,7 +17,8 @@ public sealed class WorkspaceProjectionService
                     active_file = state.ActiveFile,
                     files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>()),
                     last_saved_at = state.LastSavedAt,
-                    state.Version
+                    state.Version,
+                    ai_credits_remaining = state.AiCreditsRemaining
                 })
         };
     }

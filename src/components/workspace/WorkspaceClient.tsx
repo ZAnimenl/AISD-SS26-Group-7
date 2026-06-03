@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brain, Clock, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
-import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
+import { autosaveWorkspace, finalizeSubmission, getAiResponse, getAiState, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
-import type { AiInteractionType, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
+import type { AiHintLevel, AiState, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
@@ -16,11 +16,22 @@ type SaveState = "saved" | "unsaved" | "saving";
 
 const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "python", label: "Python" },
-  { value: "javascript", label: "JavaScript" }
+  { value: "javascript", label: "JavaScript" },
+  { value: "typescript", label: "TypeScript" }
+];
+
+const HINT_LEVELS: Array<{ value: AiHintLevel; label: string; fallbackCost: number }> = [
+  { value: "concept_hint", label: "Concept", fallbackCost: 1 },
+  { value: "strategy_hint", label: "Strategy", fallbackCost: 2 },
+  { value: "debugging_hint", label: "Debugging", fallbackCost: 3 },
+  { value: "pseudocode_hint", label: "Pseudocode", fallbackCost: 4 },
+  { value: "code_level_suggestion", label: "Code-level", fallbackCost: 6 }
 ];
 
 function getFileNameForLanguage(language: Language) {
-  return language === "javascript" ? "main.js" : "main.py";
+  if (language === "javascript") return "main.js";
+  if (language === "typescript") return "main.ts";
+  return "main.py";
 }
 
 function createQuestionState(question: Question | undefined, language: Language = "python"): WorkspaceQuestionState {
@@ -36,7 +47,8 @@ function createQuestionState(question: Question | undefined, language: Language 
       }
     },
     last_saved_at: "",
-    version: 0
+    version: 0,
+    ai_credits_remaining: question?.ai_credit_budget ?? null
   };
 }
 
@@ -98,6 +110,44 @@ function mergeQuestionStates(current: WorkspaceState["questions"], saved: Worksp
       }
     }
   }), current);
+}
+
+function mergeAiCreditsIntoQuestionStates(current: WorkspaceState["questions"], aiState: AiState) {
+  return Object.entries(aiState.questions).reduce<WorkspaceState["questions"]>((nextStates, [questionId, creditState]) => {
+    const existing = nextStates[questionId];
+    if (!existing) return nextStates;
+
+    return {
+      ...nextStates,
+      [questionId]: {
+        ...existing,
+        ai_credits_remaining: creditState.ai_credits_remaining
+      }
+    };
+  }, current);
+}
+
+function updateAiStateCredits(current: AiState, questionId: string, creditsRemaining: number | null) {
+  return {
+    ...current,
+    questions: {
+      ...current.questions,
+      [questionId]: {
+        ...current.questions[questionId],
+        ai_credits_remaining: creditsRemaining
+      }
+    }
+  };
+}
+
+function getHintCost(aiState: AiState | null, level: AiHintLevel) {
+  return aiState?.hint_levels.find((hint) => hint.hint_level === level)?.credit_cost
+    ?? HINT_LEVELS.find((hint) => hint.value === level)?.fallbackCost
+    ?? 1;
+}
+
+function getHintLabel(level: AiHintLevel) {
+  return HINT_LEVELS.find((hint) => hint.value === level)?.label ?? "Structured";
 }
 
 function parseInlineCode(text: string) {
@@ -252,10 +302,36 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiState, setAiState] = useState<AiState | null>(null);
+  const [selectedHintLevel, setSelectedHintLevel] = useState<AiHintLevel>("concept_hint");
   const [aiMessage, setAiMessage] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "I can give hints, explain concepts, debug symptoms, or review your current approach through the backend AI endpoint." }
+    { role: "assistant", text: "Choose a structured hint level. Each hint spends credits from the active question only." }
   ]);
+
+  useEffect(() => {
+    if (!assessment.ai_enabled) {
+      setAiState(null);
+      return;
+    }
+
+    let cancelled = false;
+    getAiState(assessment.assessment_id)
+      .then((nextAiState) => {
+        if (cancelled) return;
+        setAiState(nextAiState);
+        setQuestionStates((current) => mergeAiCreditsIntoQuestionStates(current, nextAiState));
+      })
+      .catch((exception) => {
+        if (!cancelled) {
+          setError(exception instanceof Error ? exception.message : "AI state failed to load.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assessment.ai_enabled, assessment.assessment_id]);
 
   useEffect(() => {
     setSaveState("unsaved");
@@ -379,23 +455,31 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     }
   }
 
-  async function sendAi(type: AiInteractionType, overrideMessage?: string) {
+  async function sendAi(level: AiHintLevel = selectedHintLevel, overrideMessage?: string) {
     setError(null);
-    const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
+    const message = (overrideMessage ?? aiMessage).trim() || getHintLabel(level);
     try {
       const response = await getAiResponse({
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
-        interaction_type: type,
+        hint_level: level,
         message,
         selected_language: language,
         active_file_content: code
       });
       setMessages((current) => [
         ...current,
-        { role: "student", text: message },
-        { role: "assistant", text: response }
+        { role: "student", text: `${getHintLabel(level)} hint: ${message}` },
+        { role: "assistant", text: response.response_markdown }
       ]);
+      setAiState((current) => current ? updateAiStateCredits(current, activeQuestionId, response.credits_remaining) : current);
+      setQuestionStates((current) => ({
+        ...current,
+        [activeQuestionId]: {
+          ...(current[activeQuestionId] ?? createQuestionState(activeQuestion, language)),
+          ai_credits_remaining: response.credits_remaining
+        }
+      }));
       setAiMessage("");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "AI request failed.");
@@ -421,6 +505,12 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   }
 
   const activeFile = getFileNameForLanguage(language);
+  const aiQuestionState = aiState?.questions[activeQuestionId];
+  const activeCreditsRemaining = aiQuestionState?.ai_credits_remaining ?? questionStates[activeQuestionId]?.ai_credits_remaining ?? activeQuestion?.ai_credit_budget ?? null;
+  const activeCreditBudget = aiQuestionState?.ai_credit_budget ?? activeQuestion?.ai_credit_budget ?? null;
+  const selectedHintCost = getHintCost(aiState, selectedHintLevel);
+  const hasEnoughCredits = !aiState?.ai_settings.ai_credits_enabled || activeCreditsRemaining === null || activeCreditsRemaining >= selectedHintCost;
+  const structuredHintsEnabled = Boolean(assessment.ai_enabled && (aiState?.ai_settings.structured_hints_enabled ?? assessment.ai_settings?.structured_hints_enabled ?? true));
 
   return (
     <div className="grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
@@ -536,7 +626,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                 <p className="mt-1 text-xs leading-5 text-white/65">
                   The last run exposed a problem. Ask the assistant for a focused debugging hint.
                 </p>
-                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debug", buildDebugPrompt(runResult, error))}>
+                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debugging_hint", buildDebugPrompt(runResult, error))} disabled={!structuredHintsEnabled}>
                   <Sparkles size={14} />
                   Ask AI to debug this run
                 </button>
@@ -551,18 +641,55 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
           <div className="min-w-0">
             <h2 className="font-semibold">AI assistant</h2>
-            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
+            <p className="text-xs text-white/40">{structuredHintsEnabled ? "Structured hints enabled" : "Disabled for this assessment"}</p>
           </div>
         </div>
-        <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
-          {(["hint", "explain", "debug", "code_review"] as AiInteractionType[]).map((type) => (
-            <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45" onClick={() => sendAi(type)}>
-              <span className="ml-8 grid w-[132px] grid-cols-[18px_96px] items-center gap-3 text-left">
-                <Sparkles size={14} className="justify-self-center" />
-                <span className="block">{type.replace("_", " ")}</span>
-              </span>
-            </button>
-          ))}
+        <div className="relative mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs uppercase tracking-[0.16em] text-white/35">Credits</span>
+            <span className="font-mono text-sm text-cyanGlow">
+              {activeCreditsRemaining ?? "-"}{activeCreditBudget !== null ? ` / ${activeCreditBudget}` : ""}
+            </span>
+          </div>
+        </div>
+        <div className="relative mt-3 grid grid-cols-1 gap-2 xl:grid-cols-2">
+          {HINT_LEVELS.map((hint) => {
+            const cost = getHintCost(aiState, hint.value);
+            const disabled = !structuredHintsEnabled || (aiState?.ai_settings.ai_credits_enabled && activeCreditsRemaining !== null && activeCreditsRemaining < cost);
+            return (
+              <button
+                key={hint.value}
+                disabled={disabled}
+                className={`btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45 ${selectedHintLevel === hint.value ? "border-cyanGlow/50 bg-cyanGlow/10" : ""}`}
+                onClick={() => setSelectedHintLevel(hint.value)}
+              >
+                <span className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 text-left">
+                  <Sparkles size={14} className="justify-self-center" />
+                  <span className="block truncate">{hint.label}</span>
+                  <span className="font-mono text-[11px] text-white/45">{cost}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!hasEnoughCredits ? (
+          <p className="relative mt-2 text-xs leading-5 text-pinkGlow">Not enough credits for the selected hint level.</p>
+        ) : null}
+        <div className="relative mt-3 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
+          <input
+            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30"
+            placeholder="Add context for the selected hint..."
+            value={aiMessage}
+            onChange={(event) => setAiMessage(event.target.value)}
+            disabled={!structuredHintsEnabled}
+          />
+          <button
+            className="rounded-xl bg-cyanGlow p-2 text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"
+            onClick={() => sendAi(selectedHintLevel)}
+            disabled={!structuredHintsEnabled || !hasEnoughCredits}
+          >
+            <Send size={16} />
+          </button>
         </div>
         <div className="scrollbar-soft relative mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           {messages.map((message, index) => (
@@ -570,15 +697,6 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
               {renderMarkdown(message.text)}
             </div>
           ))}
-        </div>
-        <div className="relative mt-4 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
-          <input
-            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30"
-            placeholder="Ask a question..."
-            value={aiMessage}
-            onChange={(event) => setAiMessage(event.target.value)}
-          />
-          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950" onClick={() => sendAi("chat")}><Send size={16} /></button>
         </div>
       </aside>
 

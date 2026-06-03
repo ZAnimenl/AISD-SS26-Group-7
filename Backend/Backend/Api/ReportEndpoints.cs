@@ -13,6 +13,7 @@ public static class ReportEndpoints
         api.MapGet("/admin/reports", ListAsync);
         api.MapGet("/reports/aggregate/{assessmentId:guid}", AggregateAsync);
         api.MapGet("/admin/reports/{assessmentId:guid}/students/{studentId:guid}", StudentDetailAsync);
+        api.MapPost("/admin/reports/{assessmentId:guid}/students/{studentId:guid}/process-evaluation", ProcessEvaluationAsync);
     }
 
     private static async Task<IResult> ListAsync(
@@ -34,6 +35,7 @@ public static class ReportEndpoints
                 assessment_id = assessment.Id,
                 assessment_title = assessment.Title,
                 assessment.Status,
+                reports_released = assessment.ReportsReleased,
                 participant_count = assessment.Sessions.Count,
                 completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted)
             })
@@ -98,6 +100,7 @@ public static class ReportEndpoints
                 score = summary?.Score ?? 0,
                 max_score = summary?.MaxScore ?? 0,
                 submitted_at = summary?.SubmittedAt,
+                process_score = ToProcessScoreDto(session),
                 ai_usage_summary = new
                 {
                     total_interactions = tags.Count,
@@ -114,6 +117,7 @@ public static class ReportEndpoints
             average_score = scores.Count == 0 ? 0 : scores.Average(),
             completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
             participant_count = assessment.Sessions.Count,
+            reports_released = assessment.ReportsReleased,
             score_distribution = BuildScoreDistribution(scores),
             students
         });
@@ -163,6 +167,12 @@ public static class ReportEndpoints
             {
                 interaction_id = interaction.Id,
                 interaction_type = interaction.InteractionType,
+                hint_level = interaction.HintLevel,
+                credit_cost = interaction.CreditCost,
+                is_rescue = interaction.IsRescue,
+                rescue_correctness_label = interaction.RescueCorrectnessLabel,
+                rescue_decision = interaction.RescueDecision,
+                rescue_decision_time_ms = interaction.RescueDecisionTimeMs,
                 interaction.Message,
                 semantic_tags = JsonDocumentSerializer.Deserialize(interaction.SemanticTagsJson, Array.Empty<string>()),
                 created_at = interaction.CreatedAt
@@ -176,9 +186,50 @@ public static class ReportEndpoints
             student = AuthEndpoints.ToUserDto(session.User!),
             attempt_id = session.Id,
             attempt_status = session.Status,
+            reflection = new
+            {
+                status = session.ReflectionStatus,
+                started_at = session.ReflectionStartedAt,
+                expires_at = session.ReflectionExpiresAt,
+                submitted_at = session.ReflectionSubmittedAt,
+                text = session.ReflectionText,
+                evaluation = session.ReflectionEvaluationJson is null
+                    ? null
+                    : JsonDocumentSerializer.Deserialize(session.ReflectionEvaluationJson, new Dictionary<string, object>())
+            },
+            process_score = ToProcessScoreDto(session),
             submissions,
             ai_interactions = interactions
         });
+    }
+
+    private static async Task<IResult> ProcessEvaluationAsync(
+        Guid assessmentId,
+        Guid studentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var session = await dbContext.AssessmentSessions
+            .FirstOrDefaultAsync(item => item.AssessmentId == assessmentId && item.UserId == studentId, cancellationToken);
+        if (session is null)
+        {
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
+        }
+
+        session.ProcessScoreExplanationJson ??= JsonDocumentSerializer.Serialize(new
+        {
+            note = "Process evaluation foundation is present; LLM evaluation will be generated in a later Module 4 stage."
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(ToProcessScoreDto(session));
     }
 
     private static object[] BuildScoreDistribution(IEnumerable<double> scores)
@@ -192,5 +243,20 @@ public static class ReportEndpoints
             new { range = "61-80", count = values.Count(score => score is > 60 and <= 80) },
             new { range = "81-100", count = values.Count(score => score is > 80 and <= 100) }
         ];
+    }
+
+    private static object ToProcessScoreDto(AssessmentSession session)
+    {
+        return new
+        {
+            final_score = session.ProcessAwareScore,
+            code_correctness = session.CodeCorrectnessScore,
+            ai_usage_quality = session.AiUsageQualityScore,
+            reflection_understanding = session.ReflectionUnderstandingScore,
+            critical_ai_judgment = session.CriticalAiJudgmentScore,
+            explanations = session.ProcessScoreExplanationJson is null
+                ? null
+                : JsonDocumentSerializer.Deserialize(session.ProcessScoreExplanationJson, new Dictionary<string, object>())
+        };
     }
 }

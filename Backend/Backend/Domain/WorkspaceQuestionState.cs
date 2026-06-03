@@ -19,4 +19,6 @@ public sealed class WorkspaceQuestionState
     public DateTimeOffset LastSavedAt { get; set; }
 
     public int Version { get; set; }
+
+    public int? AiCreditsRemaining { get; set; }
 }

@@ -127,7 +127,7 @@ Run the local development stack:
 npm run dev
 ```
 
-This starts the ASP.NET backend on `http://localhost:5140`, waits for `/api/v1/health`, then starts the Next.js frontend on `http://localhost:3000`. Backend logs are written to `backend-dev.log` and `backend-dev.err.log`.
+This starts the ASP.NET backend on `http://localhost:5140`, waits for `/api/v1/health`, starts the Next.js frontend on `http://localhost:3000`, prints both localhost URLs, and opens the frontend in your browser. Backend logs are written to `backend-dev.log` / `backend-dev.err.log`; frontend logs are written to `frontend-dev.log` / `frontend-dev.err.log`.
 
 Run only one side when needed:
 

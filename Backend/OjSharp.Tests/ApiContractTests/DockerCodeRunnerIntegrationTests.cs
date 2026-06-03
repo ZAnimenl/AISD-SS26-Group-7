@@ -1,4 +1,5 @@
 using Backend.Domain;
+using Backend.Persistence;
 using Backend.Services;
 using Backend.Services.Grading;
 using Docker.DotNet;
@@ -185,9 +186,10 @@ public sealed class DockerCodeRunnerIntegrationTests
     [Fact]
     public async Task RunDatabaseSeeding()
     {
-        var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Backend.Persistence.OjSharpDbContext>();
+        var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<OjSharpDbContext>();
         optionsBuilder.UseNpgsql("Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password");
-        using var dbContext = new Backend.Persistence.OjSharpDbContext(optionsBuilder.Options);
+        using var dbContext = new OjSharpDbContext(optionsBuilder.Options);
+        await new SchemaCompatibilityService(dbContext).EnsureAsync(CancellationToken.None);
 
         var PythonAssessmentId = Guid.Parse("33333333-3333-3333-3333-333333333333");
         var FibonacciQuestionId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -213,6 +215,7 @@ public sealed class DockerCodeRunnerIntegrationTests
                     ["javascript"] = "function solve(n) {\n  // TODO: return the n-th Fibonacci number\n}\n",
                     ["typescript"] = "function solve(n: number): number {\n  // TODO: return the n-th Fibonacci number\n  return 0;\n}\n"
                 }),
+                Difficulty = QuestionDifficulties.Medium,
                 SortOrder = 3,
                 MaxScore = 50
             };

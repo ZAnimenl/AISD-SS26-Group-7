@@ -48,6 +48,8 @@ public static class QuestionEndpoints
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(request.LanguageConstraints),
             StarterCodeJson = JsonDocumentSerializer.Serialize(request.StarterCode),
             AdminNotes = request.AdminNotes,
+            Difficulty = NormalizeDifficulty(request.Difficulty),
+            AiCreditBudgetOverride = NormalizeOptionalPositiveInt(request.AiCreditBudgetOverride),
             SortOrder = request.SortOrder,
             MaxScore = request.MaxScore
         };
@@ -83,6 +85,8 @@ public static class QuestionEndpoints
         question.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(request.LanguageConstraints);
         question.StarterCodeJson = JsonDocumentSerializer.Serialize(request.StarterCode);
         question.AdminNotes = request.AdminNotes;
+        question.Difficulty = NormalizeDifficulty(request.Difficulty);
+        question.AiCreditBudgetOverride = NormalizeOptionalPositiveInt(request.AiCreditBudgetOverride);
         question.SortOrder = request.SortOrder;
         question.MaxScore = request.MaxScore;
 
@@ -249,6 +253,8 @@ public static class QuestionEndpoints
             language_constraints = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>()),
             starter_code = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>()),
             admin_notes = question.AdminNotes,
+            difficulty = question.Difficulty,
+            ai_credit_budget_override = question.AiCreditBudgetOverride,
             sort_order = question.SortOrder,
             max_score = question.MaxScore
         };
@@ -264,5 +270,17 @@ public static class QuestionEndpoints
         return testCode is null
             ? new Dictionary<string, string>()
             : testCode.ToDictionary(item => item.Key.ToLowerInvariant(), item => item.Value);
+    }
+
+    private static string NormalizeDifficulty(string? difficulty)
+    {
+        return difficulty is QuestionDifficulties.Easy or QuestionDifficulties.Hard
+            ? difficulty
+            : QuestionDifficulties.Medium;
+    }
+
+    private static int? NormalizeOptionalPositiveInt(int? value)
+    {
+        return value is > 0 ? value.Value : null;
     }
 }

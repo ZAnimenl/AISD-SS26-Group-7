@@ -15,6 +15,7 @@ public static class StudentEndpoints
         group.MapGet("/dashboard", DashboardAsync);
         group.MapGet("/assessments", AssessmentsAsync);
         group.MapGet("/results", ResultsAsync);
+        group.MapGet("/results/{assessmentId:guid}", ResultDetailAsync);
     }
 
     private static async Task<IResult> DashboardAsync(
@@ -119,7 +120,73 @@ public static class StudentEndpoints
             .ThenInclude(assessment => assessment!.Questions)
             .ToListAsync(cancellationToken);
 
-        return ApiResults.Success(BuildResultSummaries(results));
+        return ApiResults.Success(BuildResultSummaries(results.Where(submission => submission.Session!.Assessment!.ReportsReleased)));
+    }
+
+    private static async Task<IResult> ResultDetailAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var assessment = await dbContext.Assessments.FirstOrDefaultAsync(item => item.Id == assessmentId, cancellationToken);
+        if (assessment is null)
+        {
+            return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (!assessment.ReportsReleased)
+        {
+            return ApiResults.Error("REPORT_NOT_RELEASED", "Final reports have not been released for this assessment.", StatusCodes.Status403Forbidden);
+        }
+
+        var session = await dbContext.AssessmentSessions
+            .Include(item => item.Assessment)
+            .ThenInclude(item => item!.Questions)
+            .Include(item => item.Submissions)
+            .FirstOrDefaultAsync(item => item.AssessmentId == assessmentId && item.UserId == user!.Id, cancellationToken);
+        if (session is null)
+        {
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
+        }
+
+        var submissions = session.Submissions.OrderByDescending(submission => submission.SubmittedAt).ToList();
+        if (submissions.Count == 0)
+        {
+            return ApiResults.Error("NOT_FOUND", "No released submission result was found.", StatusCodes.Status404NotFound);
+        }
+
+        var score = submissions.Sum(submission => submission.Score);
+        var maxScore = submissions.Sum(submission => submission.MaxScore);
+        return ApiResults.Success(new
+        {
+            assessment_id = assessmentId,
+            assessment_title = session.Assessment!.Title,
+            attempt_id = session.Id,
+            evaluation_status = BuildResultStatus(submissions, score, maxScore),
+            score,
+            max_score = maxScore,
+            process_score = ToProcessScoreDto(session),
+            short_explanation = session.ProcessScoreExplanationJson is null
+                ? "Released result is based on stored code correctness and available process signals."
+                : null,
+            submissions = submissions.Select(submission => new
+            {
+                submission_id = submission.Id,
+                question_id = submission.QuestionId,
+                evaluation_status = submission.EvaluationStatus,
+                submission.Score,
+                max_score = submission.MaxScore,
+                submitted_at = submission.SubmittedAt
+            })
+        });
     }
 
     internal static IReadOnlyList<StudentResultSummary> BuildResultSummaries(IEnumerable<Submission> results)
@@ -141,6 +208,7 @@ public static class StudentEndpoints
                     EvaluationStatus: BuildResultStatus(submissions, score, maxScore),
                     Score: score,
                     MaxScore: maxScore,
+                    ProcessAwareScore: latestSubmission.Session.ProcessAwareScore,
                     QuestionCount: latestSubmission.Session.Assessment.Questions.Count,
                     SubmittedAt: submissions.Max(submission => submission.SubmittedAt));
             })
@@ -168,6 +236,22 @@ public static class StudentEndpoints
         string EvaluationStatus,
         int Score,
         int MaxScore,
+        int? ProcessAwareScore,
         int QuestionCount,
         DateTimeOffset SubmittedAt);
+
+    private static object ToProcessScoreDto(AssessmentSession session)
+    {
+        return new
+        {
+            final_score = session.ProcessAwareScore,
+            code_correctness = session.CodeCorrectnessScore,
+            ai_usage_quality = session.AiUsageQualityScore,
+            reflection_understanding = session.ReflectionUnderstandingScore,
+            critical_ai_judgment = session.CriticalAiJudgmentScore,
+            explanations = session.ProcessScoreExplanationJson is null
+                ? null
+                : JsonDocumentSerializer.Deserialize(session.ProcessScoreExplanationJson, new Dictionary<string, object>())
+        };
+    }
 }

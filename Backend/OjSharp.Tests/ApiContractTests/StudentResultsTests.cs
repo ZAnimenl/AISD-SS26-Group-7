@@ -14,10 +14,12 @@ public sealed class StudentResultsTests
         {
             Id = sessionId,
             AssessmentId = assessmentId,
+            ProcessAwareScore = 75,
             Assessment = new Assessment
             {
                 Id = assessmentId,
                 Title = "Assessment",
+                ReportsReleased = true,
                 Questions =
                 [
                     new Question { Id = Guid.NewGuid() },
@@ -37,6 +39,7 @@ public sealed class StudentResultsTests
         Assert.Equal("Assessment", summary.AssessmentTitle);
         Assert.Equal(75, summary.Score);
         Assert.Equal(100, summary.MaxScore);
+        Assert.Equal(75, summary.ProcessAwareScore);
         Assert.Equal(2, summary.QuestionCount);
         Assert.Equal(ExecutionStatuses.Failed, summary.EvaluationStatus);
     }

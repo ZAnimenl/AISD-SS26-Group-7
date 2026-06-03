@@ -17,6 +17,8 @@ public static class AssessmentEndpoints
         api.MapPost("/admin/assessments/{assessmentId:guid}/archive", ArchiveAsync);
         api.MapDelete("/admin/assessments/{assessmentId:guid}", DeleteAsync);
         api.MapGet("/assessments/{assessmentId:guid}/context", ContextAsync);
+        api.MapPost("/admin/assessments/{assessmentId:guid}/reports/release", ReleaseReportsAsync);
+        api.MapPost("/admin/assessments/{assessmentId:guid}/reports/unrelease", UnreleaseReportsAsync);
     }
 
     private static async Task<IResult> ListAdminAsync(
@@ -61,8 +63,11 @@ public static class AssessmentEndpoints
             DurationMinutes = request.DurationMinutes,
             Status = NormalizeAssessmentStatus(request.Status),
             AiEnabled = request.AiEnabled,
+            AiCreditBudgetOverride = NormalizeOptionalPositiveInt(request.AiCreditBudgetOverride),
+            ReportsReleased = request.ReportsReleased ?? false,
             CreatedAt = DateTimeOffset.UtcNow
         };
+        ApplyAiSettings(assessment, request.AiSettings);
 
         dbContext.Assessments.Add(assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -124,6 +129,9 @@ public static class AssessmentEndpoints
         assessment.DurationMinutes = request.DurationMinutes;
         assessment.Status = NormalizeAssessmentStatus(request.Status);
         assessment.AiEnabled = request.AiEnabled;
+        assessment.AiCreditBudgetOverride = NormalizeOptionalPositiveInt(request.AiCreditBudgetOverride);
+        assessment.ReportsReleased = request.ReportsReleased ?? assessment.ReportsReleased;
+        ApplyAiSettings(assessment, request.AiSettings);
         await dbContext.SaveChangesAsync(cancellationToken);
         return ApiResults.Success(new { assessment_id = assessment.Id });
     }
@@ -214,10 +222,81 @@ public static class AssessmentEndpoints
         return ApiResults.Success(projectionService.ToStudentContext(assessment, session));
     }
 
+    private static async Task<IResult> ReleaseReportsAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        return await SetReportsReleasedAsync(assessmentId, true, httpContext, dbContext, currentUserAccessor, cancellationToken);
+    }
+
+    private static async Task<IResult> UnreleaseReportsAsync(
+        Guid assessmentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        return await SetReportsReleasedAsync(assessmentId, false, httpContext, dbContext, currentUserAccessor, cancellationToken);
+    }
+
+    private static async Task<IResult> SetReportsReleasedAsync(
+        Guid assessmentId,
+        bool reportsReleased,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var assessment = await dbContext.Assessments.FindAsync([assessmentId], cancellationToken);
+        if (assessment is null)
+        {
+            return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
+        }
+
+        assessment.ReportsReleased = reportsReleased;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(new { assessment_id = assessment.Id, reports_released = assessment.ReportsReleased });
+    }
+
     private static string NormalizeAssessmentStatus(string status)
     {
         return status is AssessmentStatuses.Draft or AssessmentStatuses.Active or AssessmentStatuses.Closed or AssessmentStatuses.Archived
             ? status
             : AssessmentStatuses.Draft;
+    }
+
+    private static void ApplyAiSettings(Assessment assessment, AssessmentAiSettingsRequest? settings)
+    {
+        if (settings is null)
+        {
+            return;
+        }
+
+        assessment.StructuredHintsEnabled = settings.StructuredHintsEnabled ?? assessment.StructuredHintsEnabled;
+        assessment.AiCreditsEnabled = settings.AiCreditsEnabled ?? assessment.AiCreditsEnabled;
+        assessment.AiRescueEnabled = settings.AiRescueEnabled ?? assessment.AiRescueEnabled;
+        assessment.ReflectionEnabled = settings.ReflectionEnabled ?? assessment.ReflectionEnabled;
+        assessment.RescueCorrectnessProbability = NormalizeProbability(
+            settings.RescueCorrectnessProbability,
+            assessment.RescueCorrectnessProbability);
+    }
+
+    private static double NormalizeProbability(double? value, double fallback)
+    {
+        return value is >= 0 and <= 1 ? value.Value : fallback;
+    }
+
+    private static int? NormalizeOptionalPositiveInt(int? value)
+    {
+        return value is > 0 ? value.Value : null;
     }
 }

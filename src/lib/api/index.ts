@@ -1,7 +1,9 @@
 import type {
   AdminDashboard,
   AggregateReport,
-  AiInteractionType,
+  AiHintLevel,
+  AiHintResponse,
+  AiState,
   Assessment,
   AssessmentStatus,
   AttemptStatus,
@@ -475,21 +477,24 @@ export async function finalizeSubmission(assessmentId: string) {
 export async function getAiResponse(input: {
   assessment_id: string;
   question_id: string;
-  interaction_type: AiInteractionType;
+  hint_level: AiHintLevel;
   message: string;
   selected_language: Language;
   active_file_content: string;
 }) {
-  const response = await apiRequest<{ response_markdown: string }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/chat`, {
+  return apiRequest<AiHintResponse>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/hints`, {
     method: "POST",
     body: JSON.stringify({
-      interaction_type: input.interaction_type,
+      hint_level: input.hint_level,
       message: input.message,
       selected_language: input.selected_language,
       active_file_content: input.active_file_content
     })
   });
-  return response.response_markdown;
+}
+
+export async function getAiState(assessmentId: string) {
+  return apiRequest<AiState>(`/assessments/${assessmentId}/ai-state`);
 }
 
 function normalizeUser(user: BackendUser): AuthUser {
@@ -543,6 +548,13 @@ function normalizeAssessment(raw: any): Assessment {
     duration_minutes: raw.duration_minutes ?? 0,
     status: (raw.status ?? "active") as AssessmentStatus,
     ai_enabled: Boolean(raw.ai_enabled),
+    ai_settings: raw.ai_settings ? {
+      structured_hints_enabled: Boolean(raw.ai_settings.structured_hints_enabled),
+      ai_credits_enabled: Boolean(raw.ai_settings.ai_credits_enabled),
+      ai_rescue_enabled: Boolean(raw.ai_settings.ai_rescue_enabled),
+      reflection_enabled: Boolean(raw.ai_settings.reflection_enabled),
+      rescue_correctness_probability: Number(raw.ai_settings.rescue_correctness_probability ?? 0.5)
+    } : undefined,
     closes_at: raw.closes_at ?? raw.expires_at ?? new Date().toISOString(),
     question_count: raw.question_count ?? raw.questions?.length ?? 0,
     attempt_status: normalizeAttemptStatus(attemptStatus),
@@ -568,7 +580,9 @@ function normalizeQuestion(question: any): Question {
       typescript: question.starter_code?.typescript ?? ""
     },
     public_examples: question.public_examples ?? [],
-    admin_test_cases: (question.admin_test_cases ?? []).map(normalizeAdminTestCase)
+    admin_test_cases: (question.admin_test_cases ?? []).map(normalizeAdminTestCase),
+    difficulty: question.difficulty,
+    ai_credit_budget: question.ai_credit_budget ?? question.ai_credit_budget_override ?? undefined
   };
 }
 
