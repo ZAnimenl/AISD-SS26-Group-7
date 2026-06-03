@@ -344,14 +344,13 @@ Use the module4-ai-telemetry-coder skill.
 
 Use for:
 
-- AI backend service
+- embedded AI agent backend service
 - secure AI proxy
-- LLM provider integration
+- LLM provider integration (e.g. Deepseek API)
 - AI interaction logging
-- token usage telemetry
+- token usage tracking and efficiency metrics
 - semantic tags
 - structured AI responses
-- inline completion backend
 - AI provider error handling
 
 ---
@@ -496,13 +495,15 @@ Owns:
 - browser IDE
 - Monaco/editor
 - student/admin pages
-- problem statement display
+- practical task description display
+- starter project file browser
 - language selector
 - timer display
 - autosave indicator
 - run/submit UI
 - output console
-- AI assistant UI
+- embedded AI agent UI (integrated within workspace, not a separate chat panel)
+- AI token usage display
 - frontend API clients
 
 Must not:
@@ -537,15 +538,17 @@ Must not:
 
 ---
 
-## Module 4 - AI Telemetry and Assistance Service
+## Module 4 - AI Telemetry and Assistance Service (Embedded AI Agent)
 
 Owns:
 
+- embedded AI agent backend service
 - secure AI proxy
-- external LLM provider calls
+- external LLM provider calls (e.g. Deepseek API)
 - server-side system prompts
 - AI interaction logging
-- token usage telemetry
+- token usage tracking (input tokens, output tokens, per-interaction and per-attempt totals)
+- token efficiency metrics
 - semantic tagging
 - structured AI responses
 - AI provider error handling
@@ -557,6 +560,7 @@ Must not:
 - leak system prompts
 - leak hidden tests or grading criteria
 - bypass logging/rate-limit controls where required
+- provide direct complete solutions to students (agent should assist, explain, and guide)
 
 ---
 

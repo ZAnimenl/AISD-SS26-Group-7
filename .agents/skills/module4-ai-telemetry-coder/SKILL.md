@@ -1,6 +1,6 @@
 ﻿---
 name: module4-ai-telemetry-coder
-description: Use this for Module 4 work: AI assistance service, secure AI proxy, AI telemetry, AI usage logging, token metrics, semantic tagging, inline completion service, structured AI response schemas, and prompt-safety boundaries.
+description: Use this for Module 4 work: embedded AI agent service, secure AI proxy, AI telemetry, AI usage logging, token usage and efficiency tracking, semantic tagging, structured AI response schemas, and prompt-safety boundaries.
 ---
 
 # Module 4 - AI Telemetry and Assistance Coder Skill
@@ -119,9 +119,9 @@ When implementing current frontend/backend integration, follow the newer require
 - Secure AI proxy service
 - Server-side system prompts
 - External LLM provider calls
-- AI chat/hint/explain/debug/code-review assistance backend
-- AI inline completion service if implemented
-- Token usage logging
+- Embedded AI agent backend (code suggestion, explanation, debugging assistance)
+- Token usage tracking (input tokens, output tokens, per-interaction totals)
+- Token efficiency metrics
 - AI interaction telemetry
 - Semantic tagging/classification
 - Structured AI response schemas
@@ -164,7 +164,7 @@ Only use this skill for real AI backend work when the user explicitly requests M
 
 ## Typical allowed tasks
 
-- Implement/fix AI chat backend endpoint.
+- Implement/fix embedded AI agent backend endpoint.
 - Implement/fix AI telemetry logging.
 - Implement/fix semantic tag storage/classification.
 - Implement/fix provider adapter.

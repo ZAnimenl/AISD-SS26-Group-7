@@ -170,7 +170,8 @@ Use: `module3-sandbox-execution-coder`
 - token usage
 - semantic tags
 - AI interaction logging
-- inline completion service
+- embedded AI agent backend
+- token efficiency tracking
 - system prompts
 - structured AI responses
 - prompt safety
