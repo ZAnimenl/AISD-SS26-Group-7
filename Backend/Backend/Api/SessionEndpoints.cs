@@ -131,20 +131,28 @@ public static class SessionEndpoints
 
         foreach (var question in assessment.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
         {
-            var starterCode = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>());
+            var starterCode = JsonDocumentSerializer.Deserialize(
+                question.StarterCodeJson,
+                new Dictionary<string, Dictionary<string, string>>());
             var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
-            var activeFile = GetActiveFile(language);
+            var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
+            var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
+            var workspaceFiles = languageFiles.ToDictionary(
+                entry => entry.Key,
+                entry => new WorkspaceFileDto(language, entry.Value));
+            if (workspaceFiles.Count == 0)
+            {
+                workspaceFiles[firstFile] = new WorkspaceFileDto(language, string.Empty);
+            }
+
             dbContext.WorkspaceQuestionStates.Add(new WorkspaceQuestionState
             {
                 Id = Guid.NewGuid(),
                 SessionId = session.Id,
                 QuestionId = question.Id,
                 SelectedLanguage = language,
-                ActiveFile = activeFile,
-                FilesJson = JsonDocumentSerializer.Serialize(new Dictionary<string, WorkspaceFileDto>
-                {
-                    [activeFile] = new WorkspaceFileDto(language, starterCode.GetValueOrDefault(language, string.Empty))
-                }),
+                ActiveFile = firstFile,
+                FilesJson = JsonDocumentSerializer.Serialize(workspaceFiles),
                 LastSavedAt = now,
                 Version = 1
             });

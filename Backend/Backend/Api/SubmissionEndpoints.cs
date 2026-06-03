@@ -73,14 +73,12 @@ public static class SubmissionEndpoints
             }
 
             var tests = await dbContext.TestCases.Where(testCase => testCase.QuestionId == state.QuestionId).ToListAsync(cancellationToken);
-            var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
-            var content = files.TryGetValue(state.ActiveFile, out var activeFile)
-                ? activeFile.Content
-                : files.Values.FirstOrDefault()?.Content ?? string.Empty;
+            var workspaceFiles = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+            var runnerFiles = workspaceFiles.ToDictionary(entry => entry.Key, entry => entry.Value.Content);
             var result = await evaluationService.EvaluateAsync(
                 Guid.NewGuid(),
                 tests,
-                content,
+                runnerFiles,
                 state.SelectedLanguage,
                 cancellationToken);
             var score = evaluationService.CalculateScore(question.MaxScore, result.TestResults);
@@ -147,20 +145,28 @@ public static class SubmissionEndpoints
 
         foreach (var question in session.Assessment!.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
         {
-            var starterCode = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>());
+            var starterCode = JsonDocumentSerializer.Deserialize(
+                question.StarterCodeJson,
+                new Dictionary<string, Dictionary<string, string>>());
             var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
-            var activeFile = GetActiveFile(language);
+            var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
+            var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
+            var workspaceFiles = languageFiles.ToDictionary(
+                entry => entry.Key,
+                entry => new WorkspaceFileDto(language, entry.Value));
+            if (workspaceFiles.Count == 0)
+            {
+                workspaceFiles[firstFile] = new WorkspaceFileDto(language, string.Empty);
+            }
+
             var state = new WorkspaceQuestionState
             {
                 Id = Guid.NewGuid(),
                 SessionId = session.Id,
                 QuestionId = question.Id,
                 SelectedLanguage = language,
-                ActiveFile = activeFile,
-                FilesJson = JsonDocumentSerializer.Serialize(new Dictionary<string, WorkspaceFileDto>
-                {
-                    [activeFile] = new WorkspaceFileDto(language, starterCode.GetValueOrDefault(language, string.Empty))
-                }),
+                ActiveFile = firstFile,
+                FilesJson = JsonDocumentSerializer.Serialize(workspaceFiles),
                 LastSavedAt = now,
                 Version = 1
             };

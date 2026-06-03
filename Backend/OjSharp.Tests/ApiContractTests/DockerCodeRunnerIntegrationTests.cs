@@ -63,7 +63,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         );
 
         var result = await runner.RunAsync(
-            "def solve(a, b):\n    return a + b\n",
+            new Dictionary<string, string> { ["solution.py"] = "def solve(a, b):\n    return a + b\n" },
             "python",
             testCase,
             CancellationToken.None
@@ -90,7 +90,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         );
 
         var result = await runner.RunAsync(
-            "function solve(a, b) {\n    return a + b;\n}\n",
+            new Dictionary<string, string> { ["solution.js"] = "function solve(a, b) {\n    return a + b;\n}\nmodule.exports = { solve };\n" },
             "javascript",
             testCase,
             CancellationToken.None
@@ -116,7 +116,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         );
 
         var result = await runner.RunAsync(
-            "def solve():\n    while True:\n        pass\n",
+            new Dictionary<string, string> { ["solution.py"] = "def solve():\n    while True:\n        pass\n" },
             "python",
             testCase,
             CancellationToken.None
@@ -144,7 +144,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         );
 
         var result = await runner.RunAsync(
-            "import urllib.request\ndef solve():\n    try:\n        urllib.request.urlopen('http://example.com', timeout=1)\n        return 'success'\n    except Exception:\n        return 'failed'\n",
+            new Dictionary<string, string> { ["solution.py"] = "import urllib.request\ndef solve():\n    try:\n        urllib.request.urlopen('http://example.com', timeout=1)\n        return 'success'\n    except Exception:\n        return 'failed'\n" },
             "python",
             testCase,
             CancellationToken.None
@@ -171,7 +171,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         );
 
         var result = await runner.RunAsync(
-            "def solve(a, b)\n    return a + b\n", // missing colon
+            new Dictionary<string, string> { ["solution.py"] = "def solve(a, b)\n    return a + b\n" }, // missing colon
             "python",
             testCase,
             CancellationToken.None

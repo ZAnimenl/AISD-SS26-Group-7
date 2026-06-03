@@ -15,7 +15,7 @@ public sealed class CodeEvaluationService
     public async Task<CodeEvaluationResult> EvaluateAsync(
         Guid executionId,
         IEnumerable<TestCase> testCases,
-        string code,
+        Dictionary<string, string> files,
         string language,
         CancellationToken cancellationToken)
     {
@@ -24,7 +24,7 @@ public sealed class CodeEvaluationService
 
         foreach (var testCase in testCases)
         {
-            var execution = await codeRunner.RunAsync(code, language, testCase, cancellationToken);
+            var execution = await codeRunner.RunAsync(files, language, testCase, cancellationToken);
             var output = NormalizeOutput(execution.Stdout);
             var passed = execution.ExitCode == 0;
             var status = BuildTestStatus(execution, passed);

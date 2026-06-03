@@ -247,7 +247,7 @@ public static class QuestionEndpoints
             question.Title,
             problem_description_markdown = question.ProblemDescriptionMarkdown,
             language_constraints = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>()),
-            starter_code = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, string>()),
+            starter_code = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, Dictionary<string, string>>()),
             admin_notes = question.AdminNotes,
             sort_order = question.SortOrder,
             max_score = question.MaxScore
