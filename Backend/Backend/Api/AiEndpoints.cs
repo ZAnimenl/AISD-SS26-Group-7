@@ -52,7 +52,7 @@ public static class AiEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        EnsureCreditsInitialized(session, assessment);
+        EnsureCreditsInitialized(dbContext, session, assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return ApiResults.Success(BuildAiState(assessment, session));
@@ -116,7 +116,7 @@ public static class AiEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        var state = EnsureQuestionState(session, assessment, question, DateTimeOffset.UtcNow);
+        var state = EnsureQuestionState(dbContext, session, assessment, question, DateTimeOffset.UtcNow);
         var creditCost = assessment.AiCreditsEnabled ? AiHintLevels.DefaultCost(hintLevel) : 0;
         if (assessment.AiCreditsEnabled && !TryDeductCredits(state, creditCost, out var creditsRemaining))
         {
@@ -345,16 +345,17 @@ public static class AiEndpoints
         ];
     }
 
-    private static void EnsureCreditsInitialized(AssessmentSession session, Assessment assessment)
+    private static void EnsureCreditsInitialized(OjSharpDbContext dbContext, AssessmentSession session, Assessment assessment)
     {
         var now = DateTimeOffset.UtcNow;
         foreach (var question in assessment.Questions)
         {
-            EnsureQuestionState(session, assessment, question, now);
+            EnsureQuestionState(dbContext, session, assessment, question, now);
         }
     }
 
     private static WorkspaceQuestionState EnsureQuestionState(
+        OjSharpDbContext dbContext,
         AssessmentSession session,
         Assessment assessment,
         Question question,
@@ -381,6 +382,7 @@ public static class AiEndpoints
                 Version = 1
             };
             session.WorkspaceStates.Add(state);
+            dbContext.WorkspaceQuestionStates.Add(state);
         }
 
         state.AiCreditsRemaining ??= AssessmentProjectionService.ResolveAiCreditBudget(assessment, question);
