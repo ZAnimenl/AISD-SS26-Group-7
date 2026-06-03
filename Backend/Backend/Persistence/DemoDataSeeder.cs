@@ -80,50 +80,57 @@ public sealed class DemoDataSeeder(
         var assessment = new Assessment
         {
             Id = WebDevAssessmentId,
-            Title = "Practical Web Development Assessment",
-            Description = "Complete the following real-world development tasks. You may use the embedded AI agent for assistance.",
+            Title = "Product Dashboard Assessment",
+            Description = "Build and fix features for the Product Dashboard web application. Use the Preview panel to see your app come alive as you pass each test.",
             DurationMinutes = 60,
             Status = AssessmentStatuses.Active,
             AiEnabled = true,
             CreatedAt = now
         };
 
-        assessment.Questions.Add(CreateApiTask());
-        assessment.Questions.Add(CreateBugFixTask());
+        assessment.Questions.Add(CreateProductApiTask());
+        assessment.Questions.Add(CreatePriceCalculationBugFixTask());
 
         dbContext.Assessments.Add(assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private Question CreateApiTask()
+    // ──────────────────────────────────────────────────────────────
+    // Task 1 — Backend: Product API for the Dashboard
+    // ──────────────────────────────────────────────────────────────
+    private Question CreateProductApiTask()
     {
         return new Question
         {
             Id = ApiTaskId,
             AssessmentId = WebDevAssessmentId,
-            Title = "Build a User Management API",
+            Title = "Implement the Product API",
             TaskType = TaskTypes.ApiDevelopment,
             Difficulty = "medium",
             ProblemDescriptionMarkdown = """
-## Task: Build a User Management API
+## Task: Implement the Product API
 
-You are working on an existing web application backend. The project already has a Flask/Express server (`app.py`/`app.js`) and a data layer (`models.py`/`models.js`) with sample users.
+The Product Dashboard needs a backend API to serve product data. The project has an app entry point and a data layer already set up.
 
-**Your task:** Implement the route handlers in `routes.py`/`routes.js` to complete the API.
+**Your task:** Implement the route handlers in `routes.py` / `routes.js`.
 
 ### Requirements
 
-1. `GET /api/users` — return a JSON array of all users.
-2. `POST /api/users` — accept a JSON body `{ "name": "...", "email": "..." }`, create a new user, and return it with HTTP 201.
-3. `GET /api/users/<id>` — return the user with the given id, or HTTP 404 if not found.
+1. `GET /api/products` — return a JSON array of all products.
+2. `POST /api/products` — accept `{ "name", "price", "stock", "category" }`, create and return the product with HTTP 201.
+3. `GET /api/products/<id>` — return a single product, or HTTP 404.
 
 ### File Overview
 
 | File | Purpose |
 |---|---|
 | `app.py` / `app.js` | Server entry point — **do not modify** |
-| `models.py` / `models.js` | Data layer with sample users — **do not modify** |
+| `models.py` / `models.js` | Product data layer with sample data — **do not modify** |
 | `routes.py` / `routes.js` | Route handlers — **implement here** |
+
+### Hint
+
+Check the Preview panel below to see the dashboard update as your tests pass.
 """,
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript" }),
             StarterCodeJson = JsonDocumentSerializer.Serialize(StarterFiles(
@@ -140,35 +147,38 @@ if __name__ == '__main__':
     app.run(port=5000)
 """,
                     ["models.py"] = """
-users = [
-    {"id": 1, "name": "Alice", "email": "alice@example.com"},
-    {"id": 2, "name": "Bob", "email": "bob@example.com"},
+products = [
+    {"id": 1, "name": "Wireless Keyboard", "price": 49.99, "stock": 24, "category": "Electronics"},
+    {"id": 2, "name": "USB-C Hub", "price": 35.00, "stock": 0, "category": "Electronics"},
+    {"id": 3, "name": "Monitor Stand", "price": 79.99, "stock": 12, "category": "Furniture"},
+    {"id": 4, "name": "Desk Lamp", "price": 22.50, "stock": 8, "category": "Furniture"},
+    {"id": 5, "name": "Webcam HD", "price": 64.99, "stock": 3, "category": "Electronics"},
 ]
 
-def get_all_users():
-    return list(users)
+def get_all_products():
+    return list(products)
 
-def add_user(name, email):
-    new_id = max(u["id"] for u in users) + 1 if users else 1
-    user = {"id": new_id, "name": name, "email": email}
-    users.append(user)
-    return user
+def add_product(name, price, stock, category):
+    new_id = max(p["id"] for p in products) + 1 if products else 1
+    product = {"id": new_id, "name": name, "price": price, "stock": stock, "category": category}
+    products.append(product)
+    return product
 
-def find_user(user_id):
-    return next((u for u in users if u["id"] == user_id), None)
+def find_product(product_id):
+    return next((p for p in products if p["id"] == product_id), None)
 """,
                     ["routes.py"] = """
 from flask import jsonify, request
-from models import get_all_users, add_user, find_user
+from models import get_all_products, add_product, find_product
 
 def register_routes(app):
     @app.route('/api/health')
     def health():
         return jsonify({'status': 'ok'})
 
-    # TODO: Add GET /api/users — return all users as JSON array
-    # TODO: Add POST /api/users — create user from JSON body, return 201
-    # TODO: Add GET /api/users/<int:user_id> — return one user or 404
+    # TODO: GET /api/products — return all products as JSON array
+    # TODO: POST /api/products — create product from JSON body, return 201
+    # TODO: GET /api/products/<int:product_id> — return one product or 404
 """
                 },
                 javascript: new Dictionary<string, string>
@@ -184,35 +194,38 @@ registerRoutes(app);
 module.exports = app;
 """,
                     ["models.js"] = """
-const users = [
-  { id: 1, name: 'Alice', email: 'alice@example.com' },
-  { id: 2, name: 'Bob', email: 'bob@example.com' },
+const products = [
+  { id: 1, name: 'Wireless Keyboard', price: 49.99, stock: 24, category: 'Electronics' },
+  { id: 2, name: 'USB-C Hub', price: 35.00, stock: 0, category: 'Electronics' },
+  { id: 3, name: 'Monitor Stand', price: 79.99, stock: 12, category: 'Furniture' },
+  { id: 4, name: 'Desk Lamp', price: 22.50, stock: 8, category: 'Furniture' },
+  { id: 5, name: 'Webcam HD', price: 64.99, stock: 3, category: 'Electronics' },
 ];
 
-function getAllUsers() { return [...users]; }
+function getAllProducts() { return [...products]; }
 
-function addUser(name, email) {
-  const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
-  const user = { id: newId, name, email };
-  users.push(user);
-  return user;
+function addProduct(name, price, stock, category) {
+  const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+  const product = { id: newId, name, price, stock, category };
+  products.push(product);
+  return product;
 }
 
-function findUser(id) { return users.find(u => u.id === id) || null; }
+function findProduct(id) { return products.find(p => p.id === id) || null; }
 
-module.exports = { getAllUsers, addUser, findUser };
+module.exports = { getAllProducts, addProduct, findProduct };
 """,
                     ["routes.js"] = """
-const { getAllUsers, addUser, findUser } = require('./models');
+const { getAllProducts, addProduct, findProduct } = require('./models');
 
 function registerRoutes(app) {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
 
-  // TODO: Add GET /api/users — return all users as JSON array
-  // TODO: Add POST /api/users — create user from JSON body, return 201
-  // TODO: Add GET /api/users/:id — return one user or 404
+  // TODO: GET /api/products — return all products as JSON array
+  // TODO: POST /api/products — create product from JSON body, return 201
+  // TODO: GET /api/products/:id — return one product or 404
 }
 
 module.exports = { registerRoutes };
@@ -225,59 +238,61 @@ module.exports = { registerRoutes };
                 new TestCase
                 {
                     Id = Guid.Parse("66666666-6666-6666-6666-666666666666"),
-                    Name = "GET /api/users returns a JSON array",
+                    Name = "GET /api/products returns product list array",
                     Visibility = TestCaseVisibilities.Public,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
 import app as solution_app
 
-def test_get_users():
+def test_get_products():
     client = solution_app.app.test_client()
-    resp = client.get('/api/users')
+    resp = client.get('/api/products')
     assert resp.status_code == 200
     data = resp.get_json()
     assert isinstance(data, list)
-    assert len(data) >= 2
+    assert len(data) >= 5
 """,
                         javascript: """
 const request = require('supertest');
 const app = require('./app');
 
-test('GET /api/users returns a JSON array', async () => {
-  const res = await request(app).get('/api/users');
+test('GET /api/products returns product list array', async () => {
+  const res = await request(app).get('/api/products');
   expect(res.status).toBe(200);
   expect(Array.isArray(res.body)).toBe(true);
-  expect(res.body.length).toBeGreaterThanOrEqual(2);
+  expect(res.body.length).toBeGreaterThanOrEqual(5);
 });
 """))
                 },
                 new TestCase
                 {
                     Id = Guid.Parse("77777777-7777-7777-7777-777777777777"),
-                    Name = "POST /api/users creates a new user",
+                    Name = "POST /api/products creates a new product",
                     Visibility = TestCaseVisibilities.Hidden,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
 import app as solution_app
 
-def test_post_user():
+def test_create_product():
     client = solution_app.app.test_client()
-    resp = client.post('/api/users', json={'name': 'Charlie', 'email': 'charlie@example.com'})
+    resp = client.post('/api/products', json={
+        'name': 'Standing Desk', 'price': 299.99, 'stock': 5, 'category': 'Furniture'
+    })
     assert resp.status_code == 201
     data = resp.get_json()
-    assert data['name'] == 'Charlie'
+    assert data['name'] == 'Standing Desk'
     assert 'id' in data
 """,
                         javascript: """
 const request = require('supertest');
 const app = require('./app');
 
-test('POST /api/users creates a new user', async () => {
+test('POST /api/products creates a new product', async () => {
   const res = await request(app)
-    .post('/api/users')
-    .send({ name: 'Charlie', email: 'charlie@example.com' });
+    .post('/api/products')
+    .send({ name: 'Standing Desk', price: 299.99, stock: 5, category: 'Furniture' });
   expect(res.status).toBe(201);
-  expect(res.body.name).toBe('Charlie');
+  expect(res.body.name).toBe('Standing Desk');
   expect(res.body).toHaveProperty('id');
 });
 """))
@@ -285,23 +300,23 @@ test('POST /api/users creates a new user', async () => {
                 new TestCase
                 {
                     Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
-                    Name = "GET /api/users/:id returns 404 for missing user",
+                    Name = "GET /api/products/:id returns 404 for missing product",
                     Visibility = TestCaseVisibilities.Hidden,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
 import app as solution_app
 
-def test_user_not_found():
+def test_product_not_found():
     client = solution_app.app.test_client()
-    resp = client.get('/api/users/9999')
+    resp = client.get('/api/products/9999')
     assert resp.status_code == 404
 """,
                         javascript: """
 const request = require('supertest');
 const app = require('./app');
 
-test('GET /api/users/:id returns 404 for missing user', async () => {
-  const res = await request(app).get('/api/users/9999');
+test('GET /api/products/:id returns 404 for missing product', async () => {
+  const res = await request(app).get('/api/products/9999');
   expect(res.status).toBe(404);
 });
 """))
@@ -310,19 +325,22 @@ test('GET /api/users/:id returns 404 for missing user', async () => {
         };
     }
 
-    private Question CreateBugFixTask()
+    // ──────────────────────────────────────────────────────────────
+    // Task 2 — Bug Fix: Price calculation & discount for Dashboard
+    // ──────────────────────────────────────────────────────────────
+    private Question CreatePriceCalculationBugFixTask()
     {
         return new Question
         {
             Id = BugFixTaskId,
             AssessmentId = WebDevAssessmentId,
-            Title = "Fix the Shopping Cart Module",
+            Title = "Fix the Price Calculator",
             TaskType = TaskTypes.BugFix,
             Difficulty = "easy",
             ProblemDescriptionMarkdown = """
-## Task: Fix the Shopping Cart Module
+## Task: Fix the Price Calculator
 
-A teammate wrote a shopping cart with a discount system, but customers are reporting incorrect totals. The project has two files and **both contain bugs**.
+The Product Dashboard has a price calculator module used to compute order totals and apply discounts. Customers are reporting incorrect totals. **Both files contain bugs.**
 
 **Your task:** Find and fix the bugs in both files.
 
@@ -330,46 +348,43 @@ A teammate wrote a shopping cart with a discount system, but customers are repor
 
 | File | Purpose | Bug hint |
 |---|---|---|
-| `cart.py` / `cart.js` | Cart class with `calculate_total()` and `calculate_total_with_discount()` | The total calculation uses the wrong operator |
-| `discounts.py` / `discounts.js` | `apply_discount(total, percent)` helper | The discount is applied incorrectly |
+| `calculator.py` / `calculator.js` | `calculate_order_total(items)` computes subtotal | Wrong arithmetic operator |
+| `discounts.py` / `discounts.js` | `apply_discount(total, percent)` applies a percentage discount | Discount not applied as percentage |
 
 ### Expected Behavior
 
 ```
-cart.add_item("Laptop", 999.99, 1)
-cart.add_item("Mouse",   29.99, 2)
-cart.calculate_total()                   # → 1059.97  (999.99×1 + 29.99×2)
-cart.calculate_total_with_discount(10)   # → 953.973  (1059.97 × 0.90)
+items = [
+    { "name": "Keyboard", "price": 49.99, "quantity": 2 },
+    { "name": "Mouse",    "price": 25.00, "quantity": 1 },
+]
+calculate_order_total(items)              # 124.98  (49.99*2 + 25.00*1)
+calculate_discounted_total(items, 10)     # 112.482 (124.98 * 0.90)
 ```
+
+Check the Preview panel to see the dashboard stats update as you fix each bug.
 """,
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript" }),
             StarterCodeJson = JsonDocumentSerializer.Serialize(StarterFiles(
                 python: new Dictionary<string, string>
                 {
-                    ["cart.py"] = """
+                    ["calculator.py"] = """
 from discounts import apply_discount
 
-class ShoppingCart:
-    def __init__(self):
-        self.items = []
+def calculate_order_total(items):
+    total = 0
+    for item in items:
+        # BUG: wrong operator — should multiply price by quantity
+        total += item['price'] + item['quantity']
+    return total
 
-    def add_item(self, name, price, quantity):
-        self.items.append({'name': name, 'price': price, 'quantity': quantity})
-
-    def calculate_total(self):
-        total = 0
-        for item in self.items:
-            # BUG: something is wrong with this calculation
-            total += item['price'] + item['quantity']
-        return total
-
-    def calculate_total_with_discount(self, discount_percent):
-        total = self.calculate_total()
-        return apply_discount(total, discount_percent)
+def calculate_discounted_total(items, discount_percent):
+    total = calculate_order_total(items)
+    return apply_discount(total, discount_percent)
 """,
                     ["discounts.py"] = """
 def apply_discount(total, discount_percent):
-    # BUG: the discount is not calculated as a percentage
+    # BUG: subtracts the raw number instead of calculating percentage
     if discount_percent > 0:
         return total - discount_percent
     return total
@@ -377,38 +392,28 @@ def apply_discount(total, discount_percent):
                 },
                 javascript: new Dictionary<string, string>
                 {
-                    ["cart.js"] = """
+                    ["calculator.js"] = """
 const { applyDiscount } = require('./discounts');
 
-class ShoppingCart {
-  constructor() {
-    this.items = [];
+function calculateOrderTotal(items) {
+  let total = 0;
+  for (const item of items) {
+    // BUG: wrong operator — should multiply price by quantity
+    total += item.price + item.quantity;
   }
-
-  addItem(name, price, quantity) {
-    this.items.push({ name, price, quantity });
-  }
-
-  calculateTotal() {
-    let total = 0;
-    for (const item of this.items) {
-      // BUG: something is wrong with this calculation
-      total += item.price + item.quantity;
-    }
-    return total;
-  }
-
-  calculateTotalWithDiscount(discountPercent) {
-    const total = this.calculateTotal();
-    return applyDiscount(total, discountPercent);
-  }
+  return total;
 }
 
-module.exports = { ShoppingCart };
+function calculateDiscountedTotal(items, discountPercent) {
+  const total = calculateOrderTotal(items);
+  return applyDiscount(total, discountPercent);
+}
+
+module.exports = { calculateOrderTotal, calculateDiscountedTotal };
 """,
                     ["discounts.js"] = """
 function applyDiscount(total, discountPercent) {
-  // BUG: the discount is not calculated as a percentage
+  // BUG: subtracts the raw number instead of calculating percentage
   if (discountPercent > 0) {
     return total - discountPercent;
   }
@@ -425,76 +430,74 @@ module.exports = { applyDiscount };
                 new TestCase
                 {
                     Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
-                    Name = "basic cart total",
+                    Name = "calculate_order_total returns correct total for product list",
                     Visibility = TestCaseVisibilities.Public,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
-from cart import ShoppingCart
+from calculator import calculate_order_total
 
-def test_basic_total():
-    cart = ShoppingCart()
-    cart.add_item('Laptop', 999.99, 1)
-    cart.add_item('Mouse', 29.99, 2)
-    assert abs(cart.calculate_total() - 1059.97) < 0.01
+def test_order_total():
+    items = [
+        {'name': 'Keyboard', 'price': 49.99, 'quantity': 2},
+        {'name': 'Mouse', 'price': 25.00, 'quantity': 1},
+    ]
+    assert abs(calculate_order_total(items) - 124.98) < 0.01
 """,
                         javascript: """
-const { ShoppingCart } = require('./cart');
+const { calculateOrderTotal } = require('./calculator');
 
-test('basic cart total', () => {
-  const cart = new ShoppingCart();
-  cart.addItem('Laptop', 999.99, 1);
-  cart.addItem('Mouse', 29.99, 2);
-  expect(cart.calculateTotal()).toBeCloseTo(1059.97);
+test('calculate_order_total returns correct total for product list', () => {
+  const items = [
+    { name: 'Keyboard', price: 49.99, quantity: 2 },
+    { name: 'Mouse', price: 25.00, quantity: 1 },
+  ];
+  expect(calculateOrderTotal(items)).toBeCloseTo(124.98);
 });
 """))
                 },
                 new TestCase
                 {
                     Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                    Name = "10% discount applied correctly",
+                    Name = "10% discount applied correctly to product stats",
                     Visibility = TestCaseVisibilities.Hidden,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
-from cart import ShoppingCart
+from calculator import calculate_discounted_total
 
 def test_discount():
-    cart = ShoppingCart()
-    cart.add_item('Book', 100.00, 1)
-    result = cart.calculate_total_with_discount(10)
-    assert abs(result - 90.00) < 0.01
+    items = [{'name': 'Monitor', 'price': 200.00, 'quantity': 1}]
+    result = calculate_discounted_total(items, 10)
+    assert abs(result - 180.00) < 0.01
 """,
                         javascript: """
-const { ShoppingCart } = require('./cart');
+const { calculateDiscountedTotal } = require('./calculator');
 
-test('10% discount applied correctly', () => {
-  const cart = new ShoppingCart();
-  cart.addItem('Book', 100.00, 1);
-  expect(cart.calculateTotalWithDiscount(10)).toBeCloseTo(90.00);
+test('10% discount applied correctly to product stats', () => {
+  const items = [{ name: 'Monitor', price: 200.00, quantity: 1 }];
+  expect(calculateDiscountedTotal(items, 10)).toBeCloseTo(180.00);
 });
 """))
                 },
                 new TestCase
                 {
                     Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                    Name = "zero discount returns full total",
+                    Name = "zero discount displays full total in dashboard",
                     Visibility = TestCaseVisibilities.Hidden,
                     TestCodeJson = JsonDocumentSerializer.Serialize(TestCode(
                         python: """
-from cart import ShoppingCart
+from calculator import calculate_discounted_total
 
 def test_zero_discount():
-    cart = ShoppingCart()
-    cart.add_item('Book', 50.00, 2)
-    result = cart.calculate_total_with_discount(0)
-    assert abs(result - 100.00) < 0.01
+    items = [{'name': 'Lamp', 'price': 22.50, 'quantity': 4}]
+    result = calculate_discounted_total(items, 0)
+    assert abs(result - 90.00) < 0.01
 """,
                         javascript: """
-const { ShoppingCart } = require('./cart');
+const { calculateDiscountedTotal } = require('./calculator');
 
-test('zero discount returns full total', () => {
-  const cart = new ShoppingCart();
-  cart.addItem('Book', 50.00, 2);
-  expect(cart.calculateTotalWithDiscount(0)).toBeCloseTo(100.00);
+test('zero discount displays full total in dashboard', () => {
+  const items = [{ name: 'Lamp', price: 22.50, quantity: 4 }];
+  expect(calculateDiscountedTotal(items, 0)).toBeCloseTo(90.00);
 });
 """))
                 }

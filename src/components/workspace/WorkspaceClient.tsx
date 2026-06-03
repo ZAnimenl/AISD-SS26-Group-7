@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock, Play, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { Brain, Clock, Eye, Play, Send, Sparkles, Terminal, UploadCloud, X } from "lucide-react";
 import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
+import { ProductDashboardPreview } from "@/components/workspace/previews/ProductDashboardPreview";
 import type { AiInteractionType, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
@@ -304,6 +305,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
   const [aiMessage, setAiMessage] = useState("");
   const [messages, setMessages] = useState([
     { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
@@ -611,36 +613,72 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
               onChange={updateCode}
             />
           </div>
-          <div className="flex min-h-0 flex-col overflow-hidden border-t border-white/10 bg-black/25 p-3">
-            <div className="mb-2 flex shrink-0 items-center justify-between">
-              <h2 className="font-semibold">Output console</h2>
-              <span className="text-xs text-white/40">Public/sample tests only</span>
+          <div className="flex min-h-0 flex-col overflow-hidden border-t border-white/10 bg-black/25">
+            <div className="flex shrink-0 items-center border-b border-white/10 px-3">
+              <button
+                onClick={() => setOutputTab("preview")}
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+                  outputTab === "preview"
+                    ? "border-cyanGlow text-cyanGlow"
+                    : "border-transparent text-white/40 hover:text-white/60"
+                }`}
+              >
+                <Eye size={13} />
+                Preview
+              </button>
+              <button
+                onClick={() => setOutputTab("console")}
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+                  outputTab === "console"
+                    ? "border-cyanGlow text-cyanGlow"
+                    : "border-transparent text-white/40 hover:text-white/60"
+                }`}
+              >
+                <Terminal size={13} />
+                Console
+                {runResult && (
+                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+                    runResult.status === "passed" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                  }`}>
+                    {runResult.test_results.filter(t => t.passed).length}/{runResult.test_results.length}
+                  </span>
+                )}
+              </button>
+              <span className="ml-auto text-[10px] text-white/30">Public/sample tests only</span>
             </div>
-            <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
-              {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
-              {runResult ? (
-                <div className="space-y-3">
-                  <p className="text-cyanGlow">status: {runResult.status}</p>
-                  <pre className="whitespace-pre-wrap">{runResult.stdout}</pre>
-                  {runResult.test_results.map((test) => (
-                    <p key={test.name}>{test.passed ? "PASS" : "FAIL"} {test.name}{test.output ? `: ${test.output}` : ""}</p>
-                  ))}
-                  <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
-                </div>
+            <div className="min-h-0 flex-1 overflow-hidden p-2">
+              {outputTab === "preview" ? (
+                <ProductDashboardPreview runResult={runResult} runState={runState} />
               ) : (
-                <p className="text-white/35">Run code to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
+                <div className="scrollbar-soft h-full overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
+                  {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
+                  {runResult ? (
+                    <div className="space-y-3">
+                      <p className="text-cyanGlow">status: {runResult.status}</p>
+                      <pre className="whitespace-pre-wrap">{runResult.stdout}</pre>
+                      {runResult.test_results.map((test) => (
+                        <p key={test.name}>{test.passed ? "PASS" : "FAIL"} {test.name}{test.output ? `: ${test.output}` : ""}</p>
+                      ))}
+                      <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
+                    </div>
+                  ) : (
+                    <p className="text-white/35">Run code to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
+                  )}
+                </div>
               )}
             </div>
             {buildRunFailureSummary(runResult, error) ? (
-              <div className="mt-2 shrink-0 rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
-                <p className="mt-1 text-xs leading-5 text-white/65">
-                  The last run exposed a problem. Ask the assistant for a focused debugging hint.
-                </p>
-                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debugging", buildDebugPrompt(runResult, error))}>
-                  <Sparkles size={14} />
-                  Ask AI to debug this run
-                </button>
+              <div className="shrink-0 border-t border-white/10 px-3 py-2">
+                <div className="rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
+                  <p className="mt-1 text-xs leading-5 text-white/65">
+                    The last run exposed a problem. Ask the assistant for a focused debugging hint.
+                  </p>
+                  <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debugging", buildDebugPrompt(runResult, error))}>
+                    <Sparkles size={14} />
+                    Ask AI to debug this run
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>

@@ -570,6 +570,7 @@ function normalizeQuestion(question: any): Question {
   return {
     question_id: question.question_id,
     title: question.title ?? "",
+    task_type: question.task_type ?? undefined,
     problem_description_markdown: question.problem_description_markdown ?? "",
     admin_notes: question.admin_notes ?? null,
     sort_order: question.sort_order ?? 0,
