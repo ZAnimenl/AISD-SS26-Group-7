@@ -10,6 +10,10 @@ public sealed class Question
 
     public string Title { get; set; } = string.Empty;
 
+    public string TaskType { get; set; } = TaskTypes.ApiDevelopment;
+
+    public string Difficulty { get; set; } = "medium";
+
     public string ProblemDescriptionMarkdown { get; set; } = string.Empty;
 
     public string LanguageConstraintsJson { get; set; } = "[]";

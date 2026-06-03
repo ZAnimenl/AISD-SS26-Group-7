@@ -10,7 +10,7 @@ public sealed class AiInteraction
 
     public Guid QuestionId { get; set; }
 
-    public string InteractionType { get; set; } = "chat";
+    public string InteractionType { get; set; } = "code_suggestion";
 
     public string Message { get; set; } = string.Empty;
 
@@ -21,6 +21,12 @@ public sealed class AiInteraction
     public string ResponseMarkdown { get; set; } = string.Empty;
 
     public string SemanticTagsJson { get; set; } = "[]";
+
+    public int InputTokens { get; set; }
+
+    public int OutputTokens { get; set; }
+
+    public int TotalTokens { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 }

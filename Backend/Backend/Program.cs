@@ -41,6 +41,8 @@ builder.Services.AddSingleton<CodeEvaluationService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.Configure<LocalLlmOptions>(builder.Configuration.GetSection(LocalLlmOptions.SectionName));
+builder.Services.Configure<DeepseekOptions>(builder.Configuration.GetSection(DeepseekOptions.SectionName));
+builder.Services.AddSingleton<IAiResponseProvider, DeepseekAiResponseProvider>();
 builder.Services.AddSingleton<IAiResponseProvider, LocalLlmAiResponseProvider>();
 builder.Services.AddSingleton<AiMockService>();
 builder.Services.AddScoped<DemoDataSeeder>();
