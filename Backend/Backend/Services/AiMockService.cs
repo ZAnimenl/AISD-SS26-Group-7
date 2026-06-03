@@ -11,7 +11,7 @@ public sealed class AiMockService
         _responseProviders = responseProviders;
     }
 
-    public async Task<(string ResponseMarkdown, string[] SemanticTags)> GenerateResponseAsync(
+    public async Task<(string ResponseMarkdown, string[] SemanticTags, int InputTokens, int OutputTokens)> GenerateResponseAsync(
         string interactionType,
         string message,
         string selectedLanguage,
@@ -21,53 +21,30 @@ public sealed class AiMockService
         var tags = DeriveSemanticTags(interactionType, message, activeFileContent);
         var context = new AiGenerationContext(interactionType, message, selectedLanguage, activeFileContent);
 
-        // 1. Attempt using registered providers (like the local LLM if configured and enabled)
+        // 1. Attempt using registered providers with token tracking (e.g. Deepseek)
         foreach (var responseProvider in _responseProviders)
         {
+            var result = await responseProvider.TryGenerateWithUsageAsync(context, tags, cancellationToken);
+            if (result is not null)
+            {
+                return (result.ResponseMarkdown, tags, result.InputTokens, result.OutputTokens);
+            }
+
             var providerResponse = await responseProvider.TryGenerateAsync(context, tags, cancellationToken);
             if (!string.IsNullOrWhiteSpace(providerResponse))
             {
-                return (providerResponse, tags);
+                // Estimate tokens for providers that do not report usage
+                var estInput = (message.Length + activeFileContent.Length) / 4;
+                var estOutput = providerResponse.Length / 4;
+                return (providerResponse, tags, estInput, estOutput);
             }
         }
 
-        // 2. Placeholder / Hook for direct external AI integration (OpenAI, Gemini, Anthropic, etc.)
-        var realResponse = await GenerateRealAiResponseAsync(context, tags, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(realResponse))
-        {
-            return (realResponse, tags);
-        }
-
-        // 3. Fallback to mock responses if no real AI is configured/responding
+        // 2. Fallback to mock responses if no real AI provider is configured
         var response = BuildResponse(interactionType, message, selectedLanguage, activeFileContent);
-        return (response, tags);
-    }
-
-    private async Task<string?> GenerateRealAiResponseAsync(
-        AiGenerationContext context,
-        string[] semanticTags,
-        CancellationToken cancellationToken)
-    {
-        // ==========================================
-        // PLACEHOLDER / STUB FOR REAL AI INTEGRATION
-        // ==========================================
-        // To integrate a real AI model (e.g. OpenAI GPT-4, Anthropic Claude, or Google Gemini) directly here:
-        // 1. Install the official SDK package or use HttpClient.
-        // 2. Set up your API credentials / connection keys.
-        // 3. Make the API call, pass the context prompts, and extract the generated response string.
-        // 
-        // Example with a generic client or direct API request:
-        // /*
-        // var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        // var response = await myAiClient.ChatAsync(
-        //     systemPrompt: "You are a professional coding assessment assistant...",
-        //     userPrompt: $"Student request: {context.Message}\nCode: {context.ActiveFileContent}",
-        //     cancellationToken: cancellationToken);
-        // return response.Text;
-        // */
-
-        await Task.CompletedTask; // Keep compiler happy for the stub
-        return null; // By default return null to fall back to the mock
+        var mockInputTokens = (message.Length + activeFileContent.Length) / 4;
+        var mockOutputTokens = response.Length / 4;
+        return (response, tags, mockInputTokens, mockOutputTokens);
     }
 
     private static string[] DeriveSemanticTags(string interactionType, string message, string activeFileContent)
@@ -76,10 +53,9 @@ public sealed class AiMockService
 
         tags.Add(interactionType switch
         {
-            "debug" => "debugging",
-            "code_review" => "code_review",
-            "explain" => "explanation",
-            "hint" => "conceptual_hint",
+            AiInteractionTypes.CodeSuggestion => "code_suggestion",
+            AiInteractionTypes.Explanation => "explanation",
+            AiInteractionTypes.Debugging => "debugging",
             _ => "general_help"
         });
 
@@ -89,14 +65,18 @@ public sealed class AiMockService
             tags.Add("loops");
         if (combined.Contains("recur"))
             tags.Add("recursion");
-        if (combined.Contains("sort"))
-            tags.Add("sorting");
+        if (combined.Contains("api") || combined.Contains("endpoint") || combined.Contains("route"))
+            tags.Add("api_design");
+        if (combined.Contains("bug") || combined.Contains("fix") || combined.Contains("wrong"))
+            tags.Add("bug_fix");
         if (combined.Contains("exception") || combined.Contains("error") || combined.Contains("try"))
             tags.Add("error_handling");
         if (combined.Contains("list") || combined.Contains("array") || combined.Contains("dict"))
             tags.Add("data_structures");
-        if (combined.Contains("time") || combined.Contains("complex") || combined.Contains("o(n)"))
-            tags.Add("complexity");
+        if (combined.Contains("database") || combined.Contains("query") || combined.Contains("sql"))
+            tags.Add("database");
+        if (combined.Contains("test") || combined.Contains("assert"))
+            tags.Add("testing");
 
         return tags.Distinct().ToArray();
     }
@@ -112,132 +92,146 @@ public sealed class AiMockService
 
         return interactionType switch
         {
-            "debug" => BuildDebugResponse(message, lang, hasCode),
-            "code_review" => BuildCodeReviewResponse(message, lang, hasCode),
-            "explain" => BuildExplainResponse(message, lang),
-            "hint" => BuildHintResponse(message, lang),
+            AiInteractionTypes.CodeSuggestion => BuildCodeSuggestionResponse(message, lang, hasCode, activeFileContent),
+            AiInteractionTypes.Explanation => BuildExplanationResponse(message, lang, activeFileContent),
+            AiInteractionTypes.Debugging => BuildDebuggingResponse(message, lang, hasCode),
             _ => BuildGeneralResponse(message, lang)
         };
     }
 
-    private static string BuildDebugResponse(string message, string lang, bool hasCode)
+    private static string BuildCodeSuggestionResponse(string message, string lang, bool hasCode, string code)
+    {
+        var lines = new List<string>
+        {
+            "## Code Suggestion",
+            "",
+            "Based on your current code and task, here are some suggestions:",
+            ""
+        };
+
+        if (code.Contains("TODO"))
+        {
+            lines.Add("I see you have `TODO` comments in your code. Here is how to approach them:");
+            lines.Add("");
+            lines.Add("1. **Start with the data structure** - Decide how your data will be stored and accessed.");
+            lines.Add("2. **Implement one method at a time** - Get the simplest method working first, then build up.");
+            lines.Add("3. **Test as you go** - Run the code after each method to verify it works.");
+        }
+        else
+        {
+            lines.Add("Looking at your implementation:");
+            lines.Add("");
+            lines.Add("1. **Check the logic** - Make sure each operation does exactly what the requirements ask.");
+            lines.Add("2. **Handle edge cases** - Empty inputs, missing items, and boundary values.");
+            lines.Add("3. **Return the correct format** - Match the expected output structure from the task description.");
+        }
+
+        if (lang == "python")
+        {
+            lines.Add("");
+            lines.Add("**Python tip:** Use list comprehensions for filtering and dictionary comprehensions for transforming data.");
+        }
+        else if (lang == "javascript")
+        {
+            lines.Add("");
+            lines.Add("**JS tip:** Use `Array.filter()`, `Array.map()`, and `Array.reduce()` for clean data transformations.");
+        }
+
+        lines.Add("");
+        lines.Add("> I can help guide your approach, but try implementing it yourself first for the best learning experience.");
+
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildExplanationResponse(string message, string lang, string code)
+    {
+        var lines = new List<string>
+        {
+            "## Explanation",
+            "",
+            "Let me break down what this task is asking:",
+            "",
+            "1. **Read the requirements carefully** - Each numbered requirement maps to a specific piece of logic you need to implement.",
+            "2. **Identify inputs and outputs** - What data comes in, and what format should the result be in?",
+            "3. **Think about the data flow** - How does the input get transformed step by step into the output?",
+            ""
+        };
+
+        if (!string.IsNullOrWhiteSpace(code) && code.Contains("class"))
+        {
+            lines.Add("Your code defines a **class**. Each method in the class should handle one specific responsibility:");
+            lines.Add("");
+            lines.Add("- Methods that **add** data should create new entries and update internal state.");
+            lines.Add("- Methods that **query** data should filter and return without modifying state.");
+            lines.Add("- Methods that **modify** data should find the target item and update it.");
+        }
+        else if (!string.IsNullOrWhiteSpace(code) && (code.Contains("app.") || code.Contains("Flask") || code.Contains("express")))
+        {
+            lines.Add("Your code is a **web server**. The key concepts are:");
+            lines.Add("");
+            lines.Add("- **Routes** map URL paths to handler functions.");
+            lines.Add("- **Handlers** process the request and return a response.");
+            lines.Add("- **JSON responses** should use `jsonify()` in Flask or `res.json()` in Express.");
+        }
+
+        lines.Add("");
+        lines.Add("> Try to explain the problem back to yourself in plain language before writing code. If you can describe the steps clearly, the code will follow naturally.");
+
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildDebuggingResponse(string message, string lang, bool hasCode)
     {
         var steps = new List<string>
         {
             "## Debugging Guide",
             "",
-            "Here are some steps to help you find the issue:",
+            "Here are steps to find and fix the issue:",
             "",
-            "1. **Check your inputs** — Make sure your function receives the expected types and values.",
-            "2. **Trace through manually** — Walk through the sample input step by step and compare with your output.",
-            "3. **Check edge cases** — Empty input, single element, negative numbers, or zero are common failure points.",
+            "1. **Read the error message** - If there is one, it usually points to the exact line and type of problem.",
+            "2. **Check the operator** - A common bug is using `+` instead of `*`, or comparing with `=` instead of `==`.",
+            "3. **Check the conditions** - Are your `if` statements filtering correctly? Off-by-one errors are very common.",
+            "4. **Check return values** - Make sure every code path returns something, and the return type matches what the caller expects."
         };
 
         if (hasCode)
         {
-            steps.Add("4. **Add print statements** — Insert temporary print/console.log calls to inspect variable values at each step.");
-            steps.Add("5. **Check return values** — Ensure every branch of your code returns a value.");
+            steps.Add("5. **Add print/log statements** - Print intermediate values to see where the actual output diverges from expected.");
+            steps.Add("6. **Test with the simplest input** - Use a single-item or empty input to isolate the issue.");
         }
 
         if (lang == "python")
         {
             steps.Add("");
-            steps.Add("**Python tip:** Use `print(type(x))` to verify the type of a variable if you suspect a type mismatch.");
+            steps.Add("**Python tip:** Use `print(f'{variable=}')` to quickly inspect variable names and values.");
         }
-        else if (lang == "javascript" || lang == "typescript")
+        else if (lang is "javascript")
         {
             steps.Add("");
-            steps.Add("**JS tip:** Use `console.log(JSON.stringify(x))` to inspect objects and arrays clearly.");
+            steps.Add("**JS tip:** Use `console.log(JSON.stringify(data, null, 2))` to pretty-print objects for inspection.");
         }
 
         steps.Add("");
-        steps.Add("> Start with the failing sample case and work backwards from the wrong output.");
+        steps.Add("> Focus on the first failing test case. Fix that one first, then move to the next.");
 
         return string.Join("\n", steps);
-    }
-
-    private static string BuildCodeReviewResponse(string message, string lang, bool hasCode)
-    {
-        var lines = new List<string>
-        {
-            "## Code Review Checklist",
-            "",
-            "Consider the following when reviewing your solution:",
-            "",
-            "- **Correctness** — Does your solution produce the right output for all sample cases?",
-            "- **Edge cases** — Have you handled empty input, single elements, and boundary values?",
-            "- **Readability** — Are variable names clear and descriptive?",
-            "- **Function signature** — Does it match the required interface in the problem statement?",
-        };
-
-        if (lang == "python")
-        {
-            lines.Add("- **Python style** — Follow PEP 8: use `snake_case` for variables and functions.");
-        }
-        else if (lang is "javascript" or "typescript")
-        {
-            lines.Add("- **JS style** — Prefer `const` over `let` where values do not change.");
-        }
-        else if (lang == "csharp")
-        {
-            lines.Add("- **C# style** — Use `var` for local variables and `PascalCase` for methods.");
-        }
-
-        lines.Add("");
-        lines.Add("> A clean, readable solution is easier to debug and maintain.");
-
-        return string.Join("\n", lines);
-    }
-
-    private static string BuildExplainResponse(string message, string lang)
-    {
-        return string.Join("\n",
-        [
-            "## Understanding the Problem",
-            "",
-            "Break the problem into three parts:",
-            "",
-            "1. **Input** — What data does your function receive? What are the types and constraints?",
-            "2. **Transformation** — What logic or calculation must you apply to produce the result?",
-            "3. **Output** — What format does the answer need to be in?",
-            "",
-            "Once you have identified these three parts, start by solving the simplest possible version of the problem.",
-            "Then extend your solution to handle additional cases.",
-            "",
-            "> Tip: Re-read the problem statement carefully and highlight the key requirements before writing any code."
-        ]);
-    }
-
-    private static string BuildHintResponse(string message, string lang)
-    {
-        return string.Join("\n",
-        [
-            "## Hint",
-            "",
-            "Here is a nudge in the right direction without giving away the full solution:",
-            "",
-            "- Start with the public sample case. Write a function that passes only that one case first.",
-            "- Once the sample passes, think about what other inputs might break your solution.",
-            "- Consider whether a loop, recursion, or a built-in function is the most natural fit for this problem.",
-            "",
-            "> Remember: a working simple solution is better than a broken complex one."
-        ]);
     }
 
     private static string BuildGeneralResponse(string message, string lang)
     {
         return string.Join("\n",
         [
-            "## AI Assistant",
+            "## AI Agent",
             "",
-            "I am here to help you work through this problem. Here are some general tips:",
+            "I am your embedded AI assistant for this task. Here is how I can help:",
             "",
-            "- **Read the problem carefully** — Identify the input, the required output, and any constraints.",
-            "- **Start small** — Solve the simplest case first, then build up.",
-            "- **Test often** — Run your code against the sample cases frequently as you develop.",
-            "- **Ask specific questions** — If you are stuck, describe exactly what you tried and what went wrong.",
+            "- **Code suggestion** - I can guide you on how to structure your implementation.",
+            "- **Explanation** - I can break down the task requirements and concepts.",
+            "- **Debugging** - I can help you find and fix issues in your code.",
             "",
-            "> Use the interaction types (hint, explain, debug, code_review) for more targeted assistance."
+            "Try to describe what you are stuck on, and I will point you in the right direction.",
+            "",
+            "> Remember: I will guide and explain, but I will not write the complete solution for you. The goal is for you to learn by implementing it yourself."
         ]);
     }
 }

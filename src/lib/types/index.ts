@@ -3,7 +3,7 @@ export type Language = "python" | "javascript" | "typescript";
 export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
-export type AiInteractionType = "chat" | "hint" | "explain" | "debug" | "code_review";
+export type AiInteractionType = "code_suggestion" | "explanation" | "debugging";
 
 export interface AuthUser {
   user_id: string;
@@ -157,6 +157,10 @@ export interface AggregateReport extends ReportListItem {
     submitted_at: string;
     ai_usage_summary: {
       total_interactions: number;
+      total_tokens: number;
+      total_input_tokens: number;
+      total_output_tokens: number;
+      average_tokens_per_interaction: number;
       main_semantic_tags: string[];
     };
   }>;

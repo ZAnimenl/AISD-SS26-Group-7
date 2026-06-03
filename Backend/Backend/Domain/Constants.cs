@@ -41,3 +41,18 @@ public static class UserStatuses
     public const string Active = "active";
     public const string Inactive = "inactive";
 }
+
+public static class AiInteractionTypes
+{
+    public const string CodeSuggestion = "code_suggestion";
+    public const string Explanation = "explanation";
+    public const string Debugging = "debugging";
+}
+
+public static class TaskTypes
+{
+    public const string WebApplication = "web_application";
+    public const string DatabaseTask = "database_task";
+    public const string ApiDevelopment = "api_development";
+    public const string BugFix = "bug_fix";
+}

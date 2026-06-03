@@ -42,7 +42,7 @@ These decisions remove ambiguity for the first frontend-only MVP. For backend-co
 - Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns and resolves the active attempt internally.
 - Run behavior: mock public/sample test output only. Run does not affect score.
 - Submit behavior: mock final result modal. Do not execute hidden tests. Student UI may show hidden test summary counts only, never hidden inputs or expected outputs.
-- AI behavior: mock chat, hint, explain, debug, and code-review responses only. Do not call external AI APIs from the frontend. Inline completion is out of scope for the first visual MVP.
+- AI behavior: the workspace includes an embedded AI agent. Do not call external AI APIs from the frontend. The backend proxies all AI requests and tracks token usage.
 - Admin scope: include visual pages for dashboard, assessments, assessment create/edit, question/test-case editing, report list, and report detail. Keep all changes in local mock state only.
 - Out of scope for first Module 2 MVP: `/register`, `/admin/users`, backend routes, database logic, sandbox execution, grading engine, real AI provider calls, and report aggregation logic.
 
@@ -216,12 +216,13 @@ INTERNAL_ERROR
   "questions": [
     {
       "question_id": "uuid",
-      "title": "Array Sum",
-      "problem_description_markdown": "## Task\nWrite a function that returns the sum of an array.",
+      "title": "Build a REST API endpoint",
+      "task_type": "api_development",
+      "problem_description_markdown": "## Task\nCreate a GET /api/users endpoint that returns a list of users from the database.",
       "language_constraints": ["python", "javascript"],
       "starter_code": {
-        "python": "def solve(arr):\n    pass\n",
-        "javascript": "function solve(arr) {\n  // TODO\n}\n"
+        "python": "from flask import Flask\n\napp = Flask(__name__)\n\n# TODO: implement GET /api/users\n",
+        "javascript": "const express = require('express');\nconst app = express();\n\n// TODO: implement GET /api/users\n"
       }
     }
   ]
@@ -465,45 +466,77 @@ internal_error
 
 ---
 
-## 11. AI APIs
+## 11. Embedded AI Agent APIs
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
-| P1 | POST | `/api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat` | AI chat/hint/explain/debug/code review |
-| P2 | POST | `/api/v1/ai/inline-completion` | Monaco ghost text |
-| P1 | GET | `/api/v1/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage summary |
-| P2 | GET | `/api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions` | Admin AI interaction logs for a student's assessment attempt |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist` | Embedded AI agent request (code suggestion, explanation, debugging) |
+| P1 | GET | `/api/v1/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage and token summary |
+| P1 | GET | `/api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions` | Admin AI interaction logs with token details |
 
-### AI chat request
+### AI agent request
 
 ```json
 {
-  "interaction_type": "hint",
-  "message": "Can you give me a small hint?",
+  "interaction_type": "code_suggestion",
+  "message": "How should I structure this endpoint?",
   "selected_language": "python",
-  "active_file_content": "def solve(arr):\n    pass\n"
+  "active_file_content": "from flask import Flask\napp = Flask(__name__)\n"
 }
 ```
 
 ### AI interaction types
 
 ```text
-chat
-hint
-explain
-debug
-code_review
+code_suggestion
+explanation
+debugging
 ```
 
-### AI decisions to confirm
+### AI agent response
 
-- MVP decision: AI enabled/disabled is per assessment.
-- MVP decision: AI panel supports mocked chat, hint, explain, debug, and code review. Inline completion is out of scope.
-- Does backend log every interaction automatically?
-- MVP decision: mock AI responses may be displayed as Markdown-style text if the frontend already has a safe renderer; otherwise plain text is acceptable.
-- What semantic tags are possible?
-- What happens if AI is disabled?
-- What happens if AI provider is down?
+```json
+{
+  "interaction_id": "uuid",
+  "response_markdown": "You can structure your endpoint like this...",
+  "semantic_tags": ["code_suggestion", "api_design"],
+  "token_usage": {
+    "input_tokens": 245,
+    "output_tokens": 180,
+    "total_tokens": 425
+  },
+  "created_at": "2026-05-01T10:30:00Z"
+}
+```
+
+### AI usage summary response
+
+```json
+{
+  "attempt_id": "uuid",
+  "assessment_id": "uuid",
+  "total_interactions": 8,
+  "total_input_tokens": 1950,
+  "total_output_tokens": 1420,
+  "total_tokens": 3370,
+  "average_tokens_per_interaction": 421,
+  "by_type": {
+    "code_suggestion": 4,
+    "explanation": 2,
+    "debugging": 2
+  }
+}
+```
+
+### AI decisions
+
+- AI enabled/disabled is per assessment.
+- The AI agent is embedded in the workspace UI, not a separate chat panel.
+- Backend logs every interaction automatically with token counts.
+- Backend proxies all LLM calls (e.g. Deepseek API). Frontend never calls external AI APIs directly.
+- The AI agent must not provide direct complete solutions.
+- If AI is disabled for an assessment, the agent UI is hidden.
+- If AI provider is down, show an error message and preserve the assessment attempt.
 
 ---
 
@@ -543,7 +576,11 @@ code_review
       "submitted_at": "2026-04-30T13:40:00Z",
       "ai_usage_summary": {
         "total_interactions": 5,
-        "main_semantic_tags": ["conceptual_hint", "debug"]
+        "total_tokens": 2150,
+        "total_input_tokens": 1200,
+        "total_output_tokens": 950,
+        "average_tokens_per_interaction": 430,
+        "main_semantic_tags": ["code_suggestion", "debugging"]
       }
     }
   ]
@@ -573,8 +610,8 @@ code_review
 {
   "features": {
     "registration_enabled": true,
-    "ai_chat_enabled": true,
-    "ai_inline_completion_enabled": false,
+    "embedded_ai_agent_enabled": true,
+    "token_tracking_enabled": true,
     "multi_file_workspace_enabled": false,
     "real_sandbox_enabled": false
   },
@@ -603,7 +640,7 @@ code_review
 | `/student/assessments` | `GET /api/v1/student/assessments` |
 | `/student/results` | `GET /api/v1/student/results` |
 | `/student/assessments/{assessment_id}/start` | `POST /api/v1/assessments/{assessment_id}/attempts/start` |
-| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/assessments/{assessment_id}/attempt`, `GET /api/v1/assessments/{assessment_id}/workspace`, `PUT /api/v1/assessments/{assessment_id}/workspace`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run`, `POST /api/v1/assessments/{assessment_id}/submit`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat` |
+| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/assessments/{assessment_id}/attempt`, `GET /api/v1/assessments/{assessment_id}/workspace`, `PUT /api/v1/assessments/{assessment_id}/workspace`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run`, `POST /api/v1/assessments/{assessment_id}/submit`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist`, `GET /api/v1/assessments/{assessment_id}/ai-usage` |
 
 ### Admin Pages
 
@@ -664,16 +701,15 @@ GET  /api/v1/admin/questions/{question_id}/test-cases
 POST /api/v1/admin/questions/{question_id}/test-cases
 
 GET  /api/v1/assessments/{assessment_id}/submissions
-POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/chat
+POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist
 GET  /api/v1/assessments/{assessment_id}/ai-usage
+GET  /api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions
 GET  /api/v1/admin/submissions/{submission_id}
 ```
 
 ### P2: Advanced features
 
 ```text
-POST /api/v1/ai/inline-completion
-GET  /api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions
 GET  /api/v1/admin/reports/{assessment_id}/students/{student_id}
 
 POST /api/v1/admin/users

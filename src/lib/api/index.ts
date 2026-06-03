@@ -480,7 +480,10 @@ export async function getAiResponse(input: {
   selected_language: Language;
   active_file_content: string;
 }) {
-  const response = await apiRequest<{ response_markdown: string }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/chat`, {
+  const response = await apiRequest<{
+    response_markdown: string;
+    token_usage: { input_tokens: number; output_tokens: number; total_tokens: number };
+  }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/assist`, {
     method: "POST",
     body: JSON.stringify({
       interaction_type: input.interaction_type,
@@ -489,7 +492,18 @@ export async function getAiResponse(input: {
       active_file_content: input.active_file_content
     })
   });
-  return response.response_markdown;
+  return response;
+}
+
+export async function getAiUsage(assessmentId: string) {
+  return apiRequest<{
+    total_interactions: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_tokens: number;
+    average_tokens_per_interaction: number;
+    by_type: Record<string, number>;
+  }>(`/assessments/${assessmentId}/ai-usage`);
 }
 
 function normalizeUser(user: BackendUser): AuthUser {

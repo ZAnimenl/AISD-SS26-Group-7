@@ -254,7 +254,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   const [error, setError] = useState<string | null>(null);
   const [aiMessage, setAiMessage] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "I can give hints, explain concepts, debug symptoms, or review your current approach through the backend AI endpoint." }
+    { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
   ]);
 
   useEffect(() => {
@@ -394,7 +394,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       setMessages((current) => [
         ...current,
         { role: "student", text: message },
-        { role: "assistant", text: response }
+        { role: "assistant", text: response.response_markdown }
       ]);
       setAiMessage("");
     } catch (exception) {
@@ -536,7 +536,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                 <p className="mt-1 text-xs leading-5 text-white/65">
                   The last run exposed a problem. Ask the assistant for a focused debugging hint.
                 </p>
-                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debug", buildDebugPrompt(runResult, error))}>
+                <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debugging", buildDebugPrompt(runResult, error))}>
                   <Sparkles size={14} />
                   Ask AI to debug this run
                 </button>
@@ -550,12 +550,12 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         <div className="relative flex items-center gap-3">
           <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
           <div className="min-w-0">
-            <h2 className="font-semibold">AI assistant</h2>
+            <h2 className="font-semibold">AI Agent</h2>
             <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
           </div>
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
-          {(["hint", "explain", "debug", "code_review"] as AiInteractionType[]).map((type) => (
+          {(["code_suggestion", "explanation", "debugging"] as AiInteractionType[]).map((type) => (
             <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45" onClick={() => sendAi(type)}>
               <span className="ml-8 grid w-[132px] grid-cols-[18px_96px] items-center gap-3 text-left">
                 <Sparkles size={14} className="justify-self-center" />
@@ -578,7 +578,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             value={aiMessage}
             onChange={(event) => setAiMessage(event.target.value)}
           />
-          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950" onClick={() => sendAi("chat")}><Send size={16} /></button>
+          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950" onClick={() => sendAi("code_suggestion")}><Send size={16} /></button>
         </div>
       </aside>
 
