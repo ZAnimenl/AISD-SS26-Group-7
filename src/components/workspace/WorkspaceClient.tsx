@@ -19,30 +19,46 @@ const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "javascript", label: "JavaScript" }
 ];
 
-function getFileNameForLanguage(language: Language) {
-  return language === "javascript" ? "main.js" : "main.py";
+function getStarterFiles(question: Question | undefined, language: Language): Record<string, string> {
+  return question?.starter_code[language] ?? {};
+}
+
+function getFileNames(question: Question | undefined, language: Language): string[] {
+  const files = getStarterFiles(question, language);
+  const names = Object.keys(files);
+  return names.length > 0 ? names : [language === "javascript" ? "main.js" : "main.py"];
 }
 
 function createQuestionState(question: Question | undefined, language: Language = "python"): WorkspaceQuestionState {
-  const fileName = getFileNameForLanguage(language);
+  const starterFiles = getStarterFiles(question, language);
+  const fileNames = Object.keys(starterFiles);
+  const firstFile = fileNames[0] ?? (language === "javascript" ? "main.js" : "main.py");
+
+  const files: Record<string, { language: Language; content: string }> = {};
+  if (fileNames.length > 0) {
+    for (const [name, content] of Object.entries(starterFiles)) {
+      files[name] = { language, content };
+    }
+  } else {
+    files[firstFile] = { language, content: "" };
+  }
 
   return {
     selected_language: language,
-    active_file: fileName,
-    files: {
-      [fileName]: {
-        language,
-        content: question?.starter_code[language] ?? ""
-      }
-    },
+    active_file: firstFile,
+    files,
     last_saved_at: "",
     version: 0
   };
 }
 
-function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Question | undefined, language: Language) {
-  const fileName = getFileNameForLanguage(language);
-  return state?.files[fileName]?.content ?? question?.starter_code[language] ?? "";
+function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Question | undefined, language: Language, fileName?: string) {
+  const targetFile = fileName ?? state?.active_file ?? getFileNames(question, language)[0];
+  if (state?.files[targetFile]) {
+    return state.files[targetFile].content;
+  }
+  const starterFiles = getStarterFiles(question, language);
+  return starterFiles[targetFile] ?? "";
 }
 
 function buildRunFailureSummary(runResult: RunResult | null, error: string | null) {
@@ -213,6 +229,41 @@ function renderMarkdown(text: string) {
       );
     } else if (trimmed === "") {
       elements.push(<div key={i} className="h-2" />);
+    } else if (trimmed.startsWith("| ")) {
+      const tableLines: string[] = [trimmed];
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim().startsWith("|")) {
+        tableLines.push(lines[j].trim());
+        j++;
+      }
+      const headerCells = tableLines[0].split("|").filter(Boolean).map(c => c.trim());
+      const dataRows = tableLines.slice(2);
+      elements.push(
+        <div key={i} className="my-3 overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/5">
+                {headerCells.map((cell, ci) => (
+                  <th key={ci} className="px-3 py-1.5 text-left font-semibold text-white/70">{cell}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataRows.map((row, ri) => {
+                const cells = row.split("|").filter(Boolean).map(c => c.trim());
+                return (
+                  <tr key={ri} className="border-b border-white/5">
+                    {cells.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-1.5 text-white/55">{parseBoldAndInlineCode(cell)}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      i = j - 1;
     } else {
       elements.push(
         <p key={i} className="mt-1 text-sm leading-6 text-white/65">
@@ -246,7 +297,8 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   );
   const initialState = questionStates[activeQuestionId] ?? Object.values(questionStates)[0] ?? createQuestionState(activeQuestion);
   const [language, setLanguage] = useState<Language>(initialState?.selected_language ?? "python");
-  const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState?.selected_language ?? "python"));
+  const [activeFile, setActiveFile] = useState(initialState?.active_file ?? getFileNames(activeQuestion, language)[0]);
+  const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState?.selected_language ?? "python", activeFile));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
@@ -257,19 +309,24 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
   ]);
 
+  const fileNames = useMemo(() => {
+    const state = questionStates[activeQuestionId];
+    if (state && Object.keys(state.files).length > 0) {
+      return Object.keys(state.files);
+    }
+    return getFileNames(activeQuestion, language);
+  }, [questionStates, activeQuestionId, activeQuestion, language]);
+
   useEffect(() => {
     setSaveState("unsaved");
     const saving = window.setTimeout(() => setSaveState("saving"), 450);
     const saved = window.setTimeout(async () => {
       try {
-        const activeFile = getFileNameForLanguage(language);
-        const savedWorkspace = await autosaveWorkspace(
-          assessment.assessment_id,
-          activeQuestionId,
-          language,
-          activeFile,
-          code
-        );
+        const currentState = persistCurrentCode();
+        const stateToSave = currentState[activeQuestionId];
+        if (!stateToSave) return;
+
+        const savedWorkspace = await saveWorkspace(assessment.assessment_id, { [activeQuestionId]: stateToSave });
         setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
         setSaveState("saved");
       } catch (exception) {
@@ -281,22 +338,22 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [activeQuestionId, assessment.assessment_id, code, language]);
+  }, [activeQuestionId, assessment.assessment_id, code, language, activeFile]);
 
   function persistCurrentCode(nextQuestionStates = questionStates) {
-    const activeFile = getFileNameForLanguage(language);
+    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
     return {
       ...nextQuestionStates,
       [activeQuestionId]: {
-        ...(nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language)),
+        ...currentQuestionState,
         selected_language: language,
         active_file: activeFile,
         files: {
-          ...(nextQuestionStates[activeQuestionId]?.files ?? {}),
+          ...currentQuestionState.files,
           [activeFile]: { language, content: code }
         },
-        last_saved_at: nextQuestionStates[activeQuestionId]?.last_saved_at ?? new Date().toISOString(),
-        version: nextQuestionStates[activeQuestionId]?.version ?? 0
+        last_saved_at: currentQuestionState.last_saved_at ?? new Date().toISOString(),
+        version: currentQuestionState.version ?? 0
       }
     };
   }
@@ -304,9 +361,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   function updateCode(nextCode: string) {
     setCode(nextCode);
     setQuestionStates((current) => {
-      const activeFile = getFileNameForLanguage(language);
       const currentQuestionState = current[activeQuestionId] ?? createQuestionState(activeQuestion, language);
-
       return {
         ...current,
         [activeQuestionId]: {
@@ -322,35 +377,55 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     });
   }
 
+  function switchFile(nextFile: string) {
+    const nextQuestionStates = persistCurrentCode();
+    const currentState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
+    const nextCode = currentState.files[nextFile]?.content ?? getStarterFiles(activeQuestion, language)[nextFile] ?? "";
+
+    setQuestionStates(nextQuestionStates);
+    setActiveFile(nextFile);
+    setCode(nextCode);
+  }
+
   function switchLanguage(nextLanguage: Language) {
     const nextQuestionStates = persistCurrentCode();
-    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, nextLanguage);
-    const nextFile = getFileNameForLanguage(nextLanguage);
-    const nextCode = currentQuestionState.files[nextFile]?.content ?? activeQuestion?.starter_code[nextLanguage] ?? "";
+    const starterFiles = getStarterFiles(activeQuestion, nextLanguage);
+    const newFileNames = Object.keys(starterFiles);
+    const nextFile = newFileNames[0] ?? (nextLanguage === "javascript" ? "main.js" : "main.py");
+
+    const existingState = nextQuestionStates[activeQuestionId];
+    const hasFilesForLang = existingState && Object.keys(existingState.files).some(f =>
+      newFileNames.includes(f)
+    );
+
+    const files: Record<string, { language: Language; content: string }> = {};
+    for (const [name, content] of Object.entries(starterFiles)) {
+      const existing = hasFilesForLang ? existingState?.files[name] : undefined;
+      files[name] = { language: nextLanguage, content: existing?.content ?? content };
+    }
 
     setQuestionStates({
       ...nextQuestionStates,
       [activeQuestionId]: {
-        ...currentQuestionState,
+        ...(existingState ?? createQuestionState(activeQuestion, nextLanguage)),
         selected_language: nextLanguage,
         active_file: nextFile,
         files: {
-          ...currentQuestionState.files,
-          [nextFile]: {
-            language: nextLanguage,
-            content: nextCode
-          }
+          ...(existingState?.files ?? {}),
+          ...files
         }
       }
     });
     setLanguage(nextLanguage);
-    setCode(nextCode);
+    setActiveFile(nextFile);
+    setCode(files[nextFile]?.content ?? "");
   }
 
   function switchQuestion(question: Question) {
     const nextQuestionStates = persistCurrentCode();
     const nextState = nextQuestionStates[question.question_id] ?? createQuestionState(question);
     const nextLanguage = nextState.selected_language;
+    const nextFile = nextState.active_file;
 
     setQuestionStates({
       ...nextQuestionStates,
@@ -358,7 +433,25 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     });
     setActiveQuestionId(question.question_id);
     setLanguage(nextLanguage);
-    setCode(getCodeFromState(nextState, question, nextLanguage));
+    setActiveFile(nextFile);
+    setCode(getCodeFromState(nextState, question, nextLanguage, nextFile));
+  }
+
+  function getAllFiles(): Record<string, string> {
+    const currentState = persistCurrentCode();
+    const qState = currentState[activeQuestionId];
+    if (!qState) return { [activeFile]: code };
+
+    const result: Record<string, string> = {};
+    for (const [fileName, fileData] of Object.entries(qState.files)) {
+      if (fileData.language === language) {
+        result[fileName] = fileData.content;
+      }
+    }
+    if (Object.keys(result).length === 0) {
+      result[activeFile] = code;
+    }
+    return result;
   }
 
   async function handleRun() {
@@ -370,7 +463,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         selected_language: language,
-        active_file_content: code
+        files: getAllFiles()
       }));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Run failed.");
@@ -419,8 +512,6 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       setSaveState("unsaved");
     }
   }
-
-  const activeFile = getFileNameForLanguage(language);
 
   return (
     <div className="grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
@@ -484,10 +575,20 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
           <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)}>Submit</button>
         </div>
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
-        <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
-          <span className="rounded-t-xl border border-b-0 border-cyanGlow/30 bg-black/30 px-4 py-2 font-mono text-xs text-cyanGlow shadow-[0_-8px_24px_rgba(0,229,255,0.06)]">
-            {activeFile}
-          </span>
+        <div className="relative flex flex-wrap items-center gap-1 border-b border-white/10 px-3 py-2">
+          {fileNames.map((fileName) => (
+            <button
+              key={fileName}
+              onClick={() => switchFile(fileName)}
+              className={`rounded-t-lg border border-b-0 px-3 py-1.5 font-mono text-xs transition ${
+                fileName === activeFile
+                  ? "border-cyanGlow/30 bg-black/30 text-cyanGlow shadow-[0_-8px_24px_rgba(0,229,255,0.06)]"
+                  : "border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
+              }`}
+            >
+              {fileName}
+            </button>
+          ))}
           <label className="ml-auto hidden text-xs text-white/40 xl:inline" htmlFor="language">Language</label>
           <select id="language" className="field py-2" value={language} onChange={(event) => switchLanguage(event.target.value as Language)}>
             {STUDENT_LANGUAGES.map((option) => (

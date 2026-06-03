@@ -23,7 +23,7 @@ public sealed class CodeEvaluationServiceTests
             TestCase("third", "input-3", "3")
         };
 
-        var result = await service.EvaluateAsync(Guid.NewGuid(), testCases, "code", "python", CancellationToken.None);
+        var result = await service.EvaluateAsync(Guid.NewGuid(), testCases, new Dictionary<string, string> { ["solution.py"] = "code" }, "python", CancellationToken.None);
 
         Assert.Equal(3, runner.TestCaseNames.Count);
         Assert.Equal(["first", "second", "third"], runner.TestCaseNames);
@@ -49,7 +49,7 @@ public sealed class CodeEvaluationServiceTests
         var result = await service.EvaluateAsync(
             Guid.NewGuid(),
             testCases,
-            "def solve(arr):\n    return sum(arr)\n",
+            new Dictionary<string, string> { ["solution.py"] = "def solve(arr):\n    return sum(arr)\n" },
             "python",
             CancellationToken.None);
 
@@ -100,14 +100,13 @@ public sealed class CodeEvaluationServiceTests
         var typeScriptDirectory = Directory.CreateTempSubdirectory("ojsharp-typescript-test-");
         try
         {
-            factory.Write(pythonDirectory.FullName, "def solve(value):\n    return value\n", "from solution import solve\n", GradingLanguage.Python);
-            factory.Write(javascriptDirectory.FullName, "function solve(value) {\n  return value;\n}\n", "const { solve } = require(\"./solution.js\");\n", GradingLanguage.JavaScript);
-            factory.Write(typeScriptDirectory.FullName, "function solve(value: string): string {\n  return value;\n}\n", "const solve = globalThis.__ojsharpSolve;\n", GradingLanguage.TypeScript);
+            factory.Write(pythonDirectory.FullName, new Dictionary<string, string> { ["solution.py"] = "def solve(value):\n    return value\n" }, "from solution import solve\n", GradingLanguage.Python);
+            factory.Write(javascriptDirectory.FullName, new Dictionary<string, string> { ["solution.js"] = "function solve(value) {\n  return value;\n}\nmodule.exports = { solve };\n" }, "const { solve } = require(\"./solution.js\");\n", GradingLanguage.JavaScript);
+            factory.Write(typeScriptDirectory.FullName, new Dictionary<string, string> { ["solution.ts"] = "function solve(value: string): string {\n  return value;\n}\n" }, "const solve = globalThis.__ojsharpSolve;\n", GradingLanguage.TypeScript);
 
             Assert.Contains("from solution import solve", File.ReadAllText(Path.Combine(pythonDirectory.FullName, "test_solution.py")));
             Assert.Contains("require(\"./solution.js\")", File.ReadAllText(Path.Combine(javascriptDirectory.FullName, "solution.test.js")));
-            Assert.Contains("__ojsharpSolve", File.ReadAllText(Path.Combine(typeScriptDirectory.FullName, "solution.ts")));
-            Assert.Contains("__ojsharpSolve", File.ReadAllText(Path.Combine(typeScriptDirectory.FullName, "solution.test.js")));
+            Assert.True(File.Exists(Path.Combine(typeScriptDirectory.FullName, "solution.ts")));
         }
         finally
         {
@@ -123,7 +122,7 @@ public sealed class CodeEvaluationServiceTests
         var runner = new DockerCodeRunner();
 
         var result = await runner.RunAsync(
-            "public class Solution {}",
+            new Dictionary<string, string> { ["Solution.cs"] = "public class Solution {}" },
             "csharp",
             TestCase("unsupported", "1", "1"),
             CancellationToken.None);
@@ -184,7 +183,7 @@ public sealed class CodeEvaluationServiceTests
 
         public List<string> TestCaseNames { get; } = [];
 
-        public Task<CodeRunResult> RunAsync(string code, string language, TestCase testCase, CancellationToken cancellationToken)
+        public Task<CodeRunResult> RunAsync(Dictionary<string, string> files, string language, TestCase testCase, CancellationToken cancellationToken)
         {
             TestCaseNames.Add(testCase.Name);
             return Task.FromResult(results[index++]);

@@ -17,11 +17,7 @@ export interface AuthUser {
 
 export type UserAccount = Required<Pick<AuthUser, "user_id" | "full_name" | "email" | "role" | "status" | "created_at">>;
 
-export interface StarterCode {
-  python: string;
-  javascript: string;
-  typescript: string;
-}
+export type StarterCode = Record<Language, Record<string, string>>;
 
 export interface PublicTestCase {
   test_case_id: string;

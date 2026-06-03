@@ -19,7 +19,7 @@ public sealed record QuestionRequest(
     string Title,
     string ProblemDescriptionMarkdown,
     string[] LanguageConstraints,
-    Dictionary<string, string> StarterCode,
+    Dictionary<string, Dictionary<string, string>> StarterCode,
     string? AdminNotes,
     int SortOrder,
     int MaxScore);
@@ -36,7 +36,7 @@ public sealed record WorkspaceQuestionUpdateRequest(
 
 public sealed record WorkspaceFileRequest(string Language, string Content);
 
-public sealed record AssessmentRunCodeRequest(string SelectedLanguage, string ActiveFileContent);
+public sealed record AssessmentRunCodeRequest(string SelectedLanguage, Dictionary<string, string> Files);
 
 public sealed record AssessmentAiChatRequest(
     string InteractionType,

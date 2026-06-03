@@ -52,7 +52,7 @@ public static class ExecutionEndpoints
             session.AssessmentId,
             questionId,
             request.SelectedLanguage,
-            request.ActiveFileContent,
+            request.Files,
             dbContext,
             evaluationService,
             cancellationToken);
@@ -63,7 +63,7 @@ public static class ExecutionEndpoints
         Guid assessmentId,
         Guid questionId,
         string selectedLanguage,
-        string activeFileContent,
+        Dictionary<string, string> files,
         OjSharpDbContext dbContext,
         CodeEvaluationService evaluationService,
         CancellationToken cancellationToken)
@@ -83,7 +83,7 @@ public static class ExecutionEndpoints
         var result = await evaluationService.EvaluateAsync(
             executionId,
             publicTests,
-            activeFileContent,
+            files,
             selectedLanguage,
             cancellationToken);
 

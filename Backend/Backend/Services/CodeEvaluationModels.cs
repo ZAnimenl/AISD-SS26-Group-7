@@ -4,7 +4,7 @@ namespace Backend.Services;
 
 public interface ICodeRunner
 {
-    Task<CodeRunResult> RunAsync(string code, string language, TestCase testCase, CancellationToken cancellationToken);
+    Task<CodeRunResult> RunAsync(Dictionary<string, string> files, string language, TestCase testCase, CancellationToken cancellationToken);
 }
 
 public sealed record CodeEvaluationResult(

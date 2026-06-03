@@ -32,7 +32,7 @@ internal sealed class DockerCodeRunner : ICodeRunner
     }
 
     public async Task<CodeRunResult> RunAsync(
-        string code,
+        Dictionary<string, string> files,
         string language,
         TestCase testCase,
         CancellationToken cancellationToken)
@@ -51,7 +51,7 @@ internal sealed class DockerCodeRunner : ICodeRunner
         try
         {
             using var run = workspace.CreateRun();
-            testFileFactory.Write(run.HostPath, code, testCode, gradingLanguage);
+            testFileFactory.Write(run.HostPath, files, testCode, gradingLanguage);
 
             var execution = await graderContainer.ExecuteAsync(
                 run.ContainerPath,

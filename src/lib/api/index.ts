@@ -455,13 +455,13 @@ export async function runCode(input: {
   assessment_id: string;
   question_id: string;
   selected_language: Language;
-  active_file_content: string;
+  files: Record<string, string>;
 }) {
   return apiRequest<RunResult>(`/assessments/${input.assessment_id}/questions/${input.question_id}/run`, {
     method: "POST",
     body: JSON.stringify({
       selected_language: input.selected_language,
-      active_file_content: input.active_file_content
+      files: input.files
     })
   });
 }
@@ -577,9 +577,9 @@ function normalizeQuestion(question: any): Question {
     constraints: question.constraints ?? [],
     language_constraints: question.language_constraints ?? ["python", "javascript", "typescript"],
     starter_code: {
-      python: question.starter_code?.python ?? "",
-      javascript: question.starter_code?.javascript ?? "",
-      typescript: question.starter_code?.typescript ?? ""
+      python: question.starter_code?.python ?? {},
+      javascript: question.starter_code?.javascript ?? {},
+      typescript: question.starter_code?.typescript ?? {}
     },
     public_examples: question.public_examples ?? [],
     admin_test_cases: (question.admin_test_cases ?? []).map(normalizeAdminTestCase)
@@ -601,9 +601,9 @@ function toQuestionRequest(question: Question) {
     problem_description_markdown: question.problem_description_markdown,
     language_constraints: question.language_constraints.length ? question.language_constraints : ["python", "javascript", "typescript"],
     starter_code: {
-      python: question.starter_code.python,
-      javascript: question.starter_code.javascript,
-      typescript: question.starter_code.typescript
+      python: question.starter_code.python ?? {},
+      javascript: question.starter_code.javascript ?? {},
+      typescript: question.starter_code.typescript ?? {}
     },
     admin_notes: question.admin_notes ?? "",
     sort_order: question.sort_order ?? 0,

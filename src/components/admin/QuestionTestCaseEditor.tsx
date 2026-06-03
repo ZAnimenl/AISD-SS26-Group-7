@@ -19,9 +19,9 @@ interface QuestionTestCaseEditorProps {
 }
 
 const defaultStarterCode = {
-  python: "def solve():\n    pass\n",
-  javascript: "function solve() {\n}\n",
-  typescript: "function solve(): unknown {\n  return null;\n}\n"
+  python: { "solution.py": "def solve():\n    pass\n" },
+  javascript: { "solution.js": "function solve() {\n}\n\nmodule.exports = { solve };\n" },
+  typescript: { "solution.ts": "function solve(): unknown {\n  return null;\n}\n" }
 };
 
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
@@ -49,16 +49,25 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     });
   }
 
+  function getFirstFileContent(files: Record<string, string> | undefined): string {
+    if (!files) return "";
+    const values = Object.values(files);
+    return values[0] ?? "";
+  }
+
   function updateStarterCode(questionId: string, language: Language, value: string) {
     const question = assessment.questions.find((item) => item.question_id === questionId);
     if (!question) {
       return;
     }
 
+    const currentFiles = question.starter_code[language] ?? {};
+    const firstFileName = Object.keys(currentFiles)[0] ?? (language === "javascript" ? "solution.js" : language === "typescript" ? "solution.ts" : "solution.py");
+
     updateQuestionState(questionId, {
       starter_code: {
         ...question.starter_code,
-        [language]: value
+        [language]: { ...currentFiles, [firstFileName]: value }
       }
     });
   }
@@ -230,15 +239,15 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="grid gap-3 lg:grid-cols-3">
                   <label className="grid gap-2 text-sm text-white/60">
                     Python starter code
-                    <textarea className="field min-h-32 font-mono" value={question.starter_code.python} onChange={(event) => updateStarterCode(question.question_id, "python", event.target.value)} />
+                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.python)} onChange={(event) => updateStarterCode(question.question_id, "python", event.target.value)} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     JavaScript starter code
-                    <textarea className="field min-h-32 font-mono" value={question.starter_code.javascript} onChange={(event) => updateStarterCode(question.question_id, "javascript", event.target.value)} />
+                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.javascript)} onChange={(event) => updateStarterCode(question.question_id, "javascript", event.target.value)} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     TypeScript starter code
-                    <textarea className="field min-h-32 font-mono" value={question.starter_code.typescript} onChange={(event) => updateStarterCode(question.question_id, "typescript", event.target.value)} />
+                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.typescript)} onChange={(event) => updateStarterCode(question.question_id, "typescript", event.target.value)} />
                   </label>
                 </div>
               </div>
