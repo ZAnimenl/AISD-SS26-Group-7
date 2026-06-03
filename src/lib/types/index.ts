@@ -35,6 +35,7 @@ export interface AdminTestCase {
 export interface Question {
   question_id: string;
   title: string;
+  task_type?: string;
   problem_description_markdown: string;
   admin_notes?: string | null;
   sort_order?: number;

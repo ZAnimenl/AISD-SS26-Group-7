@@ -21,6 +21,7 @@ public sealed class AssessmentProjectionService
                 {
                     question_id = question.Id,
                     title = question.Title,
+                    task_type = question.TaskType,
                     problem_description_markdown = question.ProblemDescriptionMarkdown,
                     language_constraints = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>()),
                     starter_code = JsonDocumentSerializer.Deserialize(question.StarterCodeJson, new Dictionary<string, Dictionary<string, string>>())
