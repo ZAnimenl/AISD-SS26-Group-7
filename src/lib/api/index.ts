@@ -14,7 +14,9 @@ import type {
   RunResult,
   StudentDashboard,
   SubmissionResult,
+  TaskType,
   UserAccount,
+  VerificationMode,
   WorkspaceQuestionState,
   WorkspaceState
 } from "@/lib/types";
@@ -282,6 +284,9 @@ export async function createAssessment(input: {
   duration_minutes: number;
   status: AssessmentStatus;
   ai_enabled: boolean;
+  shared_prototype_reference?: string | null;
+  shared_prototype_version?: string | null;
+  shared_prototype_metadata?: Record<string, string>;
 }) {
   return apiRequest<{ assessment_id: string }>("/admin/assessments", {
     method: "POST",
@@ -301,7 +306,10 @@ export async function updateAssessment(input: Assessment) {
       description: input.description,
       duration_minutes: input.duration_minutes,
       status: input.status,
-      ai_enabled: input.ai_enabled
+      ai_enabled: input.ai_enabled,
+      shared_prototype_reference: input.shared_prototype_reference ?? null,
+      shared_prototype_version: input.shared_prototype_version ?? null,
+      shared_prototype_metadata: input.shared_prototype_metadata ?? {}
     })
   });
 }
@@ -383,7 +391,14 @@ export async function getAggregateReport(assessmentId: string) {
       score: student.score ?? 0,
       max_score: student.max_score ?? 0,
       submitted_at: student.submitted_at ?? "",
-      ai_usage_summary: student.ai_usage_summary ?? { total_interactions: 0, main_semantic_tags: [] }
+      ai_usage_summary: {
+        total_interactions: student.ai_usage_summary?.total_interactions ?? 0,
+        total_tokens: student.ai_usage_summary?.total_tokens ?? 0,
+        total_input_tokens: student.ai_usage_summary?.total_input_tokens ?? 0,
+        total_output_tokens: student.ai_usage_summary?.total_output_tokens ?? 0,
+        average_tokens_per_interaction: student.ai_usage_summary?.average_tokens_per_interaction ?? 0,
+        main_semantic_tags: student.ai_usage_summary?.main_semantic_tags ?? []
+      }
     }))
   } satisfies AggregateReport;
 }
@@ -557,6 +572,11 @@ function normalizeAssessment(raw: any): Assessment {
     duration_minutes: raw.duration_minutes ?? 0,
     status: (raw.status ?? "active") as AssessmentStatus,
     ai_enabled: Boolean(raw.ai_enabled),
+    shared_prototype_reference: raw.shared_prototype_reference ?? null,
+    shared_prototype_version: raw.shared_prototype_version ?? null,
+    shared_prototype_metadata: normalizeMetadata(raw.shared_prototype_metadata),
+    supported_task_categories: (raw.supported_task_categories ?? []).map(normalizeTaskType),
+    supported_verification_modes: (raw.supported_verification_modes ?? []).map((mode: string | undefined) => normalizeVerificationMode(mode)),
     closes_at: raw.closes_at ?? raw.expires_at ?? new Date().toISOString(),
     question_count: raw.question_count ?? raw.questions?.length ?? 0,
     attempt_status: normalizeAttemptStatus(attemptStatus),
@@ -570,9 +590,12 @@ function normalizeQuestion(question: any): Question {
   return {
     question_id: question.question_id,
     title: question.title ?? "",
-    task_type: question.task_type ?? undefined,
     problem_description_markdown: question.problem_description_markdown ?? "",
     admin_notes: question.admin_notes ?? null,
+    task_type: normalizeTaskType(question.task_type),
+    difficulty: normalizeDifficulty(question.difficulty),
+    verification_mode: normalizeVerificationMode(question.verification_mode, question.task_type),
+    starter_prototype_reference: question.starter_prototype_reference ?? null,
     sort_order: question.sort_order ?? 0,
     max_score: question.max_score ?? 100,
     constraints: question.constraints ?? [],
@@ -582,6 +605,11 @@ function normalizeQuestion(question: any): Question {
       javascript: question.starter_code?.javascript ?? {},
       typescript: question.starter_code?.typescript ?? {}
     },
+    starter_files_metadata: normalizeNestedMetadata(question.starter_files_metadata),
+    verification_metadata: normalizeMetadata(question.verification_metadata),
+    grading_configuration: normalizeMetadata(question.grading_configuration),
+    authoring_source: normalizeAuthoringSource(question.authoring_source),
+    traceability_metadata: normalizeMetadata(question.traceability_metadata),
     public_examples: question.public_examples ?? [],
     admin_test_cases: (question.admin_test_cases ?? []).map(normalizeAdminTestCase)
   };
@@ -592,13 +620,21 @@ function normalizeAdminTestCase(testCase: any): AdminTestCase {
     test_case_id: testCase.test_case_id,
     name: testCase.name ?? "",
     visibility: testCase.visibility === "hidden" ? "hidden" : "public",
-    test_code: normalizeTestCode(testCase.test_code)
+    test_code: normalizeTestCode(testCase.test_code),
+    authoring_source: normalizeAuthoringSource(testCase.authoring_source),
+    public_metadata: normalizeMetadata(testCase.public_metadata),
+    admin_metadata: normalizeMetadata(testCase.admin_metadata),
+    traceability_metadata: normalizeMetadata(testCase.traceability_metadata)
   };
 }
 
 function toQuestionRequest(question: Question) {
   return {
     title: question.title,
+    task_type: normalizeTaskType(question.task_type),
+    difficulty: normalizeDifficulty(question.difficulty),
+    verification_mode: normalizeVerificationMode(question.verification_mode, question.task_type),
+    starter_prototype_reference: question.starter_prototype_reference ?? null,
     problem_description_markdown: question.problem_description_markdown,
     language_constraints: question.language_constraints.length ? question.language_constraints : ["python", "javascript", "typescript"],
     starter_code: {
@@ -606,6 +642,11 @@ function toQuestionRequest(question: Question) {
       javascript: question.starter_code.javascript ?? {},
       typescript: question.starter_code.typescript ?? {}
     },
+    starter_files_metadata: question.starter_files_metadata ?? {},
+    verification_metadata: question.verification_metadata ?? {},
+    grading_configuration: question.grading_configuration ?? {},
+    authoring_source: question.authoring_source ?? "manual",
+    traceability_metadata: question.traceability_metadata ?? {},
     admin_notes: question.admin_notes ?? "",
     sort_order: question.sort_order ?? 0,
     max_score: question.max_score ?? 100
@@ -616,7 +657,11 @@ function toTestCaseRequest(testCase: AdminTestCase) {
   return {
     name: testCase.name,
     visibility: testCase.visibility,
-    test_code: normalizeTestCode(testCase.test_code)
+    test_code: normalizeTestCode(testCase.test_code),
+    authoring_source: testCase.authoring_source ?? "manual",
+    public_metadata: testCase.public_metadata ?? {},
+    admin_metadata: testCase.admin_metadata ?? {},
+    traceability_metadata: testCase.traceability_metadata ?? {}
   };
 }
 
@@ -626,4 +671,85 @@ function normalizeAttemptStatus(value: string | undefined): AttemptStatus {
   }
 
   return "not_started";
+}
+
+function normalizeTaskType(value: string | undefined): TaskType {
+  if (value === "frontend_ui_extension" || value === "rest_api_development" || value === "database_query_schema" || value === "bug_fix") {
+    return value;
+  }
+
+  if (value === "web_application") {
+    return "frontend_ui_extension";
+  }
+
+  if (value === "api_development") {
+    return "rest_api_development";
+  }
+
+  if (value === "database_task") {
+    return "database_query_schema";
+  }
+
+  return "rest_api_development";
+}
+
+function normalizeDifficulty(value: string | undefined) {
+  if (value === "easy" || value === "medium" || value === "hard") {
+    return value;
+  }
+
+  return "medium";
+}
+
+function normalizeVerificationMode(value: string | undefined, taskType?: string): VerificationMode {
+  if (value === "browser_ui_preview" || value === "api_response_check" || value === "database_result_check" || value === "automated_test" || value === "regression_test") {
+    return value;
+  }
+
+  switch (normalizeTaskType(taskType)) {
+    case "frontend_ui_extension":
+      return "browser_ui_preview";
+    case "rest_api_development":
+      return "api_response_check";
+    case "database_query_schema":
+      return "database_result_check";
+    case "bug_fix":
+      return "regression_test";
+    default:
+      return "automated_test";
+  }
+}
+
+function normalizeAuthoringSource(value: string | undefined) {
+  if (value === "llm_generated" || value === "admin_edited") {
+    return value;
+  }
+
+  return "manual";
+}
+
+function normalizeMetadata(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, metadataValue]) => [
+      key,
+      typeof metadataValue === "string" ? metadataValue : String(metadataValue ?? "")
+    ])
+  );
+}
+
+function normalizeNestedMetadata(value: unknown): Record<string, Record<string, string>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, metadataValue]) => [
+      key,
+      normalizeMetadata(metadataValue)
+    ])
+  );
 }

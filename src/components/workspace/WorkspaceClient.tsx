@@ -475,6 +475,10 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
   }
 
   async function sendAi(type: AiInteractionType, overrideMessage?: string) {
+    if (!assessment.ai_enabled) {
+      return;
+    }
+
     setError(null);
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     try {
@@ -712,12 +716,13 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         </div>
         <div className="relative mt-4 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
           <input
-            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30"
-            placeholder="Ask a question..."
+            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-45"
+            placeholder={assessment.ai_enabled ? "Ask a question..." : "AI disabled for this assessment"}
             value={aiMessage}
+            disabled={!assessment.ai_enabled}
             onChange={(event) => setAiMessage(event.target.value)}
           />
-          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950" onClick={() => sendAi("code_suggestion")}><Send size={16} /></button>
+          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950 disabled:cursor-not-allowed disabled:opacity-45" disabled={!assessment.ai_enabled} onClick={() => sendAi("code_suggestion")}><Send size={16} /></button>
         </div>
       </aside>
 

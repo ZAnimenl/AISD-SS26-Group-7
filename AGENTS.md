@@ -62,6 +62,7 @@ Available skills:
 .agents/skills/module3-sandbox-execution-coder/SKILL.md
 .agents/skills/module4-ai-telemetry-coder/SKILL.md
 .agents/skills/fullstack-integration-coder/SKILL.md
+.agents/skills/shared-prototype-assessment-coder/SKILL.md
 .agents/skills/strict-code-reviewer/SKILL.md
 .agents/skills/handoff-summary/SKILL.md
 ```
@@ -84,6 +85,7 @@ Common chains:
 - Backend API work with frontend consumers: `module1-identity-assessment-coder` + `fullstack-integration-coder` -> `strict-code-reviewer`
 - Sandbox execution changes: `module3-sandbox-execution-coder` -> `strict-code-reviewer`
 - AI backend changes: `module4-ai-telemetry-coder` -> `strict-code-reviewer`
+- Shared-prototype assessment work: `shared-prototype-assessment-coder` + relevant module companion skills -> `strict-code-reviewer`
 - Context handoff: active coder/reviewer -> `handoff-summary`
 
 When producing a prompt for another agent, include a short `Skills to use` section that lists the primary skill and any companion skills in order.
@@ -193,11 +195,17 @@ Before implementation, consider every local skill and activate only the ones tha
    - Activate as primary when the task requires coordinated frontend/backend implementation.
    - Activate as companion when a module-specific task has API, auth, session/attempt, request/response, or end-to-end contract risk.
 
-9. `strict-code-reviewer`
+9. `shared-prototype-assessment-coder`
+   - Activate for work that creates, seeds, previews, validates, or integrates the four-task shared runnable prototype assessment described by `SPEC.md`.
+   - Use it for assessment templates containing frontend UI extension, REST API development, database query/schema, and bug-fixing tasks.
+   - Treat it as cross-module by default: Module 1 owns task/test/prototype metadata, Module 2 owns workspace and UI preview behavior, and Module 3 owns sandboxed execution/evaluation.
+   - If inactive, state that the request is not about shared-prototype task authoring, preview, or evaluation.
+
+10. `strict-code-reviewer`
    - Activate after implementation unless the user explicitly says a separate reviewer will handle review.
 
-10. `handoff-summary`
-    - Activate when context is getting full, work is paused midstream, or the user asks for a handoff.
+11. `handoff-summary`
+   - Activate when context is getting full, work is paused midstream, or the user asks for a handoff.
 
 Skill activation is a checklist, not permission to use every skill at once. A skill that is inactive should be briefly marked inactive with a reason. This prevents forgotten skills while keeping ownership narrow.
 
@@ -475,6 +483,7 @@ Owns:
 - results
 - reports
 - database persistence
+- shared prototype references, task category metadata, verification mode metadata, administrator-approved LLM-generated task/test drafts, and persisted starter/test files
 
 Must protect:
 
@@ -505,6 +514,7 @@ Owns:
 - embedded AI agent UI (integrated within workspace, not a separate chat panel)
 - AI token usage display
 - frontend API clients
+- task-specific preview and verification UI, including direct browser preview for frontend UI extension tasks
 
 Must not:
 
@@ -561,6 +571,32 @@ Must not:
 - leak hidden tests or grading criteria
 - bypass logging/rate-limit controls where required
 - provide direct complete solutions to students (agent should assist, explain, and guide)
+
+---
+
+# 4.1 Shared Prototype Assessment Rule
+
+The current `SPEC.md` defines the first implementation around a shared runnable prototype and four practical task categories:
+
+1. Frontend UI extension
+2. REST API development
+3. Database query/schema work
+4. Bug fixing in existing code
+
+Interpret "shared runnable prototype" as platform-managed assessment starter content. Students must be able to work inside the assessment website without installing local dependencies.
+
+Do not assume students will clone, install, or run a full external Vite/FastAPI project. When using a full prototype as source material, convert or seed it into platform-native starter files, task metadata, verification modes, and test cases that the platform can run.
+
+Only frontend UI extension tasks require a direct browser UI preview. REST API, database, and bug-fix tasks may use endpoint output, database result tables, automated tests, or regression-test output as their primary verification view.
+
+When implementing this area:
+
+- Module 1 owns assessment/task/test/prototype metadata and persistence.
+- Module 2 owns the workspace display and task-specific preview/verification UI.
+- Module 3 owns sandboxed execution and grading.
+- Module 4 owns embedded AI agent behavior, token logging, and task-authoring LLM support.
+- Student-facing views and APIs must not expose hidden tests, hidden expected outputs, grading implementation, or admin-only notes.
+- LLM-generated task/test drafts must remain administrator-reviewed before publication.
 
 ---
 

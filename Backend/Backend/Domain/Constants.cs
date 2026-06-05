@@ -51,8 +51,28 @@ public static class AiInteractionTypes
 
 public static class TaskTypes
 {
-    public const string WebApplication = "web_application";
-    public const string DatabaseTask = "database_task";
-    public const string ApiDevelopment = "api_development";
+    public const string FrontendUiExtension = "frontend_ui_extension";
+    public const string RestApiDevelopment = "rest_api_development";
+    public const string DatabaseQuerySchema = "database_query_schema";
     public const string BugFix = "bug_fix";
+
+    public const string LegacyWebApplication = "web_application";
+    public const string LegacyDatabaseTask = "database_task";
+    public const string LegacyApiDevelopment = "api_development";
+}
+
+public static class VerificationModes
+{
+    public const string BrowserUiPreview = "browser_ui_preview";
+    public const string ApiResponseCheck = "api_response_check";
+    public const string DatabaseResultCheck = "database_result_check";
+    public const string AutomatedTest = "automated_test";
+    public const string RegressionTest = "regression_test";
+}
+
+public static class AuthoringSources
+{
+    public const string Manual = "manual";
+    public const string LlmGenerated = "llm_generated";
+    public const string AdminEdited = "admin_edited";
 }

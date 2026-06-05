@@ -188,6 +188,7 @@ public sealed class DockerCodeRunnerIntegrationTests
         var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Backend.Persistence.OjSharpDbContext>();
         optionsBuilder.UseNpgsql("Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password");
         using var dbContext = new Backend.Persistence.OjSharpDbContext(optionsBuilder.Options);
+        await new Backend.Persistence.SchemaCompatibilityService(dbContext).EnsureAsync(CancellationToken.None);
 
         var PythonAssessmentId = Guid.Parse("33333333-3333-3333-3333-333333333333");
         var FibonacciQuestionId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");

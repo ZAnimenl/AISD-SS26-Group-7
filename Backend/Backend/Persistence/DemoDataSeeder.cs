@@ -85,6 +85,13 @@ public sealed class DemoDataSeeder(
             DurationMinutes = 60,
             Status = AssessmentStatuses.Active,
             AiEnabled = true,
+            SharedPrototypeReference = "product-dashboard",
+            SharedPrototypeVersion = "demo-v1",
+            SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["display_name"] = "Product Dashboard",
+                ["student_setup"] = "platform_native"
+            }),
             CreatedAt = now
         };
 
@@ -105,8 +112,20 @@ public sealed class DemoDataSeeder(
             Id = ApiTaskId,
             AssessmentId = WebDevAssessmentId,
             Title = "Implement the Product API",
-            TaskType = TaskTypes.ApiDevelopment,
+            TaskType = TaskTypes.RestApiDevelopment,
             Difficulty = "medium",
+            VerificationMode = VerificationModes.ApiResponseCheck,
+            StarterPrototypeReference = "product-dashboard",
+            StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(TaskStarterMetadata("routes.py", "routes.js")),
+            VerificationMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["primary_view"] = "api_response_check",
+                ["endpoint"] = "/api/products"
+            }),
+            GradingConfigurationJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["runner"] = "automated_tests"
+            }),
             ProblemDescriptionMarkdown = """
 ## Task: Implement the Product API
 
@@ -337,6 +356,18 @@ test('GET /api/products/:id returns 404 for missing product', async () => {
             Title = "Fix the Price Calculator",
             TaskType = TaskTypes.BugFix,
             Difficulty = "easy",
+            VerificationMode = VerificationModes.RegressionTest,
+            StarterPrototypeReference = "product-dashboard",
+            StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(TaskStarterMetadata("calculator.py", "calculator.js")),
+            VerificationMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["primary_view"] = "regression_test",
+                ["focus"] = "price_calculation"
+            }),
+            GradingConfigurationJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["runner"] = "automated_tests"
+            }),
             ProblemDescriptionMarkdown = """
 ## Task: Fix the Price Calculator
 
@@ -522,6 +553,21 @@ test('zero discount displays full total in dashboard', () => {
         {
             ["python"] = python,
             ["javascript"] = javascript
+        };
+    }
+
+    private static Dictionary<string, Dictionary<string, string>> TaskStarterMetadata(string pythonEditableFile, string javascriptEditableFile)
+    {
+        return new Dictionary<string, Dictionary<string, string>>
+        {
+            ["python"] = new Dictionary<string, string>
+            {
+                [pythonEditableFile] = "editable"
+            },
+            ["javascript"] = new Dictionary<string, string>
+            {
+                [javascriptEditableFile] = "editable"
+            }
         };
     }
 }

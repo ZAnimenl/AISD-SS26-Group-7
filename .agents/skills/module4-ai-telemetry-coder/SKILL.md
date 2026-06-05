@@ -16,6 +16,7 @@ Also include these companion skills when the task needs them:
 - `fullstack-integration-coder`: use as a companion when AI API contracts, frontend AI calls, auth context, or error handling must be verified end to end.
 - `module2-frontend-ide-coder`: use when the task includes AI assistant UI or Monaco inline-completion UI behavior.
 - `module1-identity-assessment-coder`: use when AI interactions must be persisted with users, assessments, attempts, or reports.
+- `shared-prototype-assessment-coder`: use when AI work generates, reviews, or stores draft task descriptions and test cases for the shared prototype assessment.
 - `strict-code-reviewer`: use after implementation to review provider-secret safety, prompt/system-boundary safety, telemetry, and frontend/provider isolation.
 - `module-router`: use before coding if ownership is unclear.
 

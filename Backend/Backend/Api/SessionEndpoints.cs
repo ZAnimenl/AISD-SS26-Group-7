@@ -131,9 +131,7 @@ public static class SessionEndpoints
 
         foreach (var question in assessment.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
         {
-            var starterCode = JsonDocumentSerializer.Deserialize(
-                question.StarterCodeJson,
-                new Dictionary<string, Dictionary<string, string>>());
+            var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
             var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
             var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
             var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
