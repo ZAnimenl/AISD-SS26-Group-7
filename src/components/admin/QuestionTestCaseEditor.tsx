@@ -1,17 +1,18 @@
 "use client";
 
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2, Wand2 } from "lucide-react";
 import { useState } from "react";
 import {
   createQuestion,
   createTestCase,
   deleteQuestion,
   deleteTestCase,
+  generateQuestionDraft,
   updateQuestion,
   updateTestCase
 } from "@/lib/api";
 import { defaultTestCode, normalizeTestCode } from "@/lib/languages";
-import type { AdminTestCase, Assessment, Difficulty, Language, Question, TaskType } from "@/lib/types";
+import type { AdminTestCase, Assessment, AuthoringSource, Difficulty, Language, Question, TaskType, VerificationMode } from "@/lib/types";
 
 interface QuestionTestCaseEditorProps {
   assessment: Assessment;
@@ -33,9 +34,23 @@ const taskTypes: Array<{ value: TaskType; label: string }> = [
 
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 
+const verificationModes: Array<{ value: VerificationMode; label: string }> = [
+  { value: "browser_ui_preview", label: "Browser UI preview" },
+  { value: "api_response_check", label: "API response check" },
+  { value: "database_result_check", label: "Database result check" },
+  { value: "automated_test", label: "Automated test" },
+  { value: "regression_test", label: "Regression test" }
+];
+
+const authoringSources: AuthoringSource[] = ["manual", "llm_generated", "admin_edited"];
+const studentLanguages: Language[] = ["python", "javascript"];
+
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftTaskType, setDraftTaskType] = useState<TaskType>("frontend_ui_extension");
+  const [draftDifficulty, setDraftDifficulty] = useState<Difficulty>("medium");
+  const [draftLanguages, setDraftLanguages] = useState<Language[]>(["python", "javascript"]);
 
   async function runEditorAction(action: () => Promise<void>, successMessage: string) {
     setStatus(null);
@@ -55,6 +70,49 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       questions: assessment.questions.map((question) =>
         question.question_id === questionId ? { ...question, ...update } : question
       )
+    });
+  }
+
+  function updateQuestionMetadata(
+    questionId: string,
+    metadataField: "verification_metadata" | "grading_configuration" | "traceability_metadata",
+    metadataKey: string,
+    value: string
+  ) {
+    const question = assessment.questions.find((item) => item.question_id === questionId);
+    if (!question) {
+      return;
+    }
+
+    updateQuestionState(questionId, {
+      [metadataField]: {
+        ...(question[metadataField] ?? {}),
+        [metadataKey]: value
+      }
+    } as Partial<Question>);
+  }
+
+  function updateQuestionLanguage(questionId: string, language: Language, checked: boolean) {
+    const question = assessment.questions.find((item) => item.question_id === questionId);
+    if (!question) {
+      return;
+    }
+
+    const current = question.language_constraints.filter((item) => item === "python" || item === "javascript");
+    const nextLanguages = checked
+      ? Array.from(new Set([...current, language]))
+      : current.filter((item) => item !== language);
+
+    updateQuestionState(questionId, { language_constraints: nextLanguages.length ? nextLanguages : current });
+  }
+
+  function toggleDraftLanguage(language: Language, checked: boolean) {
+    setDraftLanguages((current) => {
+      const nextLanguages = checked
+        ? Array.from(new Set([...current, language]))
+        : current.filter((item) => item !== language);
+
+      return nextLanguages.length ? nextLanguages : current;
     });
   }
 
@@ -116,15 +174,37 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       title: `Question ${sortOrder}`,
       task_type: "rest_api_development",
       difficulty: "medium",
+      verification_mode: "api_response_check",
+      starter_prototype_reference: assessment.shared_prototype_reference ?? "todo-app",
       problem_description_markdown: "Describe the task.",
       admin_notes: "",
       sort_order: sortOrder,
       max_score: 100,
       constraints: [],
-      language_constraints: ["python", "javascript", "typescript"],
+      language_constraints: ["python", "javascript"],
       starter_code: defaultStarterCode,
+      starter_files_metadata: {},
+      verification_metadata: { primary_view: "api_response_check" },
+      grading_configuration: { runner: "automated_tests", requires_student_install: "false" },
+      authoring_source: "manual",
+      traceability_metadata: { requirements: "REQ-12,REQ-13,REQ-15" },
       public_examples: [],
       admin_test_cases: []
+    });
+
+    onAssessmentChange({
+      ...assessment,
+      question_count: assessment.question_count + 1,
+      questions: [...assessment.questions, question]
+    });
+  }
+
+  async function addGeneratedDraftQuestion() {
+    const question = await generateQuestionDraft(assessment.assessment_id, {
+      task_type: draftTaskType,
+      difficulty: draftDifficulty,
+      supported_languages: draftLanguages,
+      starter_prototype_reference: assessment.shared_prototype_reference ?? "todo-app"
     });
 
     onAssessmentChange({
@@ -165,7 +245,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       test_case_id: "new",
       name: `test ${(question.admin_test_cases?.length ?? 0) + 1}`,
       visibility: "public",
-      test_code: defaultTestCode
+      test_code: defaultTestCode,
+      authoring_source: "manual",
+      public_metadata: { student_visible: "true" },
+      admin_metadata: {},
+      traceability_metadata: { requirements: "REQ-15,REQ-52,REQ-53" }
     };
     const testCaseId = await createTestCase(questionId, nextTestCase);
 
@@ -206,6 +290,50 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
             Add question
           </button>
         </div>
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_1fr_auto]">
+            <label className="grid gap-2 text-sm text-white/60">
+              Generated draft task type
+              <select className="field w-full" value={draftTaskType} onChange={(event) => setDraftTaskType(event.target.value as TaskType)}>
+                {taskTypes.map((taskType) => (
+                  <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm text-white/60">
+              Difficulty
+              <select className="field w-full" value={draftDifficulty} onChange={(event) => setDraftDifficulty(event.target.value as Difficulty)}>
+                {difficulties.map((difficulty) => (
+                  <option key={difficulty} value={difficulty}>{difficulty}</option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-2 text-sm text-white/60">
+              Supported languages
+              <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                {studentLanguages.map((language) => (
+                  <label key={language} className="flex items-center gap-2 text-xs text-white/60">
+                    <input type="checkbox" checked={draftLanguages.includes(language)} onChange={(event) => toggleDraftLanguage(language, event.target.checked)} />
+                    {language}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                className="btn-secondary px-3 py-2"
+                type="button"
+                onClick={() => runEditorAction(addGeneratedDraftQuestion, "Generated task draft added for review.")}
+              >
+                <Wand2 size={15} />
+                Generate draft
+              </button>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-white/40">
+            Generated tasks are review drafts. Keep the assessment in draft while editing, then publish by changing the assessment status to active.
+          </p>
+        </div>
         {status ? <p className="mt-3 text-sm text-cyanGlow">{status}</p> : null}
         {error ? <p className="mt-3 text-sm text-pinkGlow">{error}</p> : null}
         <div className="mt-4 space-y-4">
@@ -239,7 +367,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     <input className="field w-full" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
                   </label>
                 </div>
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
                   <label className="grid gap-2 text-sm text-white/60">
                     Task type
                     <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionState(question.question_id, { task_type: event.target.value as TaskType })}>
@@ -256,6 +384,72 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                       ))}
                     </select>
                   </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Verification mode
+                    <select className="field w-full" value={question.verification_mode ?? "automated_test"} onChange={(event) => updateQuestionState(question.question_id, { verification_mode: event.target.value as VerificationMode })}>
+                      {verificationModes.map((mode) => (
+                        <option key={mode.value} value={mode.value}>{mode.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Authoring source
+                    <select className="field w-full" value={question.authoring_source ?? "manual"} onChange={(event) => updateQuestionState(question.question_id, { authoring_source: event.target.value as AuthoringSource })}>
+                      {authoringSources.map((source) => (
+                        <option key={source} value={source}>{source}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr]">
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Starter prototype reference
+                    <input className="field w-full" value={question.starter_prototype_reference ?? ""} onChange={(event) => updateQuestionState(question.question_id, { starter_prototype_reference: event.target.value })} placeholder="todo-app" />
+                  </label>
+                  <div className="grid gap-2 text-sm text-white/60">
+                    Supported student languages
+                    <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                      {studentLanguages.map((language) => (
+                        <label key={language} className="flex items-center gap-2 text-xs text-white/60">
+                          <input type="checkbox" checked={question.language_constraints.includes(language)} onChange={(event) => updateQuestionLanguage(question.question_id, language, event.target.checked)} />
+                          {language}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Requirement IDs
+                    <input className="field w-full" value={question.traceability_metadata?.requirements ?? ""} onChange={(event) => updateQuestionMetadata(question.question_id, "traceability_metadata", "requirements", event.target.value)} placeholder="REQ-17,REQ-18d" />
+                  </label>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Preview entry / endpoint / result key
+                    <input
+                      className="field w-full"
+                      value={question.verification_metadata?.preview_entry ?? question.verification_metadata?.endpoint ?? question.verification_metadata?.result_shape ?? question.verification_metadata?.focus ?? ""}
+                      onChange={(event) => {
+                        const metadataKey = question.verification_mode === "browser_ui_preview"
+                          ? "preview_entry"
+                          : question.verification_mode === "api_response_check"
+                            ? "endpoint"
+                            : question.verification_mode === "database_result_check"
+                              ? "result_shape"
+                              : "focus";
+                        updateQuestionMetadata(question.question_id, "verification_metadata", metadataKey, event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Grading runner
+                    <input className="field w-full" value={question.grading_configuration?.runner ?? "automated_tests"} onChange={(event) => updateQuestionMetadata(question.question_id, "grading_configuration", "runner", event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Requires student install
+                    <select className="field w-full" value={question.grading_configuration?.requires_student_install ?? "false"} onChange={(event) => updateQuestionMetadata(question.question_id, "grading_configuration", "requires_student_install", event.target.value)}>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
                 </div>
                 <label className="grid gap-2 text-sm text-white/60">
                   Problem description
@@ -265,7 +459,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   Admin notes
                   <textarea className="field min-h-20" value={question.admin_notes ?? ""} onChange={(event) => updateQuestionState(question.question_id, { admin_notes: event.target.value })} />
                 </label>
-                <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid gap-3 lg:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/60">
                     Python starter code
                     <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.python)} onChange={(event) => updateStarterCode(question.question_id, "python", event.target.value)} />
@@ -273,10 +467,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   <label className="grid gap-2 text-sm text-white/60">
                     JavaScript starter code
                     <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.javascript)} onChange={(event) => updateStarterCode(question.question_id, "javascript", event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-white/60">
-                    TypeScript starter code
-                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.typescript)} onChange={(event) => updateStarterCode(question.question_id, "typescript", event.target.value)} />
                   </label>
                 </div>
               </div>
@@ -296,7 +486,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                         const testCode = normalizeTestCode(testCase.test_code);
                         return (
                           <>
-                            <div className="grid gap-3 grid-cols-1 sm:grid-cols-[2fr_1fr_auto]">
+                            <div className="grid gap-3 grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto]">
                               <label className="grid gap-2 text-sm text-white/60">
                                 Name
                                 <input className="field w-full" value={testCase.name} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { name: event.target.value })} />
@@ -306,6 +496,14 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                                 <select className="field w-full" value={testCase.visibility} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { visibility: event.target.value as AdminTestCase["visibility"] })}>
                                   <option value="public">public</option>
                                   <option value="hidden">hidden</option>
+                                </select>
+                              </label>
+                              <label className="grid gap-2 text-sm text-white/60">
+                                Source
+                                <select className="field w-full" value={testCase.authoring_source ?? "manual"} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { authoring_source: event.target.value as AuthoringSource })}>
+                                  {authoringSources.map((source) => (
+                                    <option key={source} value={source}>{source}</option>
+                                  ))}
                                 </select>
                               </label>
                               <div className="flex items-end gap-2">
@@ -318,6 +516,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                                 </button>
                               </div>
                             </div>
+                            <label className="mt-3 grid gap-2 text-sm text-white/60">
+                              Test traceability requirement IDs
+                              <input
+                                className="field w-full"
+                                value={testCase.traceability_metadata?.requirements ?? ""}
+                                onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, {
+                                  traceability_metadata: {
+                                    ...(testCase.traceability_metadata ?? {}),
+                                    requirements: event.target.value
+                                  }
+                                })}
+                                placeholder="REQ-15,REQ-52,REQ-53"
+                              />
+                            </label>
                             <div className="mt-3 grid gap-3">
                               <label className="grid gap-2 text-sm text-white/60">
                                 Python pytest code
@@ -326,10 +538,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                               <label className="grid gap-2 text-sm text-white/60">
                                 JavaScript Jest code
                                 <textarea className="field min-h-40 font-mono" value={testCode.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
-                              </label>
-                              <label className="grid gap-2 text-sm text-white/60">
-                                TypeScript Jest code
-                                <textarea className="field min-h-40 font-mono" value={testCode.typescript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "typescript", event.target.value)} />
                               </label>
                             </div>
                           </>

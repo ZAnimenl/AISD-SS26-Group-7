@@ -18,6 +18,12 @@ public sealed record AssessmentRequest(
     string? SharedPrototypeVersion = null,
     Dictionary<string, string>? SharedPrototypeMetadata = null);
 
+public sealed record GenerateQuestionDraftRequest(
+    string TaskType,
+    string Difficulty,
+    string[] SupportedLanguages,
+    string? StarterPrototypeReference = null);
+
 public sealed record QuestionRequest(
     string Title,
     string ProblemDescriptionMarkdown,

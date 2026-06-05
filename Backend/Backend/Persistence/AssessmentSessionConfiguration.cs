@@ -12,6 +12,7 @@ public static class AssessmentSessionConfiguration
             entity.ToTable("assessment_sessions");
             entity.HasKey(session => session.Id);
             entity.Property(session => session.Status).HasMaxLength(64).IsRequired();
+            entity.HasIndex(session => new { session.AssessmentId, session.UserId, session.Status });
             entity.HasOne(session => session.Assessment)
                 .WithMany(assessment => assessment.Sessions)
                 .HasForeignKey(session => session.AssessmentId)

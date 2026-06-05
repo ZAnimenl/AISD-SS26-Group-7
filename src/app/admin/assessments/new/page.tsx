@@ -29,7 +29,7 @@ export default function NewAssessmentPage() {
                 title: String(form.get("title") ?? ""),
                 description: String(form.get("description") ?? ""),
                 duration_minutes: Number(form.get("duration_minutes") ?? 75),
-                status: String(form.get("status") ?? "draft") as any,
+                status: (shouldGenerate ? "draft" : String(form.get("status") ?? "draft")) as any,
                 ai_enabled: form.get("ai_enabled") === "enabled",
                 shared_prototype_reference: shouldGenerate ? "todo-app" : null,
                 shared_prototype_version: shouldGenerate ? "seed-v1" : null
@@ -49,7 +49,7 @@ export default function NewAssessmentPage() {
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-semibold">Questions will be added after creation</p>
-            <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. Generated draft creation adds the default four Todo tasks.</p>
+            <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. Generated draft creation adds the default four Todo tasks and keeps the assessment in draft for review.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button className="btn-primary" type="submit" name="creation_mode" value="manual">Save assessment</button>

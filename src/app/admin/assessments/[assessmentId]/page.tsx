@@ -39,7 +39,15 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
       title: String(form.get("title") ?? assessment.title),
       description: String(form.get("description") ?? assessment.description),
       duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
-      status: String(form.get("status") ?? assessment.status) as AssessmentStatus
+      status: String(form.get("status") ?? assessment.status) as AssessmentStatus,
+      ai_enabled: form.get("ai_enabled") === "enabled",
+      shared_prototype_reference: String(form.get("shared_prototype_reference") ?? assessment.shared_prototype_reference ?? "").trim() || null,
+      shared_prototype_version: String(form.get("shared_prototype_version") ?? assessment.shared_prototype_version ?? "").trim() || null,
+      shared_prototype_metadata: {
+        ...(assessment.shared_prototype_metadata ?? {}),
+        student_setup: "platform_native",
+        dependency_install_required: "false"
+      }
     };
     setError(null);
     try {
@@ -72,6 +80,11 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" name="duration_minutes" type="number" defaultValue={assessment.duration_minutes} /></label>
               <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
+            </div>
+            <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} placeholder="todo-app" /></label>
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} placeholder="seed-v1" /></label>
             </div>
             <button className="btn-primary w-fit">Save changes</button>
             {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}

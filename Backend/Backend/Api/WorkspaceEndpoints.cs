@@ -27,7 +27,8 @@ public static class WorkspaceEndpoints
             httpContext,
             dbContext,
             currentUserAccessor,
-            cancellationToken);
+            requireOpenAssessment: false,
+            cancellationToken: cancellationToken);
         if (error is not null)
         {
             return error;
@@ -51,7 +52,8 @@ public static class WorkspaceEndpoints
             httpContext,
             dbContext,
             currentUserAccessor,
-            cancellationToken);
+            requireOpenAssessment: true,
+            cancellationToken: cancellationToken);
         if (error is not null)
         {
             return error;
@@ -94,12 +96,30 @@ public static class WorkspaceEndpoints
                 continue;
             }
 
-            var questionExists = await dbContext.Questions.AnyAsync(
+            var question = await dbContext.Questions.FirstOrDefaultAsync(
                 question => question.Id == questionId && question.AssessmentId == assessmentId,
                 cancellationToken);
-            if (!questionExists)
+            if (question is null)
             {
                 return ApiResults.Error("QUESTION_NOT_FOUND", "Question was not found for this assessment.", StatusCodes.Status404NotFound);
+            }
+
+            var selectedLanguage = AssessmentPolicy.NormalizeLanguage(update.SelectedLanguage);
+            var normalizedFiles = update.Files.ToDictionary(
+                entry => entry.Key,
+                entry => new WorkspaceFileRequest(
+                    AssessmentPolicy.NormalizeLanguage(entry.Value.Language),
+                    entry.Value.Content));
+            if (AssessmentPolicy.TryFindUnsupportedWorkspaceLanguage(
+                    question,
+                    selectedLanguage,
+                    normalizedFiles.Values.Select(file => file.Language),
+                    out var unsupportedLanguage))
+            {
+                return ApiResults.Error(
+                    "LANGUAGE_NOT_ALLOWED",
+                    $"Language '{unsupportedLanguage}' is not allowed for this task.",
+                    StatusCodes.Status400BadRequest);
             }
 
             var state = await dbContext.WorkspaceQuestionStates
@@ -115,9 +135,9 @@ public static class WorkspaceEndpoints
                 dbContext.WorkspaceQuestionStates.Add(state);
             }
 
-            state.SelectedLanguage = update.SelectedLanguage;
+            state.SelectedLanguage = selectedLanguage;
             state.ActiveFile = update.ActiveFile;
-            state.FilesJson = JsonDocumentSerializer.Serialize(update.Files);
+            state.FilesJson = JsonDocumentSerializer.Serialize(normalizedFiles);
             state.LastSavedAt = now;
             state.Version = Math.Max(state.Version + 1, (update.Version ?? 0) + 1);
         }
@@ -132,6 +152,7 @@ public static class WorkspaceEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        bool requireOpenAssessment,
         CancellationToken cancellationToken)
     {
         var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
@@ -140,14 +161,24 @@ public static class WorkspaceEndpoints
             return (null, error);
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.AssessmentId == assessmentId
+        var session = await dbContext.AssessmentSessions
+            .Include(item => item.Assessment)
+            .FirstOrDefaultAsync(
+                item => item.AssessmentId == assessmentId
                     && item.UserId == user!.Id
                     && item.Status == SessionStatuses.Active
                     && item.ExpiresAt > DateTimeOffset.UtcNow,
-            cancellationToken);
-        return session is null
-            ? (null, ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound))
-            : (session, null);
+                cancellationToken);
+        if (session is null)
+        {
+            return (null, ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound));
+        }
+
+        if (requireOpenAssessment && !AssessmentPolicy.IsAssessmentActive(session.Assessment))
+        {
+            return (null, ApiResults.Error("ASSESSMENT_CLOSED", "This assessment is not accepting workspace changes.", StatusCodes.Status409Conflict));
+        }
+
+        return (session, null);
     }
 }

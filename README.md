@@ -15,7 +15,7 @@ This repository contains a Next.js frontend and an ASP.NET backend:
 Authoritative project documents:
 
 - `SPEC.md`
-- `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
+- `(English Ver.) Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
 - `complete_frontend_api_list_and_backend_alignment.md`
 - `ui-style-reference.md`
 
@@ -98,9 +98,11 @@ Things users may configure:
 
 AI provider keys:
 
-- No AI provider API key is required today.
-- The current backend AI chat endpoint is an MVP stub that logs interactions and returns canned guidance.
-- Future Module 4 provider work may introduce keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`; these are intentionally commented as placeholders in `.env.example`.
+- The backend AI endpoint falls back to mock guidance when no provider key is configured.
+- For local DeepSeek responses, store `Deepseek:ApiKey` with .NET user-secrets for `Backend/Backend/Backend.csproj`, or place it in `Backend/Backend/appsettings.Local.json` during local development only.
+- DeepSeek V4 thinking mode is disabled by default so the student UI receives final assistant content without chain-of-thought output.
+- For deployment, provide `Deepseek__ApiKey` through the hosting secret manager or environment variables.
+- Do not put real AI provider keys in tracked config files such as `appsettings*.json` or `.env.example`. `appsettings.Local.json` is intentionally gitignored.
 
 ## Frontend
 

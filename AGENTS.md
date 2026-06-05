@@ -21,7 +21,7 @@ Follow this priority order when documents or implementation choices conflict:
    - Main product/system requirements specification.
    - Defines goals, non-goals, stakeholders, user stories, REQ/NFR statements, constraints, MVP clarifications, and acceptance criteria.
 
-2. `Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
+2. `(English Ver.) Architectural Design and Module Specification for an AI-Assisted Online Coding Assessment Platform.pdf`
    - Architecture and module-boundary specification.
    - Defines the four-module architecture and security boundaries.
    - Some endpoint/schema examples are older. For current assessment attempt, workspace, run, submit, and AI API routes, follow `SPEC.md` and `complete_frontend_api_list_and_backend_alignment.md`.

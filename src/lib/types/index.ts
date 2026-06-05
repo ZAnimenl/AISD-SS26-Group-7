@@ -2,12 +2,14 @@ export type Role = "student" | "administrator";
 export type Language = "python" | "javascript" | "typescript";
 export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
-export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
+export type ExecutionStatus = "queued" | "running" | "passed" | "failed" | "runtime_error" | "time_limit_exceeded" | "memory_limit_exceeded" | "internal_error";
+export type SubmissionStatus = ExecutionStatus | "submitted" | "not_submitted";
 export type AiInteractionType = "code_suggestion" | "explanation" | "debugging";
 export type TaskType = "frontend_ui_extension" | "rest_api_development" | "database_query_schema" | "bug_fix";
 export type Difficulty = "easy" | "medium" | "hard";
 export type VerificationMode = "browser_ui_preview" | "api_response_check" | "database_result_check" | "automated_test" | "regression_test";
 export type AuthoringSource = "manual" | "llm_generated" | "admin_edited";
+export type TokenEfficiencyIndicator = "no_ai_usage" | "strategic" | "token_heavy_success" | "inefficient" | "needs_review";
 export type Metadata = Record<string, string>;
 
 export interface AuthUser {
@@ -105,7 +107,7 @@ export interface WorkspaceState {
 
 export interface RunResult {
   execution_id: string;
-  status: "passed" | "failed" | "runtime_error";
+  status: ExecutionStatus;
   stdout: string;
   stderr: string | null;
   test_results: Array<{
@@ -161,9 +163,32 @@ export interface ReportListItem {
   completion_count: number;
   participant_count: number;
   ai_interactions: number;
+  total_ai_tokens: number;
+}
+
+export interface AiTaskTokenTotal {
+  question_id: string;
+  task_title: string;
+  task_type: string;
+  interaction_count: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+}
+
+export interface AiUsageSummary {
+  total_interactions: number;
+  total_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  average_tokens_per_interaction: number;
+  token_efficiency_indicator: TokenEfficiencyIndicator;
+  main_semantic_tags: string[];
+  per_task_token_totals: AiTaskTokenTotal[];
 }
 
 export interface AggregateReport extends ReportListItem {
+  ai_usage_summary: AiUsageSummary;
   score_distribution: Array<{ range: string; count: number }>;
   students: Array<{
     user_id: string;
@@ -174,13 +199,6 @@ export interface AggregateReport extends ReportListItem {
     score: number;
     max_score: number;
     submitted_at: string;
-    ai_usage_summary: {
-      total_interactions: number;
-      total_tokens: number;
-      total_input_tokens: number;
-      total_output_tokens: number;
-      average_tokens_per_interaction: number;
-      main_semantic_tags: string[];
-    };
+    ai_usage_summary: AiUsageSummary;
   }>;
 }

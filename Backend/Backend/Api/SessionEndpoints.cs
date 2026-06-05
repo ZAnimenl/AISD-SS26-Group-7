@@ -42,6 +42,12 @@ public static class SessionEndpoints
             return error;
         }
 
+        var student = user!;
+        await using var attemptLock = await DatabaseAdvisoryLocks.AcquireSessionLockAsync(
+            dbContext,
+            DatabaseAdvisoryLocks.GetAssessmentAttemptKey(assessmentId, student.Id),
+            cancellationToken);
+
         var assessment = await dbContext.Assessments
             .Include(item => item.Questions)
             .FirstOrDefaultAsync(item => item.Id == assessmentId, cancellationToken);
@@ -56,11 +62,26 @@ public static class SessionEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
+        var expiredSessions = await dbContext.AssessmentSessions
+            .Where(item => item.AssessmentId == assessmentId
+                           && item.UserId == student.Id
+                           && item.Status == SessionStatuses.Active
+                           && item.ExpiresAt <= now)
+            .ToListAsync(cancellationToken);
+        foreach (var expiredSession in expiredSessions)
+        {
+            expiredSession.Status = SessionStatuses.Expired;
+        }
+
+        if (expiredSessions.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         var session = await dbContext.AssessmentSessions
-            .Include(item => item.WorkspaceStates)
             .FirstOrDefaultAsync(
                 item => item.AssessmentId == assessmentId
-                        && item.UserId == user!.Id
+                        && item.UserId == student.Id
                         && item.Status == SessionStatuses.Active
                         && item.ExpiresAt > now,
                 cancellationToken);
@@ -71,16 +92,23 @@ public static class SessionEndpoints
             {
                 Id = Guid.NewGuid(),
                 AssessmentId = assessment.Id,
-                UserId = user!.Id,
+                UserId = student.Id,
                 Status = SessionStatuses.Active,
                 StartedAt = now,
                 ExpiresAt = now.AddMinutes(assessment.DurationMinutes)
             };
             dbContext.AssessmentSessions.Add(session);
+            dbContext.WorkspaceQuestionStates.AddRange(CreateMissingWorkspaceStates(
+                session.Id,
+                assessment.Questions,
+                new HashSet<Guid>(),
+                now));
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-
-        await EnsureWorkspaceAsync(dbContext, session, assessment, now, cancellationToken);
+        else
+        {
+            await EnsureWorkspaceAsync(dbContext, session, assessment, now, cancellationToken);
+        }
 
         return ApiResults.Success(ToAttemptDto(session, now));
     }
@@ -129,7 +157,31 @@ public static class SessionEndpoints
             .Select(state => state.QuestionId)
             .ToListAsync(cancellationToken);
 
-        foreach (var question in assessment.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
+        var missingWorkspaceStates = CreateMissingWorkspaceStates(
+            session.Id,
+            assessment.Questions,
+            existingQuestionIds.ToHashSet(),
+            now);
+        if (missingWorkspaceStates.Count == 0)
+        {
+            return;
+        }
+
+        dbContext.WorkspaceQuestionStates.AddRange(missingWorkspaceStates);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    internal static IReadOnlyList<WorkspaceQuestionState> CreateMissingWorkspaceStates(
+        Guid sessionId,
+        IEnumerable<Question> questions,
+        IReadOnlySet<Guid> existingQuestionIds,
+        DateTimeOffset now)
+    {
+        var workspaceStates = new List<WorkspaceQuestionState>();
+        foreach (var question in questions
+                     .Where(question => !existingQuestionIds.Contains(question.Id))
+                     .OrderBy(question => question.SortOrder)
+                     .ThenBy(question => question.Id))
         {
             var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
             var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
@@ -143,10 +195,10 @@ public static class SessionEndpoints
                 workspaceFiles[firstFile] = new WorkspaceFileDto(language, string.Empty);
             }
 
-            dbContext.WorkspaceQuestionStates.Add(new WorkspaceQuestionState
+            workspaceStates.Add(new WorkspaceQuestionState
             {
                 Id = Guid.NewGuid(),
-                SessionId = session.Id,
+                SessionId = sessionId,
                 QuestionId = question.Id,
                 SelectedLanguage = language,
                 ActiveFile = firstFile,
@@ -156,7 +208,7 @@ public static class SessionEndpoints
             });
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        return workspaceStates;
     }
 
     private static string GetActiveFile(string language)

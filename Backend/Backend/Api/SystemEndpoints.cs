@@ -17,12 +17,14 @@ public static class SystemEndpoints
             features = new
             {
                 registration_enabled = true,
+                embedded_ai_agent_enabled = true,
                 ai_chat_enabled = true,
                 ai_inline_completion_enabled = false,
+                token_tracking_enabled = true,
                 multi_file_workspace_enabled = false,
                 real_sandbox_enabled = true
             },
-            supported_languages = new[] { "python", "javascript", "typescript" },
+            supported_languages = new[] { "python", "javascript" },
             auth_method = "bearer_token",
             roles = new[] { "student", "administrator" }
         }));

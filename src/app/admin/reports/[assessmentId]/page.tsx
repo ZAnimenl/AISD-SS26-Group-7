@@ -5,7 +5,19 @@ import { useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAggregateReport, isAuthenticationError } from "@/lib/api";
-import type { AggregateReport } from "@/lib/types";
+import type { AggregateReport, TokenEfficiencyIndicator } from "@/lib/types";
+
+const EFFICIENCY_LABELS: Record<TokenEfficiencyIndicator, string> = {
+  no_ai_usage: "No AI usage",
+  strategic: "Strategic",
+  token_heavy_success: "Token-heavy success",
+  inefficient: "Inefficient",
+  needs_review: "Needs review"
+};
+
+function formatEfficiency(value: TokenEfficiencyIndicator) {
+  return EFFICIENCY_LABELS[value] ?? "Needs review";
+}
 
 export default function ReportDetailPage({ params }: { params: { assessmentId: string } }) {
   const router = useRouter();
@@ -43,6 +55,15 @@ export default function ReportDetailPage({ params }: { params: { assessmentId: s
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-cyanGlow">{report.average_score}%</p><p className="text-sm text-white/45">Average score</p></div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-purpleGlow">{report.completion_count}/{report.participant_count}</p><p className="text-sm text-white/45">Completed</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-cyanGlow">{report.ai_usage_summary.total_tokens.toLocaleString()}</p><p className="text-sm text-white/45">AI tokens</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-purpleGlow">{report.ai_usage_summary.average_tokens_per_interaction}</p><p className="text-sm text-white/45">Avg tokens / interaction</p></div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.14em] text-white/35">Assessment token efficiency</p>
+              <p className="mt-2 text-lg font-semibold text-cyanGlow">{formatEfficiency(report.ai_usage_summary.token_efficiency_indicator)}</p>
+              <p className="mt-1 text-sm text-white/45">
+                {report.ai_usage_summary.total_interactions} interactions across {report.ai_usage_summary.per_task_token_totals.length} tasks
+              </p>
             </div>
             <h3 className="mt-6 text-sm font-semibold text-white/80">Score distribution</h3>
             <div className="mt-3 space-y-3">
@@ -59,7 +80,7 @@ export default function ReportDetailPage({ params }: { params: { assessmentId: s
           <div className="relative overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="text-xs uppercase tracking-[0.14em] text-white/35">
-                <tr><th className="pb-3">Student</th><th className="pb-3">Status</th><th className="pb-3">Submission</th><th className="pb-3">Score</th><th className="pb-3">AI usage</th></tr>
+                <tr><th className="pb-3">Student</th><th className="pb-3">Status</th><th className="pb-3">Submission</th><th className="pb-3">Score</th><th className="pb-3">AI usage</th><th className="pb-3">Per-task tokens</th></tr>
               </thead>
               <tbody className="divide-y divide-white/10">
                 {report.students.map((student) => (
@@ -68,7 +89,20 @@ export default function ReportDetailPage({ params }: { params: { assessmentId: s
                     <td className="py-4"><StatusBadge status={student.attempt_status} /></td>
                     <td className="py-4"><StatusBadge status={student.submission_status} /></td>
                     <td className="py-4 text-cyanGlow">{student.score}/{student.max_score}</td>
-                    <td className="py-4 text-white/55">{student.ai_usage_summary.total_interactions} interactions · {student.ai_usage_summary.main_semantic_tags.join(", ")}</td>
+                    <td className="py-4 text-white/55">
+                      <p>{student.ai_usage_summary.total_interactions} interactions · {student.ai_usage_summary.total_tokens.toLocaleString()} tokens</p>
+                      <p className="mt-1 text-xs text-cyanGlow">{formatEfficiency(student.ai_usage_summary.token_efficiency_indicator)}</p>
+                      <p className="mt-1 text-xs text-white/35">{student.ai_usage_summary.main_semantic_tags.join(", ") || "No semantic tags"}</p>
+                    </td>
+                    <td className="py-4 text-xs text-white/45">
+                      <div className="space-y-1">
+                        {student.ai_usage_summary.per_task_token_totals.length ? student.ai_usage_summary.per_task_token_totals.map((task) => (
+                          <p key={task.question_id} className="max-w-[220px] truncate" title={`${task.task_title}: ${task.total_tokens} tokens`}>
+                            {task.task_title}: {task.total_tokens.toLocaleString()}
+                          </p>
+                        )) : <p>No per-task usage</p>}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -4,7 +4,10 @@ public sealed record AiGenerationContext(
     string InteractionType,
     string Message,
     string SelectedLanguage,
-    string ActiveFileContent);
+    string ActiveFileContent,
+    string TaskTitle,
+    string TaskDescriptionMarkdown,
+    string[] VisibleStarterFileNames);
 
 public sealed record AiProviderResult(
     string ResponseMarkdown,

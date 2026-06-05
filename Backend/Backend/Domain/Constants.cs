@@ -10,9 +10,14 @@ public static class AssessmentStatuses
 
 public static class ExecutionStatuses
 {
+    public const string Queued = "queued";
+    public const string Running = "running";
     public const string Passed = "passed";
     public const string Failed = "failed";
     public const string RuntimeError = "runtime_error";
+    public const string TimeLimitExceeded = "time_limit_exceeded";
+    public const string MemoryLimitExceeded = "memory_limit_exceeded";
+    public const string InternalError = "internal_error";
 }
 
 public static class SessionStatuses

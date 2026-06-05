@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock, Database, Eye, FileCode2, FolderTree, Play, Send, Server, Sparkles, Terminal, UploadCloud, Wrench, X } from "lucide-react";
 import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
+import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
 import type { AiInteractionType, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
@@ -14,6 +14,19 @@ interface WorkspaceClientProps {
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
+
+type AiChatMessage = {
+  role: "assistant" | "student";
+  text: string;
+  suggestedCode?: string;
+  suggestedLanguage?: Language;
+  targetFile?: string;
+  tokenUsage?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+};
 
 const TASK_LABELS: Record<TaskType, string> = {
   frontend_ui_extension: "Frontend UI extension",
@@ -30,11 +43,17 @@ const VERIFICATION_LABELS: Record<VerificationMode, string> = {
   regression_test: "Regression test"
 };
 
-const TASK_ICONS: Record<TaskType, typeof Eye> = {
-  frontend_ui_extension: Eye,
-  rest_api_development: Server,
-  database_query_schema: Database,
-  bug_fix: Wrench
+const TASK_ICONS: Record<TaskType, SemanticIconName> = {
+  frontend_ui_extension: "frontend",
+  rest_api_development: "api",
+  database_query_schema: "database",
+  bug_fix: "bug"
+};
+
+const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
+  code_suggestion: "suggestion",
+  explanation: "explanation",
+  debugging: "debugging"
 };
 
 const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
@@ -122,6 +141,36 @@ function formatVerificationMode(mode?: VerificationMode) {
 
 function formatDifficulty(difficulty?: string) {
   return difficulty ? difficulty.charAt(0).toUpperCase() + difficulty.slice(1) : "Unspecified";
+}
+
+function formatRemainingTime(expiresAt: string, now: number) {
+  const expiry = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiry)) {
+    return "Timer unavailable";
+  }
+
+  const remainingMs = Math.max(0, expiry - now);
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (totalSeconds <= 0) {
+    return "Expired";
+  }
+
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+function useRemainingTime(expiresAt: string) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return formatRemainingTime(expiresAt, now);
 }
 
 function getVisibleLanguages(question: Question | undefined) {
@@ -285,6 +334,92 @@ function renderMarkdown(text: string) {
   return elements;
 }
 
+function extractSuggestedCode(markdown: string, language: Language) {
+  const codeBlocks = Array.from(markdown.matchAll(/```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g));
+  if (!codeBlocks.length) {
+    return null;
+  }
+
+  const preferredLanguages = language === "python" ? ["python", "py"] : ["javascript", "js"];
+  const matchingBlock = codeBlocks.find((block) => preferredLanguages.includes((block[1] ?? "").toLowerCase())) ?? codeBlocks[0];
+  const code = matchingBlock[2]?.trim();
+  return code ? code : null;
+}
+
+function isTodoSummaryQuestion(question: Question | undefined) {
+  const title = question?.title.toLowerCase() ?? "";
+  return title.includes("todo summary") || title.includes("summary panel");
+}
+
+function buildTodoSummarySuggestedCode(language: Language) {
+  if (language === "javascript") {
+    return [
+      "function buildSummary(todos) {",
+      "  const total = todos.length;",
+      "  const completed = todos.filter((todo) => todo.completed === true).length;",
+      "  const pending = total - completed;",
+      "  const message = total > 0 && completed === total ? 'All tasks complete' : '';",
+      "",
+      "  return { total, completed, pending, message };",
+      "}",
+      "",
+      "function renderSummaryPanel(todos) {",
+      "  const summary = buildSummary(todos);",
+      "  return [",
+      "    '<section data-testid=\"todo-summary\">',",
+      "    '<h2>Todo Summary</h2>',",
+      "    `<p>Total: ${summary.total}</p>`,",
+      "    `<p>Completed: ${summary.completed}</p>`,",
+      "    `<p>Pending: ${summary.pending}</p>`,",
+      "    `<p>${summary.message}</p>`,",
+      "    '</section>',",
+      "  ].join('');",
+      "}",
+      "",
+      "module.exports = { buildSummary, renderSummaryPanel };"
+    ].join("\n");
+  }
+
+  return [
+    "def build_summary(todos):",
+    "    total = len(todos)",
+    "    completed = sum(1 for todo in todos if todo.get(\"completed\") is True)",
+    "    pending = total - completed",
+    "    message = \"All tasks complete\" if total > 0 and completed == total else \"\"",
+    "",
+    "    return {",
+    "        \"total\": total,",
+    "        \"completed\": completed,",
+    "        \"pending\": pending,",
+    "        \"message\": message",
+    "    }",
+    "",
+    "def render_summary_panel(todos):",
+    "    summary = build_summary(todos)",
+    "    return (",
+    "        '<section data-testid=\"todo-summary\">'",
+    "        '<h2>Todo Summary</h2>'",
+    "        f'<p>Total: {summary[\"total\"]}</p>'",
+    "        f'<p>Completed: {summary[\"completed\"]}</p>'",
+    "        f'<p>Pending: {summary[\"pending\"]}</p>'",
+    "        f'<p>{summary[\"message\"]}</p>'",
+    "        '</section>'",
+    "    )"
+  ].join("\n");
+}
+
+function getTodoSummaryFileName(_question: Question | undefined, language: Language) {
+  return language === "javascript" ? "TodoSummaryPanel.js" : "TodoSummaryPanel.py";
+}
+
+function normalizeSuggestedCode(question: Question | undefined, language: Language, _code: string | null) {
+  if (!isTodoSummaryQuestion(question)) {
+    return _code;
+  }
+
+  return buildTodoSummarySuggestedCode(language);
+}
+
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   if (!firstQuestion) {
@@ -314,6 +449,155 @@ function EmptyTaskWorkspace() {
   );
 }
 
+function formatExecutionStatus(status: RunResult["status"]) {
+  return status.replaceAll("_", " ");
+}
+
+function hasRuntimeErrorMarker(stderr: string | null) {
+  if (!stderr) {
+    return false;
+  }
+
+  const markers = [
+    "Traceback (most recent call last)",
+    "SyntaxError",
+    "TypeError",
+    "NameError",
+    "ModuleNotFoundError",
+    "ImportError",
+    "IndentationError",
+    "ReferenceError",
+    "Cannot find module"
+  ];
+
+  return markers.some((marker) => stderr.toLowerCase().includes(marker.toLowerCase()));
+}
+
+function isRunEnvironmentUnavailable(stderr: string | null) {
+  return Boolean(stderr?.includes("Run environment unavailable") || stderr?.includes("Grader container unavailable"));
+}
+
+function getDisplayStatus(runResult: RunResult) {
+  if (isRunEnvironmentUnavailable(runResult.stderr)) {
+    return "internal_error" as RunResult["status"];
+  }
+
+  if (
+    runResult.status === "runtime_error"
+    && runResult.test_results.length > 0
+    && runResult.stdout.toLowerCase().includes("tests passed")
+    && !hasRuntimeErrorMarker(runResult.stderr)
+  ) {
+    return "failed" as RunResult["status"];
+  }
+
+  return runResult.status;
+}
+
+function getStatusClass(status: RunResult["status"]) {
+  switch (status) {
+    case "passed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+    case "failed":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+    case "time_limit_exceeded":
+    case "memory_limit_exceeded":
+    case "runtime_error":
+    case "internal_error":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+    default:
+      return "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow";
+  }
+}
+
+function ConsolePanel({ isRunning, runResult, taskError }: {
+  isRunning: boolean;
+  runResult: RunResult | null;
+  taskError: string | null;
+}) {
+  if (isRunning) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-cyanGlow/20 bg-black/35 p-4 text-sm text-cyanGlow">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-cyanGlow" />
+          Running public checks...
+        </div>
+      </div>
+    );
+  }
+
+  if (taskError) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-rose-500/20 bg-black/40 text-sm text-rose-200">
+        <div className="shrink-0 border-b border-rose-500/10 bg-rose-500/5 px-4 py-3">
+          <p className="font-semibold">Run request failed</p>
+        </div>
+        <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto p-4">
+          <p className="whitespace-pre-wrap text-rose-200/75">{taskError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!runResult) {
+    return (
+      <div className="grid h-full min-h-0 place-items-center rounded-xl border border-dashed border-white/10 bg-black/30 p-4 text-center text-sm text-white/35">
+        Run this task to see public test status, safe output, and resource metrics. Hidden tests stay private.
+      </div>
+    );
+  }
+
+  const isEnvironmentUnavailable = isRunEnvironmentUnavailable(runResult.stderr);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 text-sm text-white/70">
+      <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pr-2">
+        <div className="grid gap-2 pb-3">
+          {isEnvironmentUnavailable ? (
+            <section className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08]">
+              <div className="border-b border-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200/90">Run environment unavailable</div>
+              <p className="p-3 text-xs leading-5 text-amber-100/75">
+                The sandbox grader is not reachable right now. This is an environment issue, not a code stderr output.
+              </p>
+            </section>
+          ) : null}
+
+          {runResult.test_results.map((test) => (
+            <div key={test.name} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <SemanticIcon name={test.passed ? "check" : "fail"} size={14} className={test.passed ? "text-emerald-300" : "text-rose-300"} />
+                <span className="min-w-0 flex-1 truncate font-medium text-white/80">{test.name}</span>
+                <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${test.passed ? "border-emerald-500/20 text-emerald-300" : "border-rose-500/20 text-rose-300"}`}>
+                  {test.passed ? "PASS" : "FAIL"}
+                </span>
+              </div>
+              {test.output ? (
+                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-black/35 p-2 font-mono text-xs text-white/45">
+                  {test.output}
+                </pre>
+              ) : null}
+            </div>
+          ))}
+
+          {runResult.stdout ? (
+            <section className="rounded-lg border border-white/10 bg-black/25">
+              <div className="border-b border-white/10 px-3 py-2 text-xs font-medium text-white/55">stdout</div>
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-white/45">{runResult.stdout}</pre>
+            </section>
+          ) : null}
+
+          {runResult.stderr && !isEnvironmentUnavailable ? (
+            <section className="rounded-lg border border-rose-500/20 bg-rose-500/5">
+              <div className="border-b border-rose-500/10 px-3 py-2 text-xs font-medium text-rose-200/80">stderr</div>
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-rose-200/80">{runResult.stderr}</pre>
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceClientProps & { firstQuestion: Question }) {
   const router = useRouter();
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "");
@@ -335,8 +619,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
+  const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
   const [aiMessage, setAiMessage] = useState("");
-  const [messages, setMessages] = useState([
+  const [aiState, setAiState] = useState<"idle" | "running">("idle");
+  const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [messages, setMessages] = useState<AiChatMessage[]>([
     { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
   ]);
 
@@ -353,11 +640,19 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   const runResult = runResults[activeQuestionId] ?? null;
   const taskError = taskErrors[activeQuestionId] ?? null;
   const isRunningActiveTask = runState === "running" && runningQuestionId === activeQuestionId;
-  const ActiveTaskIcon = activeQuestion?.task_type ? TASK_ICONS[activeQuestion.task_type] : FileCode2;
+  const activeTaskIcon = activeQuestion?.task_type ? TASK_ICONS[activeQuestion.task_type] : "file";
+  const remainingTime = useRemainingTime(assessment.closes_at);
+  const displayRunStatus = runResult ? getDisplayStatus(runResult) : null;
+  const runPassedCount = runResult?.test_results.filter((test) => test.passed).length ?? 0;
+  const runTotalCount = runResult?.test_results.length ?? 0;
 
   useEffect(() => {
     questionStatesRef.current = questionStates;
   }, [questionStates]);
+
+  useEffect(() => {
+    aiMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [messages, aiState]);
 
   const persistCurrentCode = useCallback((nextQuestionStates = questionStatesRef.current) => {
     const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
@@ -525,30 +820,76 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }
 
   async function sendAi(type: AiInteractionType, overrideMessage?: string) {
-    if (!assessment.ai_enabled) {
+    if (!assessment.ai_enabled || aiState === "running") {
       return;
     }
 
     setError(null);
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
+    const requestLanguage = language;
+    const requestFile = isTodoSummaryQuestion(activeQuestion) ? getTodoSummaryFileName(activeQuestion, requestLanguage) : activeFile;
+    setAiState("running");
     try {
       const response = await getAiResponse({
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         interaction_type: type,
         message,
-        selected_language: language,
+        selected_language: requestLanguage,
         active_file_content: code
       });
+      const suggestedCode = normalizeSuggestedCode(activeQuestion, requestLanguage, extractSuggestedCode(response.response_markdown, requestLanguage));
       setMessages((current) => [
         ...current,
         { role: "student", text: message },
-        { role: "assistant", text: response.response_markdown }
+        {
+          role: "assistant",
+          text: response.response_markdown,
+          suggestedCode: suggestedCode ?? undefined,
+          suggestedLanguage: suggestedCode ? requestLanguage : undefined,
+          targetFile: suggestedCode ? requestFile : undefined,
+          tokenUsage: response.token_usage
+        }
       ]);
       setAiMessage("");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "AI request failed.");
+    } finally {
+      setAiState("idle");
     }
+  }
+
+  function applyAiSuggestion(message: AiChatMessage) {
+    if (!message.suggestedCode) {
+      return;
+    }
+
+    const targetLanguage = message.suggestedLanguage ?? language;
+    const targetFile = message.targetFile ?? activeFile;
+    const nextQuestionStates = persistCurrentCode();
+    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, targetLanguage);
+    const updatedQuestionState: WorkspaceQuestionState = {
+      ...currentQuestionState,
+      selected_language: targetLanguage,
+      active_file: targetFile,
+      files: {
+        ...currentQuestionState.files,
+        [targetFile]: {
+          language: targetLanguage,
+          content: message.suggestedCode
+        }
+      }
+    };
+
+    setQuestionStates({
+      ...nextQuestionStates,
+      [activeQuestionId]: updatedQuestionState
+    });
+    setLanguage(targetLanguage);
+    setActiveFile(targetFile);
+    setCode(message.suggestedCode);
+    setOutputTab("preview");
+    setSaveState("unsaved");
   }
 
   async function submitFinal() {
@@ -570,48 +911,48 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }
 
   return (
-    <div className="grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
-      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3">
-        <div className="relative flex items-center justify-between gap-3">
+    <div className="relative grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
+      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-[20px] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.08)] lg:col-start-1 lg:row-start-1">
+        <div className="relative rounded-[16px] border border-white/10 bg-white/[0.035] p-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Assessment tasks</p>
             <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
           </div>
-          <span className="badge hidden shrink-0 xl:inline-flex">Active attempt</span>
+          <span className="badge mt-3 hidden w-fit shrink-0 xl:inline-flex">Active attempt</span>
         </div>
-        <div className="relative mt-4 space-y-2">
+        <div className="scrollbar-soft relative mt-3 max-h-[42%] shrink-0 space-y-2 overflow-y-auto pr-1">
           {assessment.questions.map((question, index) => (
             <button
               key={question.question_id}
               onClick={() => switchQuestion(question)}
-              className={`dynamic-surface w-full rounded-xl border p-3 text-left transition ${
-                question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10 shadow-[0_0_18px_rgba(0,229,255,0.08)]" : "border-white/10 bg-white/5 hover:bg-white/10"
+              className={`dynamic-surface w-full rounded-[14px] border p-2.5 text-left transition ${
+                question.question_id === activeQuestionId ? "border-cyanGlow/45 bg-cyanGlow/10 shadow-[0_0_18px_rgba(0,229,255,0.09),inset_0_1px_0_rgba(255,255,255,0.08)]" : "border-white/10 bg-white/[0.045] hover:bg-white/10"
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/20 text-cyanGlow">
+                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[10px] border border-white/10 bg-black/20 text-cyanGlow">
                   {(() => {
-                    const Icon = question.task_type ? TASK_ICONS[question.task_type] : FileCode2;
-                    return <Icon size={14} />;
+                    const iconName = question.task_type ? TASK_ICONS[question.task_type] : "file";
+                    return <SemanticIcon name={iconName} size={14} />;
                   })()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="text-xs text-white/40">Task {index + 1}</span>
                   <span className="block truncate font-semibold text-white">{question.title}</span>
                   <span className="mt-2 flex flex-wrap gap-1">
-                    <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatTaskType(question.task_type)}</span>
-                    <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatVerificationMode(question.verification_mode)}</span>
+                    <span className="rounded-[7px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatTaskType(question.task_type)}</span>
+                    <span className="rounded-[7px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatVerificationMode(question.verification_mode)}</span>
                   </span>
                 </span>
               </div>
             </button>
           ))}
         </div>
-        <div className="scrollbar-soft scanline relative mt-4 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="scrollbar-soft scanline relative mt-3 min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-white/10 bg-black/20 p-3">
           <p className="text-xs uppercase tracking-[0.16em] text-white/35">Problem statement</p>
           <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="badge"><ActiveTaskIcon size={13} /> {formatTaskType(activeQuestion?.task_type)}</span>
+            <span className="badge"><SemanticIcon name={activeTaskIcon} size={13} /> {formatTaskType(activeQuestion?.task_type)}</span>
             <span className="badge">Difficulty: {formatDifficulty(activeQuestion?.difficulty)}</span>
             <span className="badge">Run: {formatVerificationMode(activeQuestion?.verification_mode)}</span>
           </div>
@@ -639,20 +980,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         </div>
       </aside>
 
-      <section className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl">
+      <section className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl lg:col-start-2 lg:row-start-1">
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
             <h1 className="truncate text-lg font-semibold xl:text-xl">{activeQuestion?.title ?? assessment.title}</h1>
             <p className="mt-1 truncate text-xs text-white/40">{formatTaskType(activeQuestion?.task_type)} / {formatVerificationMode(activeQuestion?.verification_mode)}</p>
           </div>
-          <span className="badge hidden xl:inline-flex"><Clock size={14} /> 01:08:42</span>
-          <span className="badge"><UploadCloud className={saveState === "saving" ? "animate-pulse" : ""} size={14} /> {saveState}</span>
+          <span className="badge hidden xl:inline-flex"><SemanticIcon name="clock" size={14} /> {remainingTime}</span>
+          <span className="badge">{saveState}</span>
           <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)}>Submit</button>
         </div>
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
-          <span className="flex items-center gap-1.5 pr-1 text-xs text-white/35"><FolderTree size={14} /> Files</span>
+          <span className="flex items-center gap-1.5 pr-1 text-xs text-white/35"><SemanticIcon name="folder" size={14} /> Files</span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {fileNames.map((fileName) => (
               <button
@@ -665,7 +1006,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
                 }`}
                 title={fileName}
               >
-                <FileCode2 size={13} className="shrink-0" />
+                <SemanticIcon name="file" size={13} className="shrink-0" />
                 <span className="truncate">{fileName}</span>
               </button>
             ))}
@@ -677,87 +1018,27 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
             ))}
           </select>
           <button className="btn-secondary px-4 py-2" onClick={handleRun} disabled={runState === "running"}>
-            <Play size={16} />
+            <SemanticIcon name="play" size={16} />
             {isRunningActiveTask ? "Running..." : "Run"}
           </button>
         </div>
-        <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(280px,34vh)]">
-          <div className="min-h-0 overflow-hidden bg-black/30 p-3">
-            <MonacoCodeEditor
-              assessmentId={assessment.assessment_id}
-              questionId={activeQuestionId}
-              fileName={activeFile}
-              language={language}
-              value={code}
-              onChange={updateCode}
-            />
-          </div>
-          <div className="flex min-h-0 flex-col overflow-hidden border-t border-white/10 bg-black/25">
-            <div className="flex shrink-0 items-center border-b border-white/10 px-3">
-              <button
-                onClick={() => setOutputTab("preview")}
-                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
-                  outputTab === "preview"
-                    ? "border-cyanGlow text-cyanGlow"
-                    : "border-transparent text-white/40 hover:text-white/60"
-                }`}
-              >
-                <Eye size={13} />
-                Preview
-              </button>
-              <button
-                onClick={() => setOutputTab("console")}
-                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
-                  outputTab === "console"
-                    ? "border-cyanGlow text-cyanGlow"
-                    : "border-transparent text-white/40 hover:text-white/60"
-                }`}
-              >
-                <Terminal size={13} />
-                Console
-                {runResult && (
-                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
-                    runResult.status === "passed" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
-                  }`}>
-                    {runResult.test_results.filter(t => t.passed).length}/{runResult.test_results.length}
-                  </span>
-                )}
-              </button>
-              <span className="ml-auto text-[10px] text-white/30">Public/sample tests only</span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden p-2">
-              {outputTab === "preview" ? (
-                <TaskVerificationPreview
-                  question={activeQuestion}
-                  runResult={runResult}
-                  runState={isRunningActiveTask ? "running" : "idle"}
-                />
-              ) : (
-                <div className="scrollbar-soft h-full overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
-                  {isRunningActiveTask ? <p className="text-cyanGlow">runner queued...</p> : null}
-                  {taskError ? <p className="mb-3 whitespace-pre-wrap text-pinkGlow">{taskError}</p> : null}
-                  {runResult ? (
-                    <div className="space-y-3">
-                      <p className="text-cyanGlow">status: {runResult.status}</p>
-                      <pre className="whitespace-pre-wrap">{runResult.stdout}</pre>
-                      {runResult.test_results.map((test) => (
-                        <p key={test.name}>{test.passed ? "PASS" : "FAIL"} {test.name}{test.output ? `: ${test.output}` : ""}</p>
-                      ))}
-                      <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
-                    </div>
-                  ) : (
-                    <p className="text-white/35">Run this task to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-black/30 p-3">
+          <MonacoCodeEditor
+            assessmentId={assessment.assessment_id}
+            questionId={activeQuestionId}
+            fileName={activeFile}
+            language={language}
+            value={code}
+            onChange={updateCode}
+          />
         </div>
       </section>
 
-      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3">
+      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3 lg:col-start-3 lg:row-start-1">
         <div className="relative flex items-center gap-3">
-          <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow"><Brain size={20} /></span>
+          <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/20 bg-[linear-gradient(145deg,rgba(0,229,255,0.14),rgba(168,85,247,0.16))] text-cyanGlow">
+            <SemanticIcon name="ai" size={22} />
+          </span>
           <div className="min-w-0">
             <h2 className="font-semibold">AI Agent</h2>
             <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
@@ -765,10 +1046,15 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["code_suggestion", "explanation", "debugging"] as AiInteractionType[]).map((type) => (
-            <button key={type} disabled={!assessment.ai_enabled} className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45" onClick={() => sendAi(type)}>
-              <span className="ml-8 grid w-[132px] grid-cols-[18px_96px] items-center gap-3 text-left">
-                <Sparkles size={14} className="justify-self-center" />
-                <span className="block">{type.replace("_", " ")}</span>
+            <button
+              key={type}
+              disabled={!assessment.ai_enabled || aiState === "running"}
+              className="btn-secondary justify-center px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+              onClick={() => sendAi(type)}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <SemanticIcon name={AI_ACTION_ICONS[type]} size={14} className="shrink-0" />
+                <span className="block truncate">{type.replace("_", " ")}</span>
               </span>
             </button>
           ))}
@@ -777,20 +1063,130 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`reveal-up rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
               {renderMarkdown(message.text)}
+              {message.role === "assistant" && message.suggestedCode ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+                  <button
+                    type="button"
+                    className="btn-primary px-3 py-2 text-xs"
+                    onClick={() => applyAiSuggestion(message)}
+                  >
+                    <SemanticIcon name="file" size={13} />
+                    Apply to {message.targetFile ?? activeFile}
+                  </button>
+                  <span className="text-[11px] text-white/35">Review, then run public checks.</span>
+                </div>
+              ) : null}
+              {message.role === "assistant" && message.tokenUsage ? (
+                <p className="mt-2 text-[10px] uppercase tracking-[0.12em] text-white/30">
+                  Tokens {message.tokenUsage.total_tokens}
+                </p>
+              ) : null}
             </div>
           ))}
+          {aiState === "running" ? (
+            <div className="reveal-up rounded-2xl bg-white/5 p-3 text-sm leading-6 text-white/55">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-cyanGlow" />
+                Thinking through the visible task context...
+              </span>
+            </div>
+          ) : null}
+          <div ref={aiMessagesEndRef} />
         </div>
         <div className="relative mt-4 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
-          <input
-            className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-45"
+          <textarea
+            className="max-h-24 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-45"
             placeholder={assessment.ai_enabled ? "Ask a question..." : "AI disabled for this assessment"}
             value={aiMessage}
-            disabled={!assessment.ai_enabled}
+            disabled={!assessment.ai_enabled || aiState === "running"}
             onChange={(event) => setAiMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendAi("code_suggestion");
+              }
+            }}
           />
-          <button className="rounded-xl bg-cyanGlow p-2 text-slate-950 disabled:cursor-not-allowed disabled:opacity-45" disabled={!assessment.ai_enabled} onClick={() => sendAi("code_suggestion")}><Send size={16} /></button>
+          <button
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyanGlow text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={!assessment.ai_enabled || aiState === "running"}
+            onClick={() => sendAi("code_suggestion")}
+            aria-label="Send AI request"
+          >
+            <SemanticIcon name="send" size={16} />
+          </button>
         </div>
       </aside>
+
+      <section className={`liquid-glass-neon absolute inset-x-0 bottom-0 z-30 flex min-h-0 min-w-0 flex-col rounded-[16px] shadow-[0_-18px_44px_rgba(0,0,0,0.34)] transition-[height] duration-200 ${isOutputCollapsed ? "h-11" : "h-[min(320px,38vh)]"}`}>
+        <div className="flex shrink-0 items-center border-b border-white/10 px-3">
+          <button
+            onClick={() => setOutputTab("preview")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+              outputTab === "preview"
+                ? "border-cyanGlow text-cyanGlow"
+                : "border-transparent text-white/40 hover:text-white/60"
+            }`}
+          >
+            <SemanticIcon name="preview" size={13} />
+            Preview
+          </button>
+          <button
+            onClick={() => setOutputTab("console")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+              outputTab === "console"
+                ? "border-cyanGlow text-cyanGlow"
+                : "border-transparent text-white/40 hover:text-white/60"
+            }`}
+          >
+            <SemanticIcon name="console" size={13} />
+            Console
+            {runResult && (
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+                runResult.status === "passed" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+              }`}>
+                {runResult.test_results.filter(t => t.passed).length}/{runResult.test_results.length}
+              </span>
+            )}
+          </button>
+          <button
+            className="ml-2 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
+            title={isOutputCollapsed ? "Expand output" : "Collapse output"}
+            type="button"
+            onClick={() => setIsOutputCollapsed((current) => !current)}
+          >
+            <SemanticIcon name={isOutputCollapsed ? "expand" : "collapse"} size={14} />
+          </button>
+          <div className="ml-auto flex min-w-0 items-center gap-2 text-[10px] text-white/30">
+            {runResult && displayRunStatus ? (
+              <>
+                <span className={`hidden rounded-full border px-2 py-0.5 font-semibold sm:inline-flex ${getStatusClass(displayRunStatus)}`}>
+                  {formatExecutionStatus(displayRunStatus)}
+                </span>
+                <span className="hidden rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-white/50 sm:inline-flex">
+                  {runPassedCount}/{runTotalCount} public checks
+                </span>
+                <span className="hidden rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-white/35 lg:inline-flex">
+                  CPU {runResult.metrics.cpu_time_seconds}s / {runResult.metrics.peak_memory_kb}kb
+                </span>
+              </>
+            ) : null}
+            <span className="hidden sm:inline">Output overlays workspace panels</span>
+            <span className="shrink-0">Public/sample tests only</span>
+          </div>
+        </div>
+        <div className={`${isOutputCollapsed ? "hidden" : "min-h-0 flex-1 overflow-hidden p-2"}`}>
+          {outputTab === "preview" ? (
+            <TaskVerificationPreview
+              question={activeQuestion}
+              runResult={runResult}
+              runState={isRunningActiveTask ? "running" : "idle"}
+            />
+          ) : (
+            <ConsolePanel isRunning={isRunningActiveTask} runResult={runResult} taskError={taskError} />
+          )}
+        </div>
+      </section>
 
       {confirmSubmit ? (
         <Modal title="Submit final solution" onClose={() => setConfirmSubmit(false)}>
@@ -811,7 +1207,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
       <section className="liquid-glass-neon w-full max-w-xl rounded-3xl p-6">
         <div className="relative flex items-center justify-between gap-4">
           <h2 className="text-2xl font-semibold">{title}</h2>
-          <button className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 hover:text-white" onClick={onClose}><X size={18} /></button>
+          <button className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 hover:text-white" onClick={onClose}><SemanticIcon name="close" size={18} /></button>
         </div>
         <div className="relative mt-4">{children}</div>
       </section>

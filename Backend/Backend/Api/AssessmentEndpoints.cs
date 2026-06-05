@@ -13,6 +13,7 @@ public static class AssessmentEndpoints
         api.MapGet("/admin/assessments", ListAdminAsync);
         api.MapPost("/admin/assessments", CreateAsync);
         api.MapPost("/admin/assessments/generate", GenerateAsync);
+        api.MapPost("/admin/assessments/{assessmentId:guid}/questions/generate", GenerateQuestionDraftAsync);
         api.MapGet("/admin/assessments/{assessmentId:guid}", GetAdminAsync);
         api.MapPut("/admin/assessments/{assessmentId:guid}", UpdateAsync);
         api.MapPost("/admin/assessments/{assessmentId:guid}/archive", ArchiveAsync);
@@ -79,6 +80,75 @@ public static class AssessmentEndpoints
         return ApiResults.Success(new { assessment_id = assessment.Id });
     }
 
+    private static async Task<IResult> GenerateQuestionDraftAsync(
+        Guid assessmentId,
+        GenerateQuestionDraftRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
+
+        var assessment = await dbContext.Assessments
+            .Include(item => item.Questions)
+            .ThenInclude(question => question.TestCases)
+            .FirstOrDefaultAsync(item => item.Id == assessmentId, cancellationToken);
+        if (assessment is null)
+        {
+            return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (assessment.Status != AssessmentStatuses.Draft)
+        {
+            return ApiResults.Error(
+                "DRAFT_REQUIRED",
+                "Generated task drafts can only be added while the assessment is in draft status.",
+                StatusCodes.Status409Conflict);
+        }
+
+        var taskType = NormalizeTaskType(request.TaskType);
+        var draft = CreateDefaultTodoTasks(assessment.Id, AuthoringSources.LlmGenerated)
+            .First(question => question.TaskType == taskType);
+        draft.SortOrder = assessment.Questions.Count == 0
+            ? 1
+            : assessment.Questions.Max(question => question.SortOrder) + 1;
+        draft.Difficulty = NormalizeDifficulty(request.Difficulty);
+        draft.StarterPrototypeReference = NormalizeOptionalText(request.StarterPrototypeReference)
+            ?? assessment.SharedPrototypeReference
+            ?? "todo-app";
+        draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages));
+        draft.TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["requirements"] = "REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j",
+            ["source"] = "llm_generated_task_draft",
+            ["generation_mode"] = "template_fallback",
+            ["review_status"] = "administrator_review_required"
+        });
+
+        foreach (var testCase in draft.TestCases)
+        {
+            testCase.AuthoringSource = AuthoringSources.LlmGenerated;
+            testCase.TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["requirements"] = "REQ-18g,REQ-18h,REQ-18i,REQ-52,REQ-53",
+                ["source"] = "llm_generated_test_draft",
+                ["review_status"] = "administrator_review_required"
+            });
+        }
+
+        dbContext.Questions.Add(draft);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(ToQuestionDto(draft));
+    }
+
     private static async Task<IResult> GenerateAsync(
         AssessmentRequest request,
         HttpContext httpContext,
@@ -101,7 +171,7 @@ public static class AssessmentEndpoints
             Title = request.Title,
             Description = request.Description,
             DurationMinutes = request.DurationMinutes,
-            Status = NormalizeAssessmentStatus(request.Status),
+            Status = AssessmentStatuses.Draft,
             AiEnabled = request.AiEnabled,
             SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference) ?? "todo-app",
             SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion) ?? "seed-v1",
@@ -310,7 +380,15 @@ public static class AssessmentEndpoints
 
                         def render_summary_panel(todos):
                             summary = build_summary(todos)
-                            return f"Todo Summary: {summary}"
+                            return (
+                                '<section data-testid="todo-summary">'
+                                '<h2>Todo Summary</h2>'
+                                f'<p>Total: {summary["total"]}</p>'
+                                f'<p>Completed: {summary["completed"]}</p>'
+                                f'<p>Pending: {summary["pending"]}</p>'
+                                f'<p>{summary["message"]}</p>'
+                                '</section>'
+                            )
                         """,
                         ["preview_data.py"] = """
                         sample_todos = [
@@ -328,7 +406,15 @@ public static class AssessmentEndpoints
 
                         function renderSummaryPanel(todos) {
                           const summary = buildSummary(todos);
-                          return `Todo Summary: ${JSON.stringify(summary)}`;
+                          return [
+                            '<section data-testid="todo-summary">',
+                            '<h2>Todo Summary</h2>',
+                            `<p>Total: ${summary.total}</p>`,
+                            `<p>Completed: ${summary.completed}</p>`,
+                            `<p>Pending: ${summary.pending}</p>`,
+                            `<p>${summary.message}</p>`,
+                            '</section>',
+                          ].join('');
                         }
 
                         module.exports = { buildSummary, renderSummaryPanel };
@@ -738,8 +824,67 @@ public static class AssessmentEndpoints
             : AssessmentStatuses.Draft;
     }
 
+    private static string NormalizeDifficulty(string? difficulty)
+    {
+        return difficulty switch
+        {
+            "easy" => "easy",
+            "medium" => "medium",
+            "hard" => "hard",
+            _ => "medium"
+        };
+    }
+
+    private static string[] NormalizeStudentLanguages(string[]? languages)
+    {
+        var normalizedLanguages = (languages ?? [])
+            .Select(AssessmentPolicy.NormalizeLanguage)
+            .Where(language => language is "python" or "javascript")
+            .Distinct()
+            .ToArray();
+
+        return normalizedLanguages.Length > 0 ? normalizedLanguages : ["python", "javascript"];
+    }
+
     private static string? NormalizeOptionalText(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static object ToQuestionDto(Question question)
+    {
+        return new
+        {
+            question_id = question.Id,
+            question.Title,
+            task_type = NormalizeTaskType(question.TaskType),
+            difficulty = question.Difficulty,
+            verification_mode = question.VerificationMode,
+            starter_prototype_reference = question.StarterPrototypeReference,
+            problem_description_markdown = question.ProblemDescriptionMarkdown,
+            language_constraints = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>()),
+            starter_code = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson),
+            starter_files_metadata = JsonDocumentSerializer.Deserialize(question.StarterFilesMetadataJson, new Dictionary<string, Dictionary<string, string>>()),
+            verification_metadata = JsonDocumentSerializer.Deserialize(question.VerificationMetadataJson, new Dictionary<string, string>()),
+            grading_configuration = JsonDocumentSerializer.Deserialize(question.GradingConfigurationJson, new Dictionary<string, string>()),
+            authoring_source = question.AuthoringSource,
+            traceability_metadata = JsonDocumentSerializer.Deserialize(question.TraceabilityMetadataJson, new Dictionary<string, string>()),
+            admin_notes = question.AdminNotes,
+            sort_order = question.SortOrder,
+            max_score = question.MaxScore,
+            admin_test_cases = question.TestCases
+                .OrderBy(testCase => testCase.Name)
+                .Select(testCase => new
+                {
+                    test_case_id = testCase.Id,
+                    testCase.Name,
+                    testCase.Visibility,
+                    test_code = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>()),
+                    authoring_source = testCase.AuthoringSource,
+                    public_metadata = JsonDocumentSerializer.Deserialize(testCase.PublicMetadataJson, new Dictionary<string, string>()),
+                    admin_metadata = JsonDocumentSerializer.Deserialize(testCase.AdminMetadataJson, new Dictionary<string, string>()),
+                    traceability_metadata = JsonDocumentSerializer.Deserialize(testCase.TraceabilityMetadataJson, new Dictionary<string, string>())
+                })
+        };
     }
 }
