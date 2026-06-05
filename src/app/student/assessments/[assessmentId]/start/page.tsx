@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Clock, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAssessment, startAssessment } from "@/lib/api";
+import { getAssessment, isAuthenticationError, startAssessment } from "@/lib/api";
 import type { Assessment } from "@/lib/types";
 
 export default function AssessmentStartPage({ params }: { params: { assessmentId: string } }) {
@@ -14,7 +14,14 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAssessment(params.assessmentId).then(setAssessment).catch(() => router.replace("/login"));
+    getAssessment(params.assessmentId).then(setAssessment).catch((exception) => {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(exception instanceof Error ? exception.message : "Unable to load assessment.");
+    });
   }, [params.assessmentId, router]);
 
   async function openWorkspace() {
@@ -23,8 +30,17 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
       await startAssessment(params.assessmentId);
       router.push(`/student/assessments/${params.assessmentId}/workspace`);
     } catch (exception) {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
       setError(exception instanceof Error ? exception.message : "Unable to start assessment.");
     }
+  }
+
+  if (error && !assessment) {
+    return <SectionHeader eyebrow="Start assessment" title={error} />;
   }
 
   if (!assessment) {

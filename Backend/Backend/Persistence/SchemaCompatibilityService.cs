@@ -7,6 +7,11 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
 {
     public async Task EnsureAsync(CancellationToken cancellationToken)
     {
+        await using var schemaLock = await DatabaseAdvisoryLocks.AcquireSessionLockAsync(
+            dbContext,
+            DatabaseAdvisoryLocks.SchemaCompatibility,
+            cancellationToken);
+
         await dbContext.Database.ExecuteSqlRawAsync(
             """
             DO $$

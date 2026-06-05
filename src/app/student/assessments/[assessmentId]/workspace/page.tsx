@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkspaceClient } from "@/components/workspace/WorkspaceClient";
-import { getWorkspace, getWorkspaceContext, startAssessment } from "@/lib/api";
+import { getWorkspace, getWorkspaceContext, isAuthenticationError, startAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Assessment, WorkspaceState } from "@/lib/types";
 
@@ -11,24 +11,33 @@ export default function WorkspacePage({ params }: { params: { assessmentId: stri
   const router = useRouter();
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
+      setError(null);
       try {
         await startAssessment(params.assessmentId);
-        const [nextAssessment, nextWorkspace] = await Promise.all([
-          getWorkspaceContext(params.assessmentId),
-          getWorkspace(params.assessmentId)
-        ]);
+        const nextAssessment = await getWorkspaceContext(params.assessmentId);
+        const nextWorkspace = await getWorkspace(params.assessmentId);
         setAssessment(nextAssessment);
         setWorkspace(nextWorkspace);
-      } catch {
-        router.replace("/login");
+      } catch (exception) {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load workspace.");
       }
     }
 
     load();
   }, [params.assessmentId, router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Workspace" title={error} />;
+  }
 
   if (!assessment || !workspace) {
     return <SectionHeader eyebrow="Workspace" title="Connecting to backend..." />;

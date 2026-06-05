@@ -34,6 +34,7 @@ const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
   : [API_BASE_URL];
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
+const API_BASE_KEY = "ojsharp.api.base_url";
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -126,23 +127,47 @@ export function isAuthenticationError(exception: unknown) {
 }
 
 async function fetchApi(path: string, init: RequestInit, headers: Headers) {
-  for (let index = 0; index < API_BASE_URLS.length; index += 1) {
-    const baseUrl = API_BASE_URLS[index];
+  const baseUrls = getApiBaseUrlOrder();
+
+  for (let index = 0; index < baseUrls.length; index += 1) {
+    const baseUrl = baseUrls[index];
 
     try {
-      return await fetch(`${baseUrl}${path}`, {
+      const response = await fetch(`${baseUrl}${path}`, {
         ...init,
         headers,
         cache: "no-store"
       });
+
+      rememberApiBaseUrl(baseUrl);
+      return response;
     } catch {
-      if (index === API_BASE_URLS.length - 1) {
+      if (index === baseUrls.length - 1) {
         throw new Error("Backend is unreachable. Please check that the backend server is running.");
       }
     }
   }
 
   throw new Error("Backend is unreachable. Please check that the backend server is running.");
+}
+
+function getApiBaseUrlOrder() {
+  if (typeof window === "undefined") {
+    return API_BASE_URLS;
+  }
+
+  const rememberedBaseUrl = window.localStorage.getItem(API_BASE_KEY);
+  if (!rememberedBaseUrl || !API_BASE_URLS.includes(rememberedBaseUrl)) {
+    return API_BASE_URLS;
+  }
+
+  return [rememberedBaseUrl, ...API_BASE_URLS.filter((baseUrl) => baseUrl !== rememberedBaseUrl)];
+}
+
+function rememberApiBaseUrl(baseUrl: string) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(API_BASE_KEY, baseUrl);
+  }
 }
 
 async function parseApiResponse<T>(response: Response): Promise<ParsedApiResponse<T>> {
@@ -289,6 +314,22 @@ export async function createAssessment(input: {
   shared_prototype_metadata?: Record<string, string>;
 }) {
   return apiRequest<{ assessment_id: string }>("/admin/assessments", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function generateAssessment(input: {
+  title: string;
+  description: string;
+  duration_minutes: number;
+  status: AssessmentStatus;
+  ai_enabled: boolean;
+  shared_prototype_reference?: string | null;
+  shared_prototype_version?: string | null;
+  shared_prototype_metadata?: Record<string, string>;
+}) {
+  return apiRequest<{ assessment_id: string }>("/admin/assessments/generate", {
     method: "POST",
     body: JSON.stringify(input)
   });

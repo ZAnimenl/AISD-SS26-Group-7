@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock, Eye, Play, Send, Sparkles, Terminal, UploadCloud, X } from "lucide-react";
-import { autosaveWorkspace, finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
+import { Brain, Clock, Database, Eye, FileCode2, FolderTree, Play, Send, Server, Sparkles, Terminal, UploadCloud, Wrench, X } from "lucide-react";
+import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
-import { ProductDashboardPreview } from "@/components/workspace/previews/ProductDashboardPreview";
-import type { AiInteractionType, Assessment, Language, Question, RunResult, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
+import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
+import type { AiInteractionType, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
@@ -14,6 +14,28 @@ interface WorkspaceClientProps {
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
+
+const TASK_LABELS: Record<TaskType, string> = {
+  frontend_ui_extension: "Frontend UI extension",
+  rest_api_development: "REST API development",
+  database_query_schema: "Database query/schema",
+  bug_fix: "Bug fix"
+};
+
+const VERIFICATION_LABELS: Record<VerificationMode, string> = {
+  browser_ui_preview: "Browser UI preview",
+  api_response_check: "API response check",
+  database_result_check: "Database result check",
+  automated_test: "Automated test",
+  regression_test: "Regression test"
+};
+
+const TASK_ICONS: Record<TaskType, typeof Eye> = {
+  frontend_ui_extension: Eye,
+  rest_api_development: Server,
+  database_query_schema: Database,
+  bug_fix: Wrench
+};
 
 const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "python", label: "Python" },
@@ -62,47 +84,6 @@ function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Q
   return starterFiles[targetFile] ?? "";
 }
 
-function buildRunFailureSummary(runResult: RunResult | null, error: string | null) {
-  if (error) {
-    return error;
-  }
-
-  if (!runResult) {
-    return null;
-  }
-
-  if (runResult.status === "runtime_error") {
-    return runResult.stderr ?? runResult.stdout ?? "Runtime error occurred during execution.";
-  }
-
-  if (runResult.status === "failed") {
-    const failingTests = runResult.test_results.filter((test) => !test.passed);
-    const failingSummary = failingTests.length
-      ? failingTests.map((test) => `${test.name}${test.output ? `: ${test.output}` : ""}`).join("; ")
-      : "The sample tests failed.";
-
-    return `${failingSummary}\n\nStdout: ${runResult.stdout || "(empty)"}${runResult.stderr ? `\nStderr: ${runResult.stderr}` : ""}`;
-  }
-
-  return null;
-}
-
-function buildDebugPrompt(runResult: RunResult | null, error: string | null) {
-  const summary = buildRunFailureSummary(runResult, error);
-  if (!summary) {
-    return "Please help me debug my current solution.";
-  }
-
-  return [
-    "I ran my current solution and need debugging help.",
-    "",
-    "Issue summary:",
-    summary,
-    "",
-    "Please point out the most likely cause and suggest a next step without giving away the full final answer."
-  ].join("\n");
-}
-
 function mergeQuestionStates(current: WorkspaceState["questions"], saved: WorkspaceState["questions"]) {
   return Object.entries(saved).reduce<WorkspaceState["questions"]>((nextStates, [questionId, savedState]) => ({
     ...nextStates,
@@ -129,6 +110,23 @@ function parseInlineCode(text: string) {
     }
     return part;
   });
+}
+
+function formatTaskType(taskType?: TaskType) {
+  return taskType ? TASK_LABELS[taskType] : "Practical task";
+}
+
+function formatVerificationMode(mode?: VerificationMode) {
+  return mode ? VERIFICATION_LABELS[mode] : "Automated check";
+}
+
+function formatDifficulty(difficulty?: string) {
+  return difficulty ? difficulty.charAt(0).toUpperCase() + difficulty.slice(1) : "Unspecified";
+}
+
+function getVisibleLanguages(question: Question | undefined) {
+  const constraints = question?.language_constraints?.filter((item): item is Language => item === "python" || item === "javascript") ?? [];
+  return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
 }
 
 function renderMarkdown(text: string) {
@@ -218,7 +216,7 @@ function renderMarkdown(text: string) {
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       elements.push(
         <div key={i} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
-          <span className="text-cyanGlow select-none mt-0.5">•</span>
+          <span className="text-cyanGlow select-none mt-0.5">-</span>
           <span>{parseBoldAndInlineCode(trimmed.slice(2))}</span>
         </div>
       );
@@ -288,21 +286,52 @@ function renderMarkdown(text: string) {
 }
 
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
-  const router = useRouter();
   const firstQuestion = assessment.questions[0];
-  const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "q-two-sum");
+  if (!firstQuestion) {
+    return <EmptyTaskWorkspace />;
+  }
+
+  return <WorkspaceWithTasks assessment={assessment} workspace={workspace} firstQuestion={firstQuestion} />;
+}
+
+function EmptyTaskWorkspace() {
+  return (
+    <div className="grid h-[calc(100vh-24px)] place-items-center p-6">
+      <section className="panel dynamic-surface max-w-2xl rounded-xl p-6">
+        <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Workspace unavailable</p>
+        <h1 className="mt-3 text-2xl font-semibold text-white">No assessment tasks were returned</h1>
+        <p className="mt-3 text-sm leading-6 text-white/60">
+          This assessment does not have any published tasks yet. Add tasks manually, or create a generated four-task
+          draft from the administrator assessment screen.
+        </p>
+        <div className="mt-5 grid gap-2 text-sm text-white/55 sm:grid-cols-2">
+          {Object.values(TASK_LABELS).map((label) => (
+            <div key={label} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">{label}</div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceClientProps & { firstQuestion: Question }) {
+  const router = useRouter();
+  const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "");
   const [questionStates, setQuestionStates] = useState(workspace.questions);
+  const questionStatesRef = useRef(workspace.questions);
   const activeQuestion = useMemo(
     () => assessment.questions.find((question) => question.question_id === activeQuestionId) ?? assessment.questions[0],
     [assessment.questions, activeQuestionId]
   );
-  const initialState = questionStates[activeQuestionId] ?? Object.values(questionStates)[0] ?? createQuestionState(activeQuestion);
+  const initialState = questionStates[activeQuestionId] ?? createQuestionState(activeQuestion);
   const [language, setLanguage] = useState<Language>(initialState?.selected_language ?? "python");
   const [activeFile, setActiveFile] = useState(initialState?.active_file ?? getFileNames(activeQuestion, language)[0]);
   const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState?.selected_language ?? "python", activeFile));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [runState, setRunState] = useState<"idle" | "running">("idle");
-  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
+  const [runResults, setRunResults] = useState<Record<string, RunResult | null>>({});
+  const [taskErrors, setTaskErrors] = useState<Record<string, string | null>>({});
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
@@ -313,11 +342,40 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
 
   const fileNames = useMemo(() => {
     const state = questionStates[activeQuestionId];
+    const starterFileNames = getFileNames(activeQuestion, language);
     if (state && Object.keys(state.files).length > 0) {
-      return Object.keys(state.files);
+      return Array.from(new Set([...Object.keys(state.files), ...starterFileNames]));
     }
-    return getFileNames(activeQuestion, language);
+    return starterFileNames;
   }, [questionStates, activeQuestionId, activeQuestion, language]);
+
+  const visibleLanguages = useMemo(() => getVisibleLanguages(activeQuestion), [activeQuestion]);
+  const runResult = runResults[activeQuestionId] ?? null;
+  const taskError = taskErrors[activeQuestionId] ?? null;
+  const isRunningActiveTask = runState === "running" && runningQuestionId === activeQuestionId;
+  const ActiveTaskIcon = activeQuestion?.task_type ? TASK_ICONS[activeQuestion.task_type] : FileCode2;
+
+  useEffect(() => {
+    questionStatesRef.current = questionStates;
+  }, [questionStates]);
+
+  const persistCurrentCode = useCallback((nextQuestionStates = questionStatesRef.current) => {
+    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
+    return {
+      ...nextQuestionStates,
+      [activeQuestionId]: {
+        ...currentQuestionState,
+        selected_language: language,
+        active_file: activeFile,
+        files: {
+          ...currentQuestionState.files,
+          [activeFile]: { language, content: code }
+        },
+        last_saved_at: currentQuestionState.last_saved_at ?? new Date().toISOString(),
+        version: currentQuestionState.version ?? 0
+      }
+    };
+  }, [activeFile, activeQuestion, activeQuestionId, code, language]);
 
   useEffect(() => {
     setSaveState("unsaved");
@@ -340,25 +398,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [activeQuestionId, assessment.assessment_id, code, language, activeFile]);
-
-  function persistCurrentCode(nextQuestionStates = questionStates) {
-    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
-    return {
-      ...nextQuestionStates,
-      [activeQuestionId]: {
-        ...currentQuestionState,
-        selected_language: language,
-        active_file: activeFile,
-        files: {
-          ...currentQuestionState.files,
-          [activeFile]: { language, content: code }
-        },
-        last_saved_at: currentQuestionState.last_saved_at ?? new Date().toISOString(),
-        version: currentQuestionState.version ?? 0
-      }
-    };
-  }
+  }, [activeQuestionId, assessment.assessment_id, persistCurrentCode]);
 
   function updateCode(nextCode: string) {
     setCode(nextCode);
@@ -437,6 +477,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     setLanguage(nextLanguage);
     setActiveFile(nextFile);
     setCode(getCodeFromState(nextState, question, nextLanguage, nextFile));
+    setError(null);
   }
 
   function getAllFiles(): Record<string, string> {
@@ -445,6 +486,9 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
     if (!qState) return { [activeFile]: code };
 
     const result: Record<string, string> = {};
+    for (const [fileName, content] of Object.entries(getStarterFiles(activeQuestion, language))) {
+      result[fileName] = content;
+    }
     for (const [fileName, fileData] of Object.entries(qState.files)) {
       if (fileData.language === language) {
         result[fileName] = fileData.content;
@@ -458,19 +502,25 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
 
   async function handleRun() {
     setRunState("running");
-    setRunResult(null);
+    setRunningQuestionId(activeQuestionId);
+    setRunResults((current) => ({ ...current, [activeQuestionId]: null }));
+    setTaskErrors((current) => ({ ...current, [activeQuestionId]: null }));
     setError(null);
     try {
-      setRunResult(await runCode({
+      const result = await runCode({
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
         selected_language: language,
         files: getAllFiles()
-      }));
+      });
+      setRunResults((current) => ({ ...current, [activeQuestionId]: result }));
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Run failed.");
+      const message = exception instanceof Error ? exception.message : "Run failed.";
+      setTaskErrors((current) => ({ ...current, [activeQuestionId]: message }));
+      setError(message);
     } finally {
       setRunState("idle");
+      setRunningQuestionId(null);
     }
   }
 
@@ -524,7 +574,7 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
       <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3">
         <div className="relative flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Question list</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Assessment tasks</p>
             <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
           </div>
           <span className="badge hidden shrink-0 xl:inline-flex">Active attempt</span>
@@ -538,14 +588,33 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                 question.question_id === activeQuestionId ? "border-cyanGlow/40 bg-cyanGlow/10 shadow-[0_0_18px_rgba(0,229,255,0.08)]" : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
             >
-              <p className="text-xs text-white/40">Question {index + 1}</p>
-              <p className="font-semibold text-white">{question.title}</p>
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/20 text-cyanGlow">
+                  {(() => {
+                    const Icon = question.task_type ? TASK_ICONS[question.task_type] : FileCode2;
+                    return <Icon size={14} />;
+                  })()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-xs text-white/40">Task {index + 1}</span>
+                  <span className="block truncate font-semibold text-white">{question.title}</span>
+                  <span className="mt-2 flex flex-wrap gap-1">
+                    <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatTaskType(question.task_type)}</span>
+                    <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatVerificationMode(question.verification_mode)}</span>
+                  </span>
+                </span>
+              </div>
             </button>
           ))}
         </div>
         <div className="scrollbar-soft scanline relative mt-4 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           <p className="text-xs uppercase tracking-[0.16em] text-white/35">Problem statement</p>
           <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="badge"><ActiveTaskIcon size={13} /> {formatTaskType(activeQuestion?.task_type)}</span>
+            <span className="badge">Difficulty: {formatDifficulty(activeQuestion?.difficulty)}</span>
+            <span className="badge">Run: {formatVerificationMode(activeQuestion?.verification_mode)}</span>
+          </div>
           <div className="mt-3 space-y-2">{renderMarkdown(activeQuestion?.problem_description_markdown ?? "")}</div>
           <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Constraints</h4>
           {activeQuestion?.constraints.length ? (
@@ -574,39 +643,45 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
-            <h1 className="truncate text-lg font-semibold xl:text-xl">{assessment.title}</h1>
+            <h1 className="truncate text-lg font-semibold xl:text-xl">{activeQuestion?.title ?? assessment.title}</h1>
+            <p className="mt-1 truncate text-xs text-white/40">{formatTaskType(activeQuestion?.task_type)} / {formatVerificationMode(activeQuestion?.verification_mode)}</p>
           </div>
           <span className="badge hidden xl:inline-flex"><Clock size={14} /> 01:08:42</span>
           <span className="badge"><UploadCloud className={saveState === "saving" ? "animate-pulse" : ""} size={14} /> {saveState}</span>
           <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)}>Submit</button>
         </div>
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
-        <div className="relative flex flex-wrap items-center gap-1 border-b border-white/10 px-3 py-2">
-          {fileNames.map((fileName) => (
-            <button
-              key={fileName}
-              onClick={() => switchFile(fileName)}
-              className={`rounded-t-lg border border-b-0 px-3 py-1.5 font-mono text-xs transition ${
-                fileName === activeFile
-                  ? "border-cyanGlow/30 bg-black/30 text-cyanGlow shadow-[0_-8px_24px_rgba(0,229,255,0.06)]"
-                  : "border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
-              }`}
-            >
-              {fileName}
-            </button>
-          ))}
+        <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
+          <span className="flex items-center gap-1.5 pr-1 text-xs text-white/35"><FolderTree size={14} /> Files</span>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {fileNames.map((fileName) => (
+              <button
+                key={fileName}
+                onClick={() => switchFile(fileName)}
+                className={`flex max-w-[220px] items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-xs transition ${
+                  fileName === activeFile
+                    ? "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow shadow-[0_0_18px_rgba(0,229,255,0.06)]"
+                    : "border-white/10 bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70"
+                }`}
+                title={fileName}
+              >
+                <FileCode2 size={13} className="shrink-0" />
+                <span className="truncate">{fileName}</span>
+              </button>
+            ))}
+          </div>
           <label className="ml-auto hidden text-xs text-white/40 xl:inline" htmlFor="language">Language</label>
           <select id="language" className="field py-2" value={language} onChange={(event) => switchLanguage(event.target.value as Language)}>
-            {STUDENT_LANGUAGES.map((option) => (
+            {STUDENT_LANGUAGES.filter((option) => visibleLanguages.includes(option.value)).map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
           <button className="btn-secondary px-4 py-2" onClick={handleRun} disabled={runState === "running"}>
             <Play size={16} />
-            {runState === "running" ? "Running..." : "Run"}
+            {isRunningActiveTask ? "Running..." : "Run"}
           </button>
         </div>
-        <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(220px,28vh)]">
+        <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(280px,34vh)]">
           <div className="min-h-0 overflow-hidden bg-black/30 p-3">
             <MonacoCodeEditor
               assessmentId={assessment.assessment_id}
@@ -652,10 +727,15 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
             </div>
             <div className="min-h-0 flex-1 overflow-hidden p-2">
               {outputTab === "preview" ? (
-                <ProductDashboardPreview runResult={runResult} runState={runState} />
+                <TaskVerificationPreview
+                  question={activeQuestion}
+                  runResult={runResult}
+                  runState={isRunningActiveTask ? "running" : "idle"}
+                />
               ) : (
                 <div className="scrollbar-soft h-full overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-white/70">
-                  {runState === "running" ? <p className="text-cyanGlow">runner queued...</p> : null}
+                  {isRunningActiveTask ? <p className="text-cyanGlow">runner queued...</p> : null}
+                  {taskError ? <p className="mb-3 whitespace-pre-wrap text-pinkGlow">{taskError}</p> : null}
                   {runResult ? (
                     <div className="space-y-3">
                       <p className="text-cyanGlow">status: {runResult.status}</p>
@@ -666,25 +746,11 @@ export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps)
                       <p className="text-white/40">cpu {runResult.metrics.cpu_time_seconds}s, memory {runResult.metrics.peak_memory_kb}kb</p>
                     </div>
                   ) : (
-                    <p className="text-white/35">Run code to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
+                    <p className="text-white/35">Run this task to see stdout, stderr, and public test results. Hidden tests are not shown here.</p>
                   )}
                 </div>
               )}
             </div>
-            {buildRunFailureSummary(runResult, error) ? (
-              <div className="shrink-0 border-t border-white/10 px-3 py-2">
-                <div className="rounded-xl border border-cyanGlow/20 bg-cyanGlow/5 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-cyanGlow/70">AI suggestion</p>
-                  <p className="mt-1 text-xs leading-5 text-white/65">
-                    The last run exposed a problem. Ask the assistant for a focused debugging hint.
-                  </p>
-                  <button className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => sendAi("debugging", buildDebugPrompt(runResult, error))}>
-                    <Sparkles size={14} />
-                    Ask AI to debug this run
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>

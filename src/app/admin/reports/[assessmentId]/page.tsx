@@ -4,16 +4,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAggregateReport } from "@/lib/api";
+import { getAggregateReport, isAuthenticationError } from "@/lib/api";
 import type { AggregateReport } from "@/lib/types";
 
 export default function ReportDetailPage({ params }: { params: { assessmentId: string } }) {
   const router = useRouter();
   const [report, setReport] = useState<AggregateReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAggregateReport(params.assessmentId).then(setReport).catch(() => router.replace("/login"));
+    getAggregateReport(params.assessmentId).then(setReport).catch((exception) => {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(exception instanceof Error ? exception.message : "Unable to load report.");
+    });
   }, [params.assessmentId, router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Report detail" title={error} />;
+  }
 
   if (!report) {
     return <SectionHeader eyebrow="Report detail" title="Connecting to backend..." />;
