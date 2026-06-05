@@ -80,6 +80,11 @@ static async Task SeedDatabaseAsync(WebApplication app)
     {
         await using var scope = app.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OjSharpDbContext>();
+        await using var initializationLock = await DatabaseAdvisoryLocks.AcquireSessionLockAsync(
+            dbContext,
+            DatabaseAdvisoryLocks.SchemaCompatibility,
+            CancellationToken.None);
+
         await dbContext.Database.EnsureCreatedAsync();
         await scope.ServiceProvider.GetRequiredService<SchemaCompatibilityService>().EnsureAsync(CancellationToken.None);
         await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);

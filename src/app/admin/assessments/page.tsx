@@ -6,16 +6,28 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { AdminAssessmentTable } from "@/components/admin/AdminAssessmentTable";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getAdminAssessments } from "@/lib/api";
+import { getAdminAssessments, isAuthenticationError } from "@/lib/api";
 import type { Assessment } from "@/lib/types";
 
 export default function AdminAssessmentsPage() {
   const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminAssessments().then(setAssessments).catch(() => router.replace("/login"));
+    getAdminAssessments().then(setAssessments).catch((exception) => {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(exception instanceof Error ? exception.message : "Unable to load assessments.");
+    });
   }, [router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Administrator" title={error} />;
+  }
 
   return (
     <div>

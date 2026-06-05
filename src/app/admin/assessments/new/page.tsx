@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createAssessment } from "@/lib/api";
+import { createAssessment, generateAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 
 export default function NewAssessmentPage() {
@@ -20,14 +20,19 @@ export default function NewAssessmentPage() {
           onSubmit={async (event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
+            const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+            const shouldGenerate = submitter?.value === "generate";
             setError(null);
             try {
-              await createAssessment({
+              const create = shouldGenerate ? generateAssessment : createAssessment;
+              await create({
                 title: String(form.get("title") ?? ""),
                 description: String(form.get("description") ?? ""),
                 duration_minutes: Number(form.get("duration_minutes") ?? 75),
                 status: String(form.get("status") ?? "draft") as any,
-                ai_enabled: form.get("ai_enabled") === "enabled"
+                ai_enabled: form.get("ai_enabled") === "enabled",
+                shared_prototype_reference: shouldGenerate ? "todo-app" : null,
+                shared_prototype_version: shouldGenerate ? "seed-v1" : null
               });
               setSaved(true);
             } catch (exception) {
@@ -44,10 +49,11 @@ export default function NewAssessmentPage() {
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-semibold">Questions will be added after creation</p>
-            <p className="mt-1 text-sm text-white/45">The assessment is saved through the backend API.</p>
+            <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. Generated draft creation adds the default four Todo tasks.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button className="btn-primary" type="submit">Save assessment</button>
+            <button className="btn-primary" type="submit" name="creation_mode" value="manual">Save assessment</button>
+            <button className="btn-secondary" type="submit" name="creation_mode" value="generate">Generate four-task draft</button>
             <Link className="btn-secondary" href="/admin/assessments">Back to list</Link>
             {saved ? <button className="btn-secondary" type="button" onClick={() => router.push("/admin/assessments")}>View list</button> : null}
             {saved ? <span className="text-sm text-cyanGlow">Saved in backend.</span> : null}

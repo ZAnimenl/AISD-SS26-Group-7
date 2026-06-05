@@ -5,16 +5,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getReportList } from "@/lib/api";
+import { getReportList, isAuthenticationError } from "@/lib/api";
 import type { ReportListItem } from "@/lib/types";
 
 export default function ReportsPage() {
   const router = useRouter();
   const [reports, setReports] = useState<ReportListItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getReportList().then(setReports).catch(() => router.replace("/login"));
+    getReportList().then(setReports).catch((exception) => {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(exception instanceof Error ? exception.message : "Unable to load reports.");
+    });
   }, [router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Administrator" title={error} />;
+  }
 
   return (
     <div>

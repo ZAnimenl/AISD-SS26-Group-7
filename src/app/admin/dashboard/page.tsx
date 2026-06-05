@@ -7,13 +7,14 @@ import { BarChart3, Brain, FileText, Send, Users } from "lucide-react";
 import { AdminAssessmentTable } from "@/components/admin/AdminAssessmentTable";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getAdminAssessments, getAdminDashboard } from "@/lib/api";
+import { getAdminAssessments, getAdminDashboard, isAuthenticationError } from "@/lib/api";
 import type { AdminDashboard, Assessment } from "@/lib/types";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -21,13 +22,22 @@ export default function AdminDashboardPage() {
         const [nextDashboard, nextAssessments] = await Promise.all([getAdminDashboard(), getAdminAssessments()]);
         setDashboard(nextDashboard);
         setAssessments(nextAssessments);
-      } catch {
-        router.replace("/login");
+      } catch (exception) {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load admin dashboard.");
       }
     }
 
     load();
   }, [router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Administrator" title={error} />;
+  }
 
   if (!dashboard) {
     return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
