@@ -128,6 +128,8 @@ When implementing current frontend/backend integration, follow the newer require
 - Autosave indicator
 - Output console
 - Run and Submit UI
+- Task-specific preview and verification UI
+- Direct browser UI preview for frontend UI extension tasks
 - AI assistant UI
 - Admin dashboard UI
 - Assessment/question/test-case/report UI
@@ -216,6 +218,7 @@ Student UI must never show:
 - Create/improve browser IDE UI.
 - Add Monaco integration or editor fallback.
 - Add frontend API client integration.
+- Add workspace preview/verification UI for shared-prototype tasks, while requiring direct browser preview only for frontend UI extension tasks.
 - Improve frontend error/loading/empty states.
 - Add role-aware frontend navigation.
 - Add UI polish based on `ui-style-reference.md`.

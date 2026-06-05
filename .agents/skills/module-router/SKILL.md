@@ -192,6 +192,24 @@ Use: `module4-ai-telemetry-coder`
 
 Use: `fullstack-integration-coder`
 
+### Route to shared prototype assessment if the task mentions:
+- shared runnable prototype
+- four assessment tasks or four task categories
+- frontend UI extension + REST API + database + bug fix in one assessment
+- platform-native conversion of an external prototype
+- task-specific preview or verification modes
+- students running assessment tasks without installing dependencies
+- seeded practical assessment tasks based on an existing prototype
+
+Use: `shared-prototype-assessment-coder`
+
+This route is cross-module by default. Add companion skills for the affected implementation surfaces:
+
+- `module1-identity-assessment-coder` for assessment/task/test/prototype metadata and persistence.
+- `module2-frontend-ide-coder` for workspace and preview/verification UI.
+- `module3-sandbox-execution-coder` for grading and sandboxed execution.
+- `module4-ai-telemetry-coder` for embedded AI, token tracking, or LLM-assisted authoring.
+
 ## Companion skill recommendations
 
 When routing, return both a primary skill and companion skills when useful.

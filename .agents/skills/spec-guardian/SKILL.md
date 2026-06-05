@@ -208,6 +208,19 @@ When unsure:
 4. If cross-module, recommend `fullstack-integration-coder`.
 5. If unsafe or unclear, stop and ask for a decision.
 
+## Shared prototype clarification
+
+The `SPEC.md` shared runnable prototype requirements mean platform-managed starter content and task-specific verification, not a student-local install/run workflow.
+
+For this area, verify that:
+
+- the assessment contains the four primary task categories where required
+- students can work inside the assessment website without installing dependencies
+- only frontend UI extension tasks require direct browser UI preview
+- REST API, database, and bug-fix tasks use task-appropriate verification output
+- hidden tests, expected outputs, and grading implementation remain protected
+- LLM-generated task/test content remains administrator-reviewed before publication
+
 ## Required output
 
 When invoked, output:

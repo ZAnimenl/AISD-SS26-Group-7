@@ -184,6 +184,15 @@ If a command cannot be run, report why.
 - 401/403/error responses handled?
 - Cross-module boundaries respected?
 
+### Shared prototype assessment checks
+
+- Four task categories are represented where the assessment requires them?
+- Students can run tasks inside the website without installing local dependencies?
+- Frontend UI extension tasks have direct browser UI preview?
+- REST API, database, and bug-fix tasks use appropriate non-browser-preview verification when applicable?
+- Shared prototype content is represented as platform-managed starter files/metadata/tests rather than requiring students to run a full external project locally?
+- LLM-generated task/test drafts remain administrator-reviewed before publication?
+
 ## Output format
 
 1. Findings first, ordered by severity.

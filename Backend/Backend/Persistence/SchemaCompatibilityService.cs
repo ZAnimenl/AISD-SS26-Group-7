@@ -11,7 +11,23 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
             """
             DO $$
             BEGIN
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "TaskType" character varying(80) NOT NULL DEFAULT 'rest_api_development';
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "Difficulty" character varying(40) NOT NULL DEFAULT 'medium';
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "VerificationMode" character varying(80) NOT NULL DEFAULT 'api_response_check';
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "StarterPrototypeReference" character varying(200);
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "StarterFilesMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "VerificationMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "GradingConfigurationJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "AuthoringSource" character varying(80) NOT NULL DEFAULT 'manual';
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS "TraceabilityMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "SharedPrototypeReference" character varying(200);
+                ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "SharedPrototypeVersion" character varying(80);
+                ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "SharedPrototypeMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS test_code_json text NOT NULL DEFAULT '{{}}';
+                ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "AuthoringSource" character varying(80) NOT NULL DEFAULT 'manual';
+                ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "TraceabilityMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "PublicMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "AdminMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
 
                 IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='test_cases' AND column_name='Input') THEN
                     ALTER TABLE test_cases ALTER COLUMN "Input" DROP NOT NULL;

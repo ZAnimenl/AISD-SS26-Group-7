@@ -13,4 +13,12 @@ public sealed class TestCase
     public string Visibility { get; set; } = TestCaseVisibilities.Public;
 
     public string TestCodeJson { get; set; } = "{}";
+
+    public string AuthoringSource { get; set; } = AuthoringSources.Manual;
+
+    public string TraceabilityMetadataJson { get; set; } = "{}";
+
+    public string PublicMetadataJson { get; set; } = "{}";
+
+    public string AdminMetadataJson { get; set; } = "{}";
 }

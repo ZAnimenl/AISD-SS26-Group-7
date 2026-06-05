@@ -24,6 +24,7 @@ public static class AssessmentEndpoints
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
         AssessmentProjectionService projectionService,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -31,6 +32,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessments = await dbContext.Assessments
             .Include(assessment => assessment.Questions)
@@ -45,6 +48,7 @@ public static class AssessmentEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -52,6 +56,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = new Assessment
         {
@@ -61,6 +67,9 @@ public static class AssessmentEndpoints
             DurationMinutes = request.DurationMinutes,
             Status = NormalizeAssessmentStatus(request.Status),
             AiEnabled = request.AiEnabled,
+            SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference),
+            SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion),
+            SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -105,6 +114,7 @@ public static class AssessmentEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -112,6 +122,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = await dbContext.Assessments.FindAsync([assessmentId], cancellationToken);
         if (assessment is null)
@@ -124,6 +136,9 @@ public static class AssessmentEndpoints
         assessment.DurationMinutes = request.DurationMinutes;
         assessment.Status = NormalizeAssessmentStatus(request.Status);
         assessment.AiEnabled = request.AiEnabled;
+        assessment.SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference);
+        assessment.SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion);
+        assessment.SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>());
         await dbContext.SaveChangesAsync(cancellationToken);
         return ApiResults.Success(new { assessment_id = assessment.Id });
     }
@@ -133,6 +148,7 @@ public static class AssessmentEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -140,6 +156,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = await dbContext.Assessments.FindAsync([assessmentId], cancellationToken);
         if (assessment is null)
@@ -158,6 +176,7 @@ public static class AssessmentEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
@@ -165,6 +184,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = await dbContext.Assessments.FindAsync([assessmentId], cancellationToken);
         if (assessment is null)
@@ -184,6 +205,7 @@ public static class AssessmentEndpoints
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
         AssessmentProjectionService projectionService,
+        SchemaCompatibilityService schemaCompatibilityService,
         CancellationToken cancellationToken)
     {
         var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
@@ -191,6 +213,8 @@ public static class AssessmentEndpoints
         {
             return error;
         }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
         var assessment = await dbContext.Assessments
             .Include(item => item.Questions.OrderBy(question => question.SortOrder))
@@ -219,5 +243,10 @@ public static class AssessmentEndpoints
         return status is AssessmentStatuses.Draft or AssessmentStatuses.Active or AssessmentStatuses.Closed or AssessmentStatuses.Archived
             ? status
             : AssessmentStatuses.Draft;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 }

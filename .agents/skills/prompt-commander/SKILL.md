@@ -147,7 +147,12 @@ Default companion skill rules:
 - If the task is backend API/data ownership, primary skill is `module1-identity-assessment-coder`; add `fullstack-integration-coder` when frontend consumers must be verified.
 - If the task touches sandboxed execution, primary skill is `module3-sandbox-execution-coder`; do not involve frontend skills unless an API/UI integration is requested.
 - If the task touches AI provider/proxy/telemetry backend, primary skill is `module4-ai-telemetry-coder`; add `fullstack-integration-coder` only when frontend/backend integration is part of the request.
+- If the task concerns the four-category shared prototype assessment, task seeding, prototype preview, platform-native task conversion, or no-install student task workflow, primary skill is `shared-prototype-assessment-coder` with module companions for affected boundaries.
 - If ownership is unclear, use `module-router` first.
+
+### Shared prototype interpretation
+
+When a request mentions the shared runnable prototype from `SPEC.md`, interpret it as platform-managed starter content and task-specific verification. Do not plan a flow where students install dependencies or run a full external project locally. Only frontend UI extension tasks require direct browser UI preview; REST API, database, and bug-fix tasks may use task-appropriate verification output.
 
 ## Required output format
 

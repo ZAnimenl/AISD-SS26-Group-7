@@ -121,6 +121,7 @@ When implementing current frontend/backend integration, follow the newer require
 - User accounts and roles
 - Assessment CRUD backend
 - Question and test case persistence
+- Shared prototype references, task category metadata, verification mode metadata, starter files, and administrator-approved LLM-generated task/test drafts
 - Attempt/session lifecycle
 - Workspace autosave persistence endpoints
 - Submission storage
@@ -160,6 +161,7 @@ When implementing current frontend/backend integration, follow the newer require
 - Implement/fix student/admin role authorization.
 - Implement/fix assessment CRUD backend.
 - Implement/fix question/test-case persistence.
+- Implement/fix shared-prototype assessment metadata, task categories, verification modes, starter-code persistence, and test-case seeding.
 - Implement/fix attempt start/resume/expiry behavior.
 - Implement/fix workspace persistence endpoints.
 - Implement/fix submission storage and result storage.

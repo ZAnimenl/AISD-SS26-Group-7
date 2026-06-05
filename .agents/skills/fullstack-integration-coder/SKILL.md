@@ -19,6 +19,7 @@ Common pairings:
 - With `module1-identity-assessment-coder`: verify backend endpoint contracts, DTOs, auth/RBAC, and frontend consumer compatibility.
 - With `module3-sandbox-execution-coder`: verify execution API handoff and that frontend/backend do not bypass sandbox boundaries.
 - With `module4-ai-telemetry-coder`: verify AI service API contracts and that frontend never calls provider APIs directly.
+- With `shared-prototype-assessment-coder`: verify task metadata, starter files, verification modes, preview output, and run/submit contracts across frontend, backend, and sandbox boundaries.
 - Follow implementation with `strict-code-reviewer`.
 
 When used as a companion, do not take ownership away from the primary module skill. Guard the integration contract and module boundary.
@@ -126,6 +127,7 @@ When implementing current frontend/backend integration, follow the newer require
 - Assessment/attempt/workspace API integration
 - Submission/run API integration
 - Admin report data integration
+- Shared-prototype task authoring, workspace preview/verification, and platform-native run/submit flow integration
 - Error handling for backend down, non-JSON responses, 401/403/404/500
 - Type sharing or DTO alignment if already part of project
 - Integration tests if available

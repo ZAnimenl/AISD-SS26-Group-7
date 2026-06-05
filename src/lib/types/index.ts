@@ -4,6 +4,11 @@ export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type SubmissionStatus = "passed" | "failed" | "runtime_error" | "submitted";
 export type AiInteractionType = "code_suggestion" | "explanation" | "debugging";
+export type TaskType = "frontend_ui_extension" | "rest_api_development" | "database_query_schema" | "bug_fix";
+export type Difficulty = "easy" | "medium" | "hard";
+export type VerificationMode = "browser_ui_preview" | "api_response_check" | "database_result_check" | "automated_test" | "regression_test";
+export type AuthoringSource = "manual" | "llm_generated" | "admin_edited";
+export type Metadata = Record<string, string>;
 
 export interface AuthUser {
   user_id: string;
@@ -30,12 +35,19 @@ export interface AdminTestCase {
   name: string;
   visibility: "public" | "hidden";
   test_code: Record<Language, string>;
+  authoring_source?: AuthoringSource;
+  public_metadata?: Metadata;
+  admin_metadata?: Metadata;
+  traceability_metadata?: Metadata;
 }
 
 export interface Question {
   question_id: string;
   title: string;
-  task_type?: string;
+  task_type?: TaskType;
+  difficulty?: Difficulty;
+  verification_mode?: VerificationMode;
+  starter_prototype_reference?: string | null;
   problem_description_markdown: string;
   admin_notes?: string | null;
   sort_order?: number;
@@ -43,6 +55,11 @@ export interface Question {
   constraints: string[];
   language_constraints: Language[];
   starter_code: StarterCode;
+  starter_files_metadata?: Record<string, Metadata>;
+  verification_metadata?: Metadata;
+  grading_configuration?: Metadata;
+  authoring_source?: AuthoringSource;
+  traceability_metadata?: Metadata;
   public_examples: PublicTestCase[];
   admin_test_cases?: AdminTestCase[];
 }
@@ -54,6 +71,11 @@ export interface Assessment {
   duration_minutes: number;
   status: AssessmentStatus;
   ai_enabled: boolean;
+  shared_prototype_reference?: string | null;
+  shared_prototype_version?: string | null;
+  shared_prototype_metadata?: Metadata;
+  supported_task_categories?: TaskType[];
+  supported_verification_modes?: VerificationMode[];
   closes_at: string;
   question_count: number;
   attempt_status?: AttemptStatus;

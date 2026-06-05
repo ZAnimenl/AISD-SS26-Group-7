@@ -11,7 +11,7 @@ import {
   updateTestCase
 } from "@/lib/api";
 import { defaultTestCode, normalizeTestCode } from "@/lib/languages";
-import type { AdminTestCase, Assessment, Language, Question } from "@/lib/types";
+import type { AdminTestCase, Assessment, Difficulty, Language, Question, TaskType } from "@/lib/types";
 
 interface QuestionTestCaseEditorProps {
   assessment: Assessment;
@@ -23,6 +23,15 @@ const defaultStarterCode = {
   javascript: { "solution.js": "function solve() {\n}\n\nmodule.exports = { solve };\n" },
   typescript: { "solution.ts": "function solve(): unknown {\n  return null;\n}\n" }
 };
+
+const taskTypes: Array<{ value: TaskType; label: string }> = [
+  { value: "frontend_ui_extension", label: "Frontend UI extension" },
+  { value: "rest_api_development", label: "REST API development" },
+  { value: "database_query_schema", label: "Database query/schema" },
+  { value: "bug_fix", label: "Bug fix" },
+];
+
+const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
   const [status, setStatus] = useState<string | null>(null);
@@ -105,6 +114,8 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     const question = await createQuestion(assessment.assessment_id, {
       question_id: "new",
       title: `Question ${sortOrder}`,
+      task_type: "rest_api_development",
+      difficulty: "medium",
       problem_description_markdown: "Describe the task.",
       admin_notes: "",
       sort_order: sortOrder,
@@ -226,6 +237,24 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   <label className="grid gap-2 text-sm text-white/60">
                     Max score
                     <input className="field w-full" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
+                  </label>
+                </div>
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Task type
+                    <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionState(question.question_id, { task_type: event.target.value as TaskType })}>
+                      {taskTypes.map((taskType) => (
+                        <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/60">
+                    Difficulty
+                    <select className="field w-full" value={question.difficulty ?? "medium"} onChange={(event) => updateQuestionState(question.question_id, { difficulty: event.target.value as Difficulty })}>
+                      {difficulties.map((difficulty) => (
+                        <option key={difficulty} value={difficulty}>{difficulty}</option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <label className="grid gap-2 text-sm text-white/60">

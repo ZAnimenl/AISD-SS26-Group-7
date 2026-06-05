@@ -128,6 +128,7 @@ When implementing current frontend/backend integration, follow the newer require
 - execution result schema
 - queue/worker dispatch if present
 - cleanup of temporary execution environments
+- platform-managed runtime setup for assessment tasks so students do not install dependencies locally
 
 ## Module 3 must not
 
@@ -167,6 +168,7 @@ Execution must be isolated according to the architecture.
 - Implement/fix public/hidden test execution separation.
 - Implement/fix cleanup after execution.
 - Add sandbox-related tests or safety checks.
+- Adapt grading support for platform-native shared-prototype tasks while preserving the no-install student workflow.
 
 ## Required workflow before coding
 
