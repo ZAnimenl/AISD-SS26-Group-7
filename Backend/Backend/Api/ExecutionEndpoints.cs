@@ -31,15 +31,22 @@ public static class ExecutionEndpoints
             return error;
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.AssessmentId == assessmentId
-                    && item.UserId == user!.Id
-                    && item.Status == SessionStatuses.Active
-                    && item.ExpiresAt > DateTimeOffset.UtcNow,
-            cancellationToken);
+        var session = await dbContext.AssessmentSessions
+            .Include(item => item.Assessment)
+            .FirstOrDefaultAsync(
+                item => item.AssessmentId == assessmentId
+                        && item.UserId == user!.Id
+                        && item.Status == SessionStatuses.Active
+                        && item.ExpiresAt > DateTimeOffset.UtcNow,
+                cancellationToken);
         if (session is null)
         {
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (!AssessmentPolicy.IsAssessmentActive(session.Assessment))
+        {
+            return ApiResults.Error("ASSESSMENT_CLOSED", "This assessment is not accepting new runs.", StatusCodes.Status409Conflict);
         }
 
         if (sessionClock.IsClosed(session))
@@ -68,23 +75,37 @@ public static class ExecutionEndpoints
         CodeEvaluationService evaluationService,
         CancellationToken cancellationToken)
     {
-        var questionExists = await dbContext.Questions.AnyAsync(
+        var question = await dbContext.Questions.FirstOrDefaultAsync(
             question => question.Id == questionId && question.AssessmentId == assessmentId,
             cancellationToken);
-        if (!questionExists)
+        if (question is null)
         {
             return ApiResults.Error("QUESTION_NOT_FOUND", "Question was not found for this assessment.", StatusCodes.Status404NotFound);
+        }
+
+        var normalizedLanguage = AssessmentPolicy.NormalizeLanguage(selectedLanguage);
+        if (!AssessmentPolicy.IsStudentLanguageAllowed(question, normalizedLanguage))
+        {
+            return ApiResults.Error(
+                "LANGUAGE_NOT_ALLOWED",
+                "The selected language is not allowed for this task.",
+                StatusCodes.Status400BadRequest);
         }
 
         var publicTests = await dbContext.TestCases
             .Where(testCase => testCase.QuestionId == questionId && testCase.Visibility == TestCaseVisibilities.Public)
             .ToListAsync(cancellationToken);
+        if (question.VerificationMode == VerificationModes.BrowserUiPreview)
+        {
+            publicTests.Insert(0, CreateBrowserPreviewTest(question, normalizedLanguage));
+        }
+
         var executionId = Guid.NewGuid();
         var result = await evaluationService.EvaluateAsync(
             executionId,
             publicTests,
             files,
-            selectedLanguage,
+            normalizedLanguage,
             cancellationToken);
 
         dbContext.ExecutionRecords.Add(new ExecutionRecord
@@ -121,16 +142,34 @@ public static class ExecutionEndpoints
         CurrentUserAccessor currentUserAccessor,
         CancellationToken cancellationToken)
     {
-        var (_, error) = await currentUserAccessor.RequireUserAsync(httpContext, dbContext, cancellationToken);
+        var (user, error) = await currentUserAccessor.RequireUserAsync(httpContext, dbContext, cancellationToken);
         if (error is not null)
         {
             return error;
         }
 
-        var record = await dbContext.ExecutionRecords.FindAsync([executionId], cancellationToken);
+        var record = await dbContext.ExecutionRecords
+            .FirstOrDefaultAsync(item => item.Id == executionId, cancellationToken);
         if (record is null)
         {
             return ApiResults.Error("NOT_FOUND", "Execution was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (user!.Role == UserRoles.Student)
+        {
+            var ownerUserId = await dbContext.AssessmentSessions
+                .Where(session => session.Id == record.SessionId)
+                .Select(session => (Guid?)session.UserId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (ownerUserId != user.Id)
+            {
+                return ApiResults.Error("FORBIDDEN", "The current user cannot access this execution.", StatusCodes.Status403Forbidden);
+            }
+        }
+
+        if (user.Role != UserRoles.Student && user.Role != UserRoles.Administrator)
+        {
+            return ApiResults.Error("FORBIDDEN", "The current user cannot access this execution.", StatusCodes.Status403Forbidden);
         }
 
         return ApiResults.Success(new
@@ -142,5 +181,98 @@ public static class ExecutionEndpoints
             test_results = JsonDocumentSerializer.Deserialize(record.TestResultsJson, Array.Empty<object>()),
             metrics = JsonDocumentSerializer.Deserialize(record.MetricsJson, new Dictionary<string, object>())
         });
+    }
+
+    private static TestCase CreateBrowserPreviewTest(Question question, string selectedLanguage)
+    {
+        var metadata = JsonDocumentSerializer.Deserialize(question.VerificationMetadataJson, new Dictionary<string, string>());
+        var defaultEntry = AssessmentPolicy.NormalizeLanguage(selectedLanguage) == "javascript"
+            ? "TodoSummaryPanel.js"
+            : "TodoSummaryPanel.py";
+        var previewEntry = metadata.GetValueOrDefault("preview_entry") ?? defaultEntry;
+        var pythonModule = GetSafePythonModuleName(previewEntry, "TodoSummaryPanel");
+        var javascriptModule = GetSafeJavaScriptModulePath(previewEntry, "TodoSummaryPanel.js");
+
+        return new TestCase
+        {
+            Id = Guid.NewGuid(),
+            QuestionId = question.Id,
+            Name = "Browser preview render",
+            Visibility = TestCaseVisibilities.Public,
+            TestCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["python"] = $$"""
+                from pathlib import Path
+                from {{pythonModule}} import render_summary_panel
+
+                def test_browser_preview_render():
+                    todos = [
+                        {"title": "Buy groceries", "completed": False},
+                        {"title": "Write tests", "completed": True},
+                        {"title": "Review PR", "completed": False},
+                    ]
+                    html = str(render_summary_panel(todos))
+                    Path("actual.txt").write_text(html, encoding="utf-8")
+                    assert "Todo Summary" in html
+                    assert "<" in html and ">" in html
+                """,
+                ["javascript"] = $$"""
+                const fs = require('fs');
+                const { renderSummaryPanel } = require('./{{javascriptModule}}');
+
+                test('browser preview render', () => {
+                  const todos = [
+                    { title: 'Buy groceries', completed: false },
+                    { title: 'Write tests', completed: true },
+                    { title: 'Review PR', completed: false },
+                  ];
+                  const html = String(renderSummaryPanel(todos));
+                  fs.writeFileSync('actual.txt', html, 'utf8');
+                  expect(html).toContain('Todo Summary');
+                  expect(html).toContain('<');
+                });
+                """
+            }),
+            AuthoringSource = question.AuthoringSource,
+            PublicMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["student_visible"] = "true",
+                ["preview_output"] = "html"
+            }),
+            AdminMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["synthetic"] = "true",
+                ["source"] = "browser_ui_preview_run"
+            }),
+            TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["requirements"] = "REQ-18e,REQ-30c"
+            })
+        };
+    }
+
+    private static string GetSafePythonModuleName(string previewEntry, string fallback)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(previewEntry);
+        return IsSafeIdentifier(fileName) ? fileName : fallback;
+    }
+
+    private static string GetSafeJavaScriptModulePath(string previewEntry, string fallback)
+    {
+        var fileName = Path.GetFileName(previewEntry);
+        return IsSafeModuleFile(fileName) ? fileName : fallback;
+    }
+
+    private static bool IsSafeIdentifier(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.All(character => char.IsLetterOrDigit(character) || character == '_');
+    }
+
+    private static bool IsSafeModuleFile(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.EndsWith(".js", StringComparison.Ordinal)
+            && value.All(character => char.IsLetterOrDigit(character) || character is '_' or '-' or '.');
     }
 }

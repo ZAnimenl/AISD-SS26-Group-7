@@ -53,6 +53,31 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
+    public void Development_appsettings_configures_deepseek_without_api_key()
+    {
+        using var document = ReadAppsettings("appsettings.Development.json");
+
+        var deepseek = document.RootElement.GetProperty("Deepseek");
+
+        Assert.True(deepseek.GetProperty("Enabled").GetBoolean());
+        Assert.Equal("https://api.deepseek.com", deepseek.GetProperty("BaseUrl").GetString());
+        Assert.Equal("deepseek-v4-flash", deepseek.GetProperty("Model").GetString());
+        Assert.Equal(string.Empty, deepseek.GetProperty("ApiKey").GetString());
+        Assert.False(deepseek.GetProperty("ThinkingEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public void Backend_project_declares_user_secrets_for_local_provider_keys()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Backend.csproj"));
+
+        Assert.Contains("<UserSecretsId>ojsharp-backend-deepseek-local-secrets</UserSecretsId>", source);
+    }
+
+    [Fact]
     public void Schema_compatibility_sql_escapes_json_default_for_execute_sql_raw()
     {
         var source = File.ReadAllText(Path.Combine(

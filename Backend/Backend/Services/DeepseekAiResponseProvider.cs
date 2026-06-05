@@ -55,6 +55,10 @@ public sealed class DeepseekAiResponseProvider : IAiResponseProvider
                     new { role = "system", content = BuildSystemPrompt(context) },
                     new { role = "user", content = BuildUserPrompt(context, semanticTags) }
                 },
+                thinking = new
+                {
+                    type = options.ThinkingEnabled ? "enabled" : "disabled"
+                },
                 temperature = options.Temperature,
                 max_tokens = options.MaxTokens,
                 stream = false
@@ -140,6 +144,7 @@ public sealed class DeepseekAiResponseProvider : IAiResponseProvider
             "",
             $"Interaction type: {context.InteractionType}",
             $"Programming language: {context.SelectedLanguage}",
+            $"Task: {context.TaskTitle}",
         ]);
     }
 
@@ -152,6 +157,16 @@ public sealed class DeepseekAiResponseProvider : IAiResponseProvider
         return string.Join("\n",
         [
             $"Student request: {context.Message}",
+            "",
+            $"Task title: {context.TaskTitle}",
+            "",
+            "Task description:",
+            context.TaskDescriptionMarkdown,
+            "",
+            "Visible starter files:",
+            context.VisibleStarterFileNames.Length == 0
+                ? "(none listed)"
+                : string.Join(", ", context.VisibleStarterFileNames),
             "",
             "Current code:",
             codeBlock,

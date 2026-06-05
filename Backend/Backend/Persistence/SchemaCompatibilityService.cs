@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,7 +6,34 @@ namespace Backend.Persistence;
 
 public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
 {
+    private static readonly ConcurrentDictionary<string, CompatibilityState> States = new();
+
     public async Task EnsureAsync(CancellationToken cancellationToken)
+    {
+        var state = States.GetOrAdd(GetStateKey(), _ => new CompatibilityState());
+        if (Volatile.Read(ref state.Ensured))
+        {
+            return;
+        }
+
+        await state.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Volatile.Read(ref state.Ensured))
+            {
+                return;
+            }
+
+            await EnsureCoreAsync(cancellationToken);
+            Volatile.Write(ref state.Ensured, true);
+        }
+        finally
+        {
+            state.Gate.Release();
+        }
+    }
+
+    private async Task EnsureCoreAsync(CancellationToken cancellationToken)
     {
         await using var schemaLock = await DatabaseAdvisoryLocks.AcquireSessionLockAsync(
             dbContext,
@@ -47,6 +75,59 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
             """,
             cancellationToken);
 
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE assessment_sessions
+            SET "Status" = 'expired'
+            WHERE "Status" = 'active'
+              AND "ExpiresAt" <= now();
+
+            WITH ranked_active_sessions AS (
+                SELECT
+                    "Id",
+                    row_number() OVER (
+                        PARTITION BY "AssessmentId", "UserId"
+                        ORDER BY "StartedAt" DESC, "Id" DESC
+                    ) AS row_number
+                FROM assessment_sessions
+                WHERE "Status" = 'active'
+            )
+            UPDATE assessment_sessions
+            SET "Status" = 'expired'
+            WHERE "Id" IN (
+                SELECT "Id"
+                FROM ranked_active_sessions
+                WHERE row_number > 1
+            );
+
+            WITH ranked_workspace_states AS (
+                SELECT
+                    "Id",
+                    row_number() OVER (
+                        PARTITION BY "SessionId", "QuestionId"
+                        ORDER BY "Version" DESC, "LastSavedAt" DESC, "Id" DESC
+                    ) AS row_number
+                FROM workspace_question_states
+            )
+            DELETE FROM workspace_question_states
+            WHERE "Id" IN (
+                SELECT "Id"
+                FROM ranked_workspace_states
+                WHERE row_number > 1
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_assessment_sessions_one_active_per_user_assessment"
+            ON assessment_sessions ("AssessmentId", "UserId")
+            WHERE "Status" = 'active';
+
+            CREATE INDEX IF NOT EXISTS "IX_assessment_sessions_AssessmentId_UserId_Status"
+            ON assessment_sessions ("AssessmentId", "UserId", "Status");
+
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_workspace_question_states_SessionId_QuestionId"
+            ON workspace_question_states ("SessionId", "QuestionId");
+            """,
+            cancellationToken);
+
         var emptyJson = "{}";
         var defaultTestCodeJson = JsonSerializer.Serialize(DefaultTestCode());
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
@@ -66,5 +147,19 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
             ["javascript"] = "const { solve } = require(\"./solution.js\");\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n",
             ["typescript"] = "const solve = globalThis.__ojsharpSolve;\n\ntest(\"solution exists\", () => {\n  expect(typeof solve).toBe(\"function\");\n});\n"
         };
+    }
+
+    private string GetStateKey()
+    {
+        var connectionString = dbContext.Database.GetConnectionString();
+        return string.IsNullOrWhiteSpace(connectionString)
+            ? dbContext.Database.ProviderName ?? nameof(OjSharpDbContext)
+            : connectionString;
+    }
+
+    private sealed class CompatibilityState
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public bool Ensured;
     }
 }

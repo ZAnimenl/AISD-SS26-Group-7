@@ -2,27 +2,27 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Code2, FileText, LayoutDashboard, LogOut, PlusCircle, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { logout } from "@/lib/api";
+import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
 
 interface NavItem {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: SemanticIconName;
 }
 
 const studentNav: NavItem[] = [
-  { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-  { label: "Assessments", href: "/student/assessments", icon: Code2 },
-  { label: "Results", href: "/student/results", icon: BarChart3 }
+  { label: "Dashboard", href: "/student/dashboard", icon: "dashboard" },
+  { label: "Assessments", href: "/student/assessments", icon: "assessments" },
+  { label: "Results", href: "/student/results", icon: "results" }
 ];
 
 const adminNav: NavItem[] = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Assessments", href: "/admin/assessments", icon: FileText },
-  { label: "Create", href: "/admin/assessments/new", icon: PlusCircle },
-  { label: "Reports", href: "/admin/reports", icon: BarChart3 },
-  { label: "Users", href: "/admin/users", icon: Users }
+  { label: "Dashboard", href: "/admin/dashboard", icon: "dashboard" },
+  { label: "Assessments", href: "/admin/assessments", icon: "assessments" },
+  { label: "Create", href: "/admin/assessments/new", icon: "create" },
+  { label: "Reports", href: "/admin/reports", icon: "reports" },
+  { label: "Users", href: "/admin/users", icon: "users" }
 ];
 
 export function AppSidebar({ role }: { role: "student" | "administrator" }) {
@@ -34,8 +34,8 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
   return (
     <aside className={`liquid-glass sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 py-5 lg:flex ${compact ? "w-16 px-2" : "w-64 px-4"}`}>
       <Link href={role === "student" ? "/student/dashboard" : "/admin/dashboard"} className={`relative flex items-center ${compact ? "justify-center" : "gap-3"}`}>
-        <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow shadow-[0_0_20px_rgba(0,229,255,0.22)]">
-          <Sparkles size={20} />
+        <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/25 bg-[linear-gradient(145deg,rgba(0,229,255,0.16),rgba(168,85,247,0.12))] text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.24)]">
+          <SemanticIcon name="platform" size={22} />
         </span>
         <span className={compact ? "sr-only" : ""}>
           <span className="live-gradient-text block text-sm font-semibold">AI Coding</span>
@@ -45,7 +45,6 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
 
       <nav className="relative mt-10 flex flex-col gap-1">
         {navItems.map((item) => {
-          const Icon = item.icon;
           let active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           if (pathname.includes("/review")) {
             if (item.href === "/student/results") {
@@ -64,7 +63,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
               } ${compact ? "justify-center px-0" : ""}`}
             >
               {active ? <span className="absolute left-0 top-2 h-6 w-0.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.8)]" /> : null}
-              <Icon size={18} />
+              <SemanticIcon name={item.icon} size={18} />
               <span className={compact ? "sr-only" : ""}>{item.label}</span>
             </Link>
           );
@@ -83,11 +82,11 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
             router.push("/login");
           }}
         >
-          <LogOut size={17} />
+          <SemanticIcon name="logout" size={17} />
           <span className={compact ? "sr-only" : ""}>Logout</span>
         </button>
         <div className={`flex items-center gap-3 px-4 py-2.5 text-xs text-white/35 ${compact ? "hidden" : ""}`}>
-          <Settings size={16} />
+          <SemanticIcon name="settings" size={16} />
           Backend API mode
         </div>
       </div>

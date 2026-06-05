@@ -155,6 +155,11 @@ public static class StudentEndpoints
             return ExecutionStatuses.Passed;
         }
 
+        if (submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.TimeLimitExceeded))
+        {
+            return ExecutionStatuses.TimeLimitExceeded;
+        }
+
         return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)
             ? ExecutionStatuses.RuntimeError
             : ExecutionStatuses.Failed;

@@ -45,6 +45,11 @@ public static class SubmissionEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
+        if (!AssessmentPolicy.IsAssessmentActive(session.Assessment))
+        {
+            return ApiResults.Error("ASSESSMENT_CLOSED", "This assessment is not accepting new submissions.", StatusCodes.Status409Conflict);
+        }
+
         if (sessionClock.IsClosed(session))
         {
             return ApiResults.Error("ATTEMPT_EXPIRED", "The assessment attempt has expired.", StatusCodes.Status409Conflict);
@@ -74,12 +79,25 @@ public static class SubmissionEndpoints
 
             var tests = await dbContext.TestCases.Where(testCase => testCase.QuestionId == state.QuestionId).ToListAsync(cancellationToken);
             var workspaceFiles = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+            var selectedLanguage = AssessmentPolicy.NormalizeLanguage(state.SelectedLanguage);
+            if (AssessmentPolicy.TryFindUnsupportedWorkspaceLanguage(
+                    question,
+                    selectedLanguage,
+                    workspaceFiles.Values.Select(file => file.Language),
+                    out var unsupportedLanguage))
+            {
+                return ApiResults.Error(
+                    "LANGUAGE_NOT_ALLOWED",
+                    $"Language '{unsupportedLanguage}' is not allowed for this task.",
+                    StatusCodes.Status400BadRequest);
+            }
+
             var runnerFiles = workspaceFiles.ToDictionary(entry => entry.Key, entry => entry.Value.Content);
             var result = await evaluationService.EvaluateAsync(
                 Guid.NewGuid(),
                 tests,
                 runnerFiles,
-                state.SelectedLanguage,
+                selectedLanguage,
                 cancellationToken);
             var score = evaluationService.CalculateScore(question.MaxScore, result.TestResults);
             var visibleTotal = tests.Count(testCase => testCase.Visibility == TestCaseVisibilities.Public);
@@ -191,6 +209,11 @@ public static class SubmissionEndpoints
         if (maxScore > 0 && totalScore == maxScore)
         {
             return ExecutionStatuses.Passed;
+        }
+
+        if (submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.TimeLimitExceeded))
+        {
+            return ExecutionStatuses.TimeLimitExceeded;
         }
 
         return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)

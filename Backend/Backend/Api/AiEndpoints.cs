@@ -42,6 +42,11 @@ public static class AiEndpoints
             return ApiResults.Error("AI_DISABLED", "AI assistance is disabled for this assessment.", StatusCodes.Status403Forbidden);
         }
 
+        if (!AssessmentPolicy.IsAssessmentActive(assessment))
+        {
+            return ApiResults.Error("ASSESSMENT_CLOSED", "AI assistance is not available for this assessment status.", StatusCodes.Status409Conflict);
+        }
+
         var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
             item => item.AssessmentId == assessmentId
                     && item.UserId == user!.Id
@@ -53,20 +58,34 @@ public static class AiEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        var questionExists = await dbContext.Questions.AnyAsync(
+        var question = await dbContext.Questions.FirstOrDefaultAsync(
             question => question.Id == questionId && question.AssessmentId == assessmentId,
             cancellationToken);
-        if (!questionExists)
+        if (question is null)
         {
             return ApiResults.Error("QUESTION_NOT_FOUND", "Question was not found for this assessment.", StatusCodes.Status404NotFound);
         }
 
-        var (responseMarkdown, tags, inputTokens, outputTokens) = await aiMockService.GenerateResponseAsync(
-            request.InteractionType,
-            request.Message,
-            request.SelectedLanguage,
-            request.ActiveFileContent,
-            cancellationToken);
+        var selectedLanguage = AssessmentPolicy.NormalizeLanguage(request.SelectedLanguage);
+        if (!AssessmentPolicy.IsStudentLanguageAllowed(question, selectedLanguage))
+        {
+            return ApiResults.Error(
+                "LANGUAGE_NOT_ALLOWED",
+                "The selected language is not allowed for this task.",
+                StatusCodes.Status400BadRequest);
+        }
+
+        var (responseMarkdown, tags, inputTokens, outputTokens) = LooksLikeCompleteSolutionRequest(request.Message)
+            ? BuildDirectSolutionSafetyResponse(request.Message)
+            : await aiMockService.GenerateResponseAsync(
+                request.InteractionType,
+                request.Message,
+                selectedLanguage,
+                request.ActiveFileContent,
+                question.Title,
+                question.ProblemDescriptionMarkdown,
+                GetVisibleStarterFileNames(question, selectedLanguage),
+                cancellationToken);
 
         var interaction = new AiInteraction
         {
@@ -76,7 +95,7 @@ public static class AiEndpoints
             QuestionId = questionId,
             InteractionType = request.InteractionType,
             Message = request.Message,
-            SelectedLanguage = request.SelectedLanguage,
+            SelectedLanguage = selectedLanguage,
             ActiveFileContent = request.ActiveFileContent,
             ResponseMarkdown = responseMarkdown,
             SemanticTagsJson = JsonDocumentSerializer.Serialize(tags),
@@ -197,5 +216,58 @@ public static class AiEndpoints
             .ToListAsync(cancellationToken);
 
         return ApiResults.Success(interactions);
+    }
+
+    private static string[] GetVisibleStarterFileNames(Question question, string selectedLanguage)
+    {
+        var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
+        return starterCode.TryGetValue(AssessmentPolicy.NormalizeLanguage(selectedLanguage), out var languageFiles)
+            ? languageFiles.Keys.OrderBy(name => name).ToArray()
+            : [];
+    }
+
+    private static bool LooksLikeCompleteSolutionRequest(string message)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        var blockedPhrases = new[]
+        {
+            "complete solution",
+            "full solution",
+            "final answer",
+            "give me the answer",
+            "write all code",
+            "entire solution",
+            "完整代码",
+            "完整答案",
+            "直接给答案",
+            "直接答案",
+            "完整解法",
+            "全部代码"
+        };
+
+        return blockedPhrases.Any(normalized.Contains);
+    }
+
+    private static (string ResponseMarkdown, string[] SemanticTags, int InputTokens, int OutputTokens) BuildDirectSolutionSafetyResponse(string message)
+    {
+        const string response = """
+        I cannot provide a complete solution for the assessment task. I can still help you make progress: describe the failing behavior, explain the relevant concept, review a small code snippet, or suggest the next testable step.
+        """;
+
+        return (
+            response,
+            ["assessment_safety", "direct_solution_request"],
+            EstimateTokens(message),
+            EstimateTokens(response));
+    }
+
+    private static int EstimateTokens(string text)
+    {
+        return Math.Max(1, (int)Math.Ceiling(text.Length / 4.0));
     }
 }

@@ -76,6 +76,80 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
+    public async Task Timed_out_execution_returns_time_limit_status()
+    {
+        var runner = new RecordingCodeRunner([
+            new CodeRunResult(string.Empty, "Execution timed out.", 1, true)
+        ]);
+        var service = new CodeEvaluationService(runner);
+
+        var result = await service.EvaluateAsync(
+            Guid.NewGuid(),
+            [TestCase("timeout", "input", "output")],
+            new Dictionary<string, string> { ["solution.py"] = "while True:\n    pass\n" },
+            "python",
+            CancellationToken.None);
+
+        Assert.Equal(ExecutionStatuses.TimeLimitExceeded, result.Status);
+        Assert.Equal(ExecutionStatuses.TimeLimitExceeded, result.TestResults[0].Status);
+    }
+
+    [Fact]
+    public async Task Todo_summary_preview_uses_safe_static_fallback_when_grader_is_unavailable()
+    {
+        var runner = new RecordingCodeRunner([
+            new CodeRunResult(string.Empty, "Grader container unavailable: Connection failed", 1, false)
+        ]);
+        var service = new CodeEvaluationService(runner);
+
+        var result = await service.EvaluateAsync(
+            Guid.NewGuid(),
+            [TodoSummaryTestCase()],
+            new Dictionary<string, string>
+            {
+                ["TodoSummaryPanel.py"] = """
+                def build_summary(todos):
+                    total = len(todos)
+                    completed = sum(1 for todo in todos if todo.get("completed") is True)
+                    pending = total - completed
+                    message = "All tasks complete" if total > 0 and completed == total else ""
+                    return {"total": total, "completed": completed, "pending": pending, "message": message}
+
+                def render_summary_panel(todos):
+                    summary = build_summary(todos)
+                    return f'<section><h2>Todo Summary</h2><p>Total: {summary["total"]}</p></section>'
+                """
+            },
+            "python",
+            CancellationToken.None);
+
+        Assert.Equal(ExecutionStatuses.Passed, result.Status);
+        Assert.True(result.TestResults[0].Passed);
+        Assert.Contains("Todo Summary", result.TestResults[0].Output);
+        Assert.Null(result.Stderr);
+    }
+
+    [Fact]
+    public async Task Non_platform_task_reports_internal_error_when_grader_is_unavailable()
+    {
+        var runner = new RecordingCodeRunner([
+            new CodeRunResult(string.Empty, "Grader container unavailable: Connection failed", 1, false)
+        ]);
+        var service = new CodeEvaluationService(runner);
+
+        var result = await service.EvaluateAsync(
+            Guid.NewGuid(),
+            [TestCase("ordinary", "input", "output")],
+            new Dictionary<string, string> { ["solution.py"] = "def solve():\n    return 1\n" },
+            "python",
+            CancellationToken.None);
+
+        Assert.Equal(ExecutionStatuses.InternalError, result.Status);
+        Assert.Equal(ExecutionStatuses.InternalError, result.TestResults[0].Status);
+        Assert.Contains("Run environment unavailable", result.Stderr);
+    }
+
+    [Fact]
     public void Grader_commands_use_pytest_jest_and_typescript_compile_step()
     {
         var factory = new GraderCommandFactory();
@@ -162,6 +236,28 @@ public sealed class CodeEvaluationServiceTests
                 ["python"] = $"def test_{name.Replace("-", "_")}():\n    assert True\n",
                 ["javascript"] = $"test(\"{name}\", () => expect(true).toBe(true));\n",
                 ["typescript"] = $"test(\"{name}\", () => expect(true).toBe(true));\n"
+            })
+        };
+    }
+
+    private static TestCase TodoSummaryTestCase()
+    {
+        return new TestCase
+        {
+            Id = Guid.NewGuid(),
+            QuestionId = Guid.NewGuid(),
+            Name = "Summary counts visible todos",
+            Visibility = TestCaseVisibilities.Public,
+            TestCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["python"] = """
+                from TodoSummaryPanel import build_summary, render_summary_panel
+
+                def test_summary_counts_visible_todos():
+                    summary = build_summary([])
+                    assert summary["total"] == 0
+                    assert "Todo Summary" in render_summary_panel([])
+                """
             })
         };
     }

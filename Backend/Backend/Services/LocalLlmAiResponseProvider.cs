@@ -102,6 +102,7 @@ public sealed class LocalLlmAiResponseProvider : IAiResponseProvider
             "",
             $"Interaction type: {context.InteractionType}",
             $"Language: {context.SelectedLanguage}",
+            $"Task: {context.TaskTitle}",
             $"Semantic tags: {tagList}",
             "",
             "Keep the response concise, practical, and safe for an assessment setting."
@@ -120,6 +121,16 @@ public sealed class LocalLlmAiResponseProvider : IAiResponseProvider
         {
             $"Student request: {context.Message}",
             $"Semantic tags: {tagList}",
+            "",
+            $"Task title: {context.TaskTitle}",
+            "",
+            "Task description:",
+            context.TaskDescriptionMarkdown,
+            "",
+            "Visible starter files:",
+            context.VisibleStarterFileNames.Length == 0
+                ? "(none listed)"
+                : string.Join(", ", context.VisibleStarterFileNames),
             "",
             "Current code:",
             codeBlock,

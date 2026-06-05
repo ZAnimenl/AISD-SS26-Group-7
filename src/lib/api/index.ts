@@ -1,12 +1,14 @@
 import type {
   AdminDashboard,
   AggregateReport,
+  AiUsageSummary,
   AiInteractionType,
   Assessment,
   AssessmentStatus,
   AttemptStatus,
   AuthUser,
   AdminTestCase,
+  Difficulty,
   Language,
   Question,
   ReportListItem,
@@ -15,8 +17,10 @@ import type {
   StudentDashboard,
   SubmissionResult,
   TaskType,
+  TokenEfficiencyIndicator,
   UserAccount,
   VerificationMode,
+  WorkspaceFile,
   WorkspaceQuestionState,
   WorkspaceState
 } from "@/lib/types";
@@ -35,6 +39,7 @@ const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
 const API_BASE_KEY = "ojsharp.api.base_url";
+const startAssessmentRequests = new Map<string, Promise<void>>();
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -194,13 +199,55 @@ function getPlainTextError(bodyText: string) {
   return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
+function isStoredAuthUser(user: Partial<AuthUser>): user is AuthUser {
+  return typeof user.user_id === "string"
+    && typeof user.email === "string"
+    && (user.role === "student" || user.role === "administrator");
+}
+
 export function getStoredUser() {
   if (typeof window === "undefined") {
     return null;
   }
 
   const value = window.localStorage.getItem(USER_KEY);
-  return value ? (JSON.parse(value) as AuthUser) : null;
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const user = JSON.parse(value) as Partial<AuthUser>;
+
+    if (!isStoredAuthUser(user)) {
+      window.localStorage.removeItem(USER_KEY);
+      return null;
+    }
+
+    return user;
+  } catch {
+    window.localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+export function clearStoredAuth() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+}
+
+export function hasStoredAuth(expectedRole?: Role) {
+  const token = getToken();
+  const user = getStoredUser();
+
+  if (!token || !user) {
+    return false;
+  }
+
+  return expectedRole ? user.role === expectedRole : true;
 }
 
 export async function login(email: string, password: string) {
@@ -218,8 +265,7 @@ export async function logout() {
   try {
     await apiRequest<{ logged_out: boolean }>("/auth/logout", { method: "POST" });
   } finally {
-    window.localStorage.removeItem(TOKEN_KEY);
-    window.localStorage.removeItem(USER_KEY);
+    clearStoredAuth();
   }
 }
 
@@ -364,6 +410,20 @@ export async function createQuestion(assessmentId: string, input: Question) {
   return normalizeQuestion(raw);
 }
 
+export async function generateQuestionDraft(assessmentId: string, input: {
+  task_type: TaskType;
+  difficulty: Difficulty;
+  supported_languages: Language[];
+  starter_prototype_reference?: string | null;
+}) {
+  const raw = await apiRequest<any>(`/admin/assessments/${assessmentId}/questions/generate`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+
+  return normalizeQuestion(raw);
+}
+
 export async function updateQuestion(input: Question) {
   const raw = await apiRequest<any>(`/admin/questions/${input.question_id}`, {
     method: "PUT",
@@ -409,12 +469,14 @@ export async function getReportList() {
     average_score: Math.round(item.average_score ?? 0),
     completion_count: item.completion_count ?? 0,
     participant_count: item.participant_count ?? 0,
-    ai_interactions: item.ai_interactions ?? 0
+    ai_interactions: item.ai_interactions ?? 0,
+    total_ai_tokens: item.total_ai_tokens ?? item.ai_usage_summary?.total_tokens ?? 0
   })) satisfies ReportListItem[];
 }
 
 export async function getAggregateReport(assessmentId: string) {
   const raw = await apiRequest<any>(`/reports/aggregate/${assessmentId}`);
+  const aiUsageSummary = normalizeAiUsageSummary(raw.ai_usage_summary);
   return {
     assessment_id: raw.assessment_id,
     assessment_title: raw.assessment_title,
@@ -422,37 +484,48 @@ export async function getAggregateReport(assessmentId: string) {
     completion_count: raw.completion_count ?? 0,
     participant_count: raw.participant_count ?? 0,
     ai_interactions: raw.ai_interactions ?? 0,
+    total_ai_tokens: raw.total_ai_tokens ?? aiUsageSummary.total_tokens,
+    ai_usage_summary: aiUsageSummary,
     score_distribution: raw.score_distribution ?? [],
     students: (raw.students ?? []).map((student: any) => ({
       user_id: student.user_id,
       student_name: student.student_name,
       student_email: student.student_email,
       attempt_status: normalizeAttemptStatus(student.attempt_status),
-      submission_status: student.submission_status ?? "submitted",
+      submission_status: student.submission_status ?? "not_submitted",
       score: student.score ?? 0,
       max_score: student.max_score ?? 0,
       submitted_at: student.submitted_at ?? "",
-      ai_usage_summary: {
-        total_interactions: student.ai_usage_summary?.total_interactions ?? 0,
-        total_tokens: student.ai_usage_summary?.total_tokens ?? 0,
-        total_input_tokens: student.ai_usage_summary?.total_input_tokens ?? 0,
-        total_output_tokens: student.ai_usage_summary?.total_output_tokens ?? 0,
-        average_tokens_per_interaction: student.ai_usage_summary?.average_tokens_per_interaction ?? 0,
-        main_semantic_tags: student.ai_usage_summary?.main_semantic_tags ?? []
-      }
+      ai_usage_summary: normalizeAiUsageSummary(student.ai_usage_summary)
     }))
   } satisfies AggregateReport;
 }
 
 export async function getAssessment(assessmentId: string) {
   const assessments = await getStudentAssessments();
-  return assessments.find((assessment) => assessment.assessment_id === assessmentId) ?? assessments[0];
+  const assessment = assessments.find((item) => item.assessment_id === assessmentId);
+  if (!assessment) {
+    throw new ApiRequestError("Assessment was not found.", 404, "ASSESSMENT_NOT_FOUND");
+  }
+
+  return assessment;
 }
 
 export async function startAssessment(assessmentId: string) {
-  await apiRequest<unknown>(`/assessments/${assessmentId}/attempts/start`, {
+  const existingRequest = startAssessmentRequests.get(assessmentId);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = apiRequest<unknown>(`/assessments/${assessmentId}/attempts/start`, {
     method: "POST"
-  });
+  }).then(() => undefined)
+    .finally(() => {
+      startAssessmentRequests.delete(assessmentId);
+    });
+
+  startAssessmentRequests.set(assessmentId, request);
+  return request;
 }
 
 export async function getWorkspaceContext(assessmentId: string) {
@@ -460,7 +533,7 @@ export async function getWorkspaceContext(assessmentId: string) {
 }
 
 export async function getWorkspace(assessmentId: string) {
-  return apiRequest<WorkspaceState>(`/assessments/${assessmentId}/workspace`);
+  return normalizeWorkspace(await apiRequest<any>(`/assessments/${assessmentId}/workspace`), assessmentId);
 }
 
 export async function autosaveWorkspace(
@@ -640,7 +713,7 @@ function normalizeQuestion(question: any): Question {
     sort_order: question.sort_order ?? 0,
     max_score: question.max_score ?? 100,
     constraints: question.constraints ?? [],
-    language_constraints: question.language_constraints ?? ["python", "javascript", "typescript"],
+    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints),
     starter_code: {
       python: question.starter_code?.python ?? {},
       javascript: question.starter_code?.javascript ?? {},
@@ -656,6 +729,60 @@ function normalizeQuestion(question: any): Question {
   };
 }
 
+function normalizeWorkspace(raw: any, assessmentId: string): WorkspaceState {
+  const rawQuestions = raw?.questions && typeof raw.questions === "object" && !Array.isArray(raw.questions)
+    ? raw.questions as Record<string, any>
+    : {};
+
+  const questions = Object.fromEntries(
+    Object.entries(rawQuestions).map(([questionId, state]) => {
+      const files = normalizeWorkspaceFiles(state?.files);
+      const selectedLanguage = normalizeWorkspaceLanguage(state?.selected_language);
+      const activeFile = typeof state?.active_file === "string" && state.active_file.trim()
+        ? state.active_file
+        : Object.keys(files)[0] ?? (selectedLanguage === "javascript" ? "main.js" : "main.py");
+
+      return [
+        questionId,
+        {
+          selected_language: selectedLanguage,
+          active_file: activeFile,
+          files: Object.keys(files).length
+            ? files
+            : { [activeFile]: { language: selectedLanguage, content: "" } },
+          last_saved_at: typeof state?.last_saved_at === "string" ? state.last_saved_at : "",
+          version: typeof state?.version === "number" ? state.version : 0
+        }
+      ];
+    })
+  );
+
+  return {
+    assessment_id: typeof raw?.assessment_id === "string" ? raw.assessment_id : assessmentId,
+    questions
+  };
+}
+
+function normalizeWorkspaceFiles(value: unknown): Record<string, WorkspaceFile> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, any>).map(([fileName, file]) => [
+      fileName,
+      {
+        language: normalizeWorkspaceLanguage(file?.language),
+        content: typeof file?.content === "string" ? file.content : ""
+      }
+    ])
+  );
+}
+
+function normalizeWorkspaceLanguage(value: string | undefined): Language {
+  return value === "javascript" ? "javascript" : "python";
+}
+
 function normalizeAdminTestCase(testCase: any): AdminTestCase {
   return {
     test_case_id: testCase.test_case_id,
@@ -669,6 +796,31 @@ function normalizeAdminTestCase(testCase: any): AdminTestCase {
   };
 }
 
+function normalizeAiUsageSummary(value: any): AiUsageSummary {
+  const perTaskTokenTotals = Array.isArray(value?.per_task_token_totals)
+    ? value.per_task_token_totals.map((item: any) => ({
+      question_id: item.question_id ?? "",
+      task_title: item.task_title ?? "Unknown task",
+      task_type: item.task_type ?? "",
+      interaction_count: item.interaction_count ?? 0,
+      total_input_tokens: item.total_input_tokens ?? 0,
+      total_output_tokens: item.total_output_tokens ?? 0,
+      total_tokens: item.total_tokens ?? 0
+    }))
+    : [];
+
+  return {
+    total_interactions: value?.total_interactions ?? 0,
+    total_tokens: value?.total_tokens ?? 0,
+    total_input_tokens: value?.total_input_tokens ?? 0,
+    total_output_tokens: value?.total_output_tokens ?? 0,
+    average_tokens_per_interaction: value?.average_tokens_per_interaction ?? 0,
+    token_efficiency_indicator: normalizeTokenEfficiencyIndicator(value?.token_efficiency_indicator),
+    main_semantic_tags: Array.isArray(value?.main_semantic_tags) ? value.main_semantic_tags : [],
+    per_task_token_totals: perTaskTokenTotals
+  };
+}
+
 function toQuestionRequest(question: Question) {
   return {
     title: question.title,
@@ -677,7 +829,7 @@ function toQuestionRequest(question: Question) {
     verification_mode: normalizeVerificationMode(question.verification_mode, question.task_type),
     starter_prototype_reference: question.starter_prototype_reference ?? null,
     problem_description_markdown: question.problem_description_markdown,
-    language_constraints: question.language_constraints.length ? question.language_constraints : ["python", "javascript", "typescript"],
+    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints),
     starter_code: {
       python: question.starter_code.python ?? {},
       javascript: question.starter_code.javascript ?? {},
@@ -712,6 +864,15 @@ function normalizeAttemptStatus(value: string | undefined): AttemptStatus {
   }
 
   return "not_started";
+}
+
+function normalizeStudentLanguageConstraints(value: unknown): Language[] {
+  if (!Array.isArray(value)) {
+    return ["python", "javascript"];
+  }
+
+  const languages = value.filter((item): item is Language => item === "python" || item === "javascript");
+  return languages.length ? languages : ["python", "javascript"];
 }
 
 function normalizeTaskType(value: string | undefined): TaskType {
@@ -767,6 +928,20 @@ function normalizeAuthoringSource(value: string | undefined) {
   }
 
   return "manual";
+}
+
+function normalizeTokenEfficiencyIndicator(value: string | undefined): TokenEfficiencyIndicator {
+  if (
+    value === "no_ai_usage"
+    || value === "strategic"
+    || value === "token_heavy_success"
+    || value === "inefficient"
+    || value === "needs_review"
+  ) {
+    return value;
+  }
+
+  return "needs_review";
 }
 
 function normalizeMetadata(value: unknown): Record<string, string> {

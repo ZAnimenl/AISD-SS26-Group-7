@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect, useRef } from "react";
 import type { OnChange, OnMount } from "@monaco-editor/react";
 import type { Language } from "@/lib/types";
 
@@ -43,14 +44,27 @@ function getModelPath(assessmentId: string, questionId: string, fileName: string
 
 export function MonacoCodeEditor({ assessmentId, questionId, fileName, language, value, onChange }: MonacoCodeEditorProps) {
   const modelPath = getModelPath(assessmentId, questionId, fileName);
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   const handleEditorChange: OnChange = (nextValue) => {
     onChange(nextValue ?? "");
   };
 
   const handleEditorMount: OnMount = (editor) => {
+    editorRef.current = editor;
     editor.focus();
   };
+
+  useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (!model) {
+      return;
+    }
+
+    if (model.getValue() !== value) {
+      model.setValue(value);
+    }
+  }, [modelPath, value]);
 
   return (
     <div className="h-full min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#080b14]">

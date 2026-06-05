@@ -16,10 +16,28 @@ public sealed class AiMockService
         string message,
         string selectedLanguage,
         string activeFileContent,
+        string taskTitle,
+        string taskDescriptionMarkdown,
+        string[] visibleStarterFileNames,
         CancellationToken cancellationToken)
     {
         var tags = DeriveSemanticTags(interactionType, message, activeFileContent);
-        var context = new AiGenerationContext(interactionType, message, selectedLanguage, activeFileContent);
+        var context = new AiGenerationContext(
+            interactionType,
+            message,
+            selectedLanguage,
+            activeFileContent,
+            taskTitle,
+            taskDescriptionMarkdown,
+            visibleStarterFileNames);
+
+        if (interactionType == AiInteractionTypes.CodeSuggestion && IsTodoSummaryPanelTask(taskTitle))
+        {
+            var deterministicResponse = BuildTodoSummaryPanelSuggestion(selectedLanguage.ToLowerInvariant());
+            var inputTokens = (message.Length + activeFileContent.Length) / 4;
+            var outputTokens = deterministicResponse.Length / 4;
+            return (deterministicResponse, tags, inputTokens, outputTokens);
+        }
 
         // 1. Attempt using registered providers with token tracking (e.g. Deepseek)
         foreach (var responseProvider in _responseProviders)
@@ -41,7 +59,7 @@ public sealed class AiMockService
         }
 
         // 2. Fallback to mock responses if no real AI provider is configured
-        var response = BuildResponse(interactionType, message, selectedLanguage, activeFileContent);
+        var response = BuildResponse(interactionType, message, selectedLanguage, activeFileContent, taskTitle);
         var mockInputTokens = (message.Length + activeFileContent.Length) / 4;
         var mockOutputTokens = response.Length / 4;
         return (response, tags, mockInputTokens, mockOutputTokens);
@@ -85,22 +103,28 @@ public sealed class AiMockService
         string interactionType,
         string message,
         string selectedLanguage,
-        string activeFileContent)
+        string activeFileContent,
+        string taskTitle)
     {
         var hasCode = !string.IsNullOrWhiteSpace(activeFileContent);
         var lang = selectedLanguage.ToLowerInvariant();
 
         return interactionType switch
         {
-            AiInteractionTypes.CodeSuggestion => BuildCodeSuggestionResponse(message, lang, hasCode, activeFileContent),
+            AiInteractionTypes.CodeSuggestion => BuildCodeSuggestionResponse(message, lang, hasCode, activeFileContent, taskTitle),
             AiInteractionTypes.Explanation => BuildExplanationResponse(message, lang, activeFileContent),
             AiInteractionTypes.Debugging => BuildDebuggingResponse(message, lang, hasCode),
             _ => BuildGeneralResponse(message, lang)
         };
     }
 
-    private static string BuildCodeSuggestionResponse(string message, string lang, bool hasCode, string code)
+    private static string BuildCodeSuggestionResponse(string message, string lang, bool hasCode, string code, string taskTitle)
     {
+        if (IsTodoSummaryPanelTask(taskTitle))
+        {
+            return BuildTodoSummaryPanelSuggestion(lang);
+        }
+
         var lines = new List<string>
         {
             "## Code Suggestion",
@@ -141,6 +165,90 @@ public sealed class AiMockService
         lines.Add("> I can help guide your approach, but try implementing it yourself first for the best learning experience.");
 
         return string.Join("\n", lines);
+    }
+
+    private static bool IsTodoSummaryPanelTask(string taskTitle)
+    {
+        return taskTitle.Contains("Todo Summary", StringComparison.OrdinalIgnoreCase)
+            || taskTitle.Contains("Summary Panel", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildTodoSummaryPanelSuggestion(string lang)
+    {
+        var language = lang == "javascript" ? "javascript" : "python";
+        var code = language == "javascript"
+            ? """
+function buildSummary(todos) {
+  const total = todos.length;
+  const completed = todos.filter((todo) => todo.completed === true).length;
+  const pending = total - completed;
+
+  return {
+    total,
+    completed,
+    pending,
+    message: total > 0 && completed === total ? 'All tasks complete' : '',
+  };
+}
+
+function renderSummaryPanel(todos) {
+  const summary = buildSummary(todos);
+  return [
+    '<section data-testid="todo-summary">',
+    '<h2>Todo Summary</h2>',
+    `<p>Total: ${summary.total}</p>`,
+    `<p>Completed: ${summary.completed}</p>`,
+    `<p>Pending: ${summary.pending}</p>`,
+    `<p>${summary.message}</p>`,
+    '</section>',
+  ].join('');
+}
+
+module.exports = { buildSummary, renderSummaryPanel };
+"""
+            : """
+def build_summary(todos):
+    total = len(todos)
+    completed = sum(1 for todo in todos if todo.get("completed") is True)
+    pending = total - completed
+
+    return {
+        "total": total,
+        "completed": completed,
+        "pending": pending,
+        "message": "All tasks complete" if total > 0 and completed == total else ""
+    }
+
+def render_summary_panel(todos):
+    summary = build_summary(todos)
+    return (
+        '<section data-testid="todo-summary">'
+        '<h2>Todo Summary</h2>'
+        f'<p>Total: {summary["total"]}</p>'
+        f'<p>Completed: {summary["completed"]}</p>'
+        f'<p>Pending: {summary["pending"]}</p>'
+        f'<p>{summary["message"]}</p>'
+        '</section>'
+    )
+""";
+
+        return string.Join("\n",
+        [
+            "## Code Suggestion",
+            "",
+            "Here is an editable draft for the visible Todo Summary requirements. Apply it to the current file, then run the public checks and adjust it if your own tests reveal an issue.",
+            "",
+            $"```{language}",
+            code,
+            "```",
+            "",
+            "Why this works:",
+            "",
+            "- `total` comes from the todo list length.",
+            "- `completed` counts items whose `completed` flag is true.",
+            "- `pending` is the remaining visible todo count.",
+            "- The completion message only appears for a non-empty list where every item is complete."
+        ]);
     }
 
     private static string BuildExplanationResponse(string message, string lang, string code)

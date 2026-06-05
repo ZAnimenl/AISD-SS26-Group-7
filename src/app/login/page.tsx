@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Code2, LogIn, UserPlus } from "lucide-react";
-import { login, registerStudent } from "@/lib/api";
+import { clearStoredAuth, login, registerStudent } from "@/lib/api";
 
 type AuthAction = "login" | "register";
 
@@ -14,6 +14,10 @@ export default function LoginPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    clearStoredAuth();
+  }, []);
 
   async function handleSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
