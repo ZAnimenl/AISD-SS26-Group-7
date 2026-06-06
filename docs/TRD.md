@@ -38,6 +38,12 @@
   structured provider-unavailable error.
 - AI-generated assessment and question drafts use configured provider-backed JSON
   output or return a structured generation error.
+- Local one-command startup restores project dependencies, prompts for missing
+  local secrets, writes them only to `.env.local`, and waits for backend health
+  before starting the frontend.
+- Root npm dependency restoration is lockfile-hash gated so repeated local
+  starts do not reinstall duplicate dependency trees for the same
+  `package-lock.json`.
 - Backend startup requires an explicit database connection string and configured
   seed administrator credentials in every environment.
 - Student code is never executed in frontend JavaScript or normal backend

@@ -21,16 +21,33 @@ the active requirements. It does not replace automated test files.
 ## Student Workspace
 
 - Students can start an active assessment and open the browser workspace.
+- Starting an assessment shows a pending state while the backend resolves the
+  real active attempt and prevents duplicate start clicks.
+- Direct deep links to student assessment start, workspace, and review pages
+  resolve the `assessment_id` from the URL and do not show not-found states for
+  assessments returned by the backend.
 - Workspace context displays public task details and starter files.
 - Workspace APIs do not require frontend-sent `session_id` or `attempt_id`.
 - Autosave persists selected language, active file, file contents, and version.
 - Browser preview renders sandbox-produced HTML or a no-output state, never
   sample task content.
+- Workspace task navigation, AI assistant, and output panels can be collapsed,
+  expanded, and resized without sending extra backend state.
+- Output panel headers and bodies use opaque readable surfaces so sandbox logs
+  do not visually blend with editor/sidebar text behind them.
+- Browser preview tasks whose visible starter file is named
+  `todo_summary_panel.py` or `todo_summary_panel.js` still run real public
+  checks that import `TodoSummaryPanel`.
+- Final submission shows saving/submitting progress and does not navigate to
+  review until the backend confirms submission.
 
 ## Run and Submit
 
 - Run uses public checks and returns safe stdout, stderr, status, and public test
   feedback.
+- With `DOCKER_HOST` pointed at a real Docker-compatible runtime, sandbox
+  integration tests execute Python and JavaScript submissions in the grader
+  container.
 - If the sandbox grader is unavailable, run and submit report `internal_error`
   rather than static task-specific pass/fail results.
 - Submit evaluates final work and returns visible and hidden test summary counts
@@ -42,13 +59,45 @@ the active requirements. It does not replace automated test files.
 - AI assistance is hidden or blocked when disabled for the assessment.
 - AI interactions record message, response, semantic tags, input tokens, output
   tokens, total tokens, assessment, task, and attempt ownership.
+- AI requests include active file name, selected language, visible
+  selected-language file contents, active file content, and latest public run
+  output when available.
+- AI provider prompts request structured JSON with student-visible Markdown and
+  an optional active-file replacement suggestion.
+- AI Apply buttons are shown only for structured suggestions whose target file
+  and language match the current workspace state.
+- Markdown code blocks in explanation-only AI responses remain readable but are
+  not auto-applied as file replacements.
 - Direct complete-solution requests receive a safety response rather than a full
   answer.
 - Missing or failing AI providers return a structured unavailable error instead
   of mock guidance.
+- AI chat may show the student's sent intent immediately, but assistant content
+  is displayed only after the backend returns a real provider response.
+
+## Truthful Optimistic UI
+
+- Long-running admin actions show operation-specific pending copy and disable
+  duplicate clicks.
+- Data-loading pages show backend-loading or backend-error states instead of
+  rendering an apparently empty list while requests are still pending.
+- Failed mutations preserve local form values and show the backend error.
 
 ## Startup Configuration
 
+- A fresh checkout can use `npm run dev` as the local startup command.
+- `npm run dev` installs root npm dependencies when missing or stale and runs
+  `dotnet restore Backend/Backend.sln` before backend startup.
+- Repeated `npm run dev` starts skip root npm installation when the ignored
+  local install marker already matches the current `package-lock.json` hash.
+- When local configuration is missing in an interactive terminal, `npm run dev`
+  prompts for `ConnectionStrings__DefaultConnection`, `SeedAdmin__Email`,
+  `SeedAdmin__Password`, and `Deepseek__ApiKey` unless AI is explicitly
+  disabled.
+- Local startup writes entered secrets only to `.env.local`, which remains
+  untracked.
+- The frontend starts only after the backend health endpoint returns a
+  successful response.
 - Backend startup fails when `ConnectionStrings__DefaultConnection`,
   `SeedAdmin__Email`, or `SeedAdmin__Password` is missing.
 - Backend startup creates or repairs only the configured seed administrator and

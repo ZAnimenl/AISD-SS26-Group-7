@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Clock, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Clock, Loader2, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAssessment, isAuthenticationError, startAssessment } from "@/lib/api";
 import type { Assessment } from "@/lib/types";
 
-export default function AssessmentStartPage({ params }: { params: { assessmentId: string } }) {
+export default function AssessmentStartPage() {
   const router = useRouter();
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
-    getAssessment(params.assessmentId).then(setAssessment).catch((exception) => {
+    getAssessment(assessmentId).then(setAssessment).catch((exception) => {
       if (isAuthenticationError(exception)) {
         router.replace("/login");
         return;
@@ -22,13 +25,18 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
 
       setError(exception instanceof Error ? exception.message : "Unable to load assessment.");
     });
-  }, [params.assessmentId, router]);
+  }, [assessmentId, router]);
 
   async function openWorkspace() {
+    if (isStarting) {
+      return;
+    }
+
     setError(null);
+    setIsStarting(true);
     try {
-      await startAssessment(params.assessmentId);
-      router.push(`/student/assessments/${params.assessmentId}/workspace`);
+      await startAssessment(assessmentId);
+      router.push(`/student/assessments/${assessmentId}/workspace`);
     } catch (exception) {
       if (isAuthenticationError(exception)) {
         router.replace("/login");
@@ -36,6 +44,7 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
       }
 
       setError(exception instanceof Error ? exception.message : "Unable to start assessment.");
+      setIsStarting(false);
     }
   }
 
@@ -64,13 +73,14 @@ export default function AssessmentStartPage({ params }: { params: { assessmentId
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.ai_enabled ? "On" : "Off"}</p><p className="text-sm text-white/45">AI assistance</p></div>
             </div>
             {canStartAttempt ? (
-              <button className="btn-primary mt-8" onClick={openWorkspace}>
-                {assessment.attempt_status === "submitted" ? <RotateCcw size={16} /> : <PlayCircle size={16} />}
-                {startButtonLabel}
+              <button className="btn-primary mt-8" onClick={openWorkspace} disabled={isStarting}>
+                {isStarting ? <Loader2 className="animate-spin" size={16} /> : assessment.attempt_status === "submitted" ? <RotateCcw size={16} /> : <PlayCircle size={16} />}
+                {isStarting ? "Opening workspace..." : startButtonLabel}
               </button>
             ) : (
               <p className="mt-8 text-sm text-white/50">This assessment is not open for new attempts.</p>
             )}
+            {isStarting ? <p className="mt-3 text-sm text-white/55" aria-live="polite">Backend is resolving your real active attempt before opening the workspace.</p> : null}
             {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
           </div>
         </section>

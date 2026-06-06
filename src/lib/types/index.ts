@@ -122,6 +122,24 @@ export interface RunResult {
   };
 }
 
+export interface AiCodeSuggestion {
+  target_file: string;
+  language: Language;
+  replacement_code: string;
+  apply_label: string;
+}
+
+export interface AiAssistantResponse {
+  response_markdown: string;
+  semantic_tags: string[];
+  suggestion?: AiCodeSuggestion | null;
+  token_usage: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+}
+
 export interface SubmissionResult {
   submission_id: string;
   evaluation_status: SubmissionStatus;

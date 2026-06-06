@@ -3,13 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { createAssessment, generateAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+
+type CreateMode = "manual" | "generate";
 
 export default function NewAssessmentPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingMode, setPendingMode] = useState<CreateMode | null>(null);
   const router = useRouter();
+  const isPending = pendingMode !== null;
 
   return (
     <div>
@@ -21,8 +26,11 @@ export default function NewAssessmentPage() {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
             const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-            const shouldGenerate = submitter?.value === "generate";
+            const nextMode: CreateMode = submitter?.value === "generate" ? "generate" : "manual";
+            const shouldGenerate = nextMode === "generate";
             setError(null);
+            setSaved(false);
+            setPendingMode(nextMode);
             try {
               const create = shouldGenerate ? generateAssessment : createAssessment;
               await create({
@@ -37,6 +45,8 @@ export default function NewAssessmentPage() {
               setSaved(true);
             } catch (exception) {
               setError(exception instanceof Error ? exception.message : "Unable to create assessment.");
+            } finally {
+              setPendingMode(null);
             }
           }}
         >
@@ -56,10 +66,23 @@ export default function NewAssessmentPage() {
             <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. LLM draft creation calls the configured backend AI provider and keeps the assessment in draft for review.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button className="btn-primary" type="submit" name="creation_mode" value="manual">Save assessment</button>
-            <button className="btn-secondary" type="submit" name="creation_mode" value="generate">Generate LLM draft</button>
-            <Link className="btn-secondary" href="/admin/assessments">Back to list</Link>
-            {saved ? <button className="btn-secondary" type="button" onClick={() => router.push("/admin/assessments")}>View list</button> : null}
+            <button className="btn-primary" type="submit" name="creation_mode" value="manual" disabled={isPending}>
+              {pendingMode === "manual" ? <Loader2 className="animate-spin" size={16} /> : null}
+              {pendingMode === "manual" ? "Saving in backend..." : "Save assessment"}
+            </button>
+            <button className="btn-secondary" type="submit" name="creation_mode" value="generate" disabled={isPending}>
+              {pendingMode === "generate" ? <Loader2 className="animate-spin" size={16} /> : null}
+              {pendingMode === "generate" ? "Waiting for AI draft..." : "Generate LLM draft"}
+            </button>
+            <Link className={`btn-secondary ${isPending ? "pointer-events-none opacity-45" : ""}`} href="/admin/assessments" aria-disabled={isPending}>Back to list</Link>
+            {saved ? <button className="btn-secondary" type="button" onClick={() => router.push("/admin/assessments")} disabled={isPending}>View list</button> : null}
+            {pendingMode ? (
+              <span className="text-sm text-white/55" aria-live="polite">
+                {pendingMode === "generate"
+                  ? "Backend is asking the configured AI provider for a real draft. Nothing is saved until the response is confirmed."
+                  : "Saving assessment shell in the backend..."}
+              </span>
+            ) : null}
             {saved ? <span className="text-sm text-cyanGlow">Saved in backend.</span> : null}
             {error ? <span className="text-sm text-pinkGlow">{error}</span> : null}
           </div>

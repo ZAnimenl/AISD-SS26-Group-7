@@ -197,6 +197,62 @@ textarea {
     @apply rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyanGlow/70;
   }
 
+  .workspace-resizer {
+    position: relative;
+    display: block;
+    border: 0;
+    background: transparent;
+    color: rgba(0, 229, 255, 0.42);
+    transition: color 160ms ease, background 160ms ease;
+  }
+
+  .workspace-resizer:disabled {
+    cursor: default;
+    opacity: 0.32;
+  }
+
+  .workspace-resizer:not(:disabled):hover,
+  .workspace-resizer:not(:disabled):focus-visible {
+    background: rgba(0, 229, 255, 0.08);
+    color: rgba(0, 229, 255, 0.82);
+    outline: none;
+  }
+
+  .workspace-resizer::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 14px rgba(0, 229, 255, 0.22);
+  }
+
+  .workspace-resizer-vertical {
+    cursor: col-resize;
+  }
+
+  .workspace-resizer-vertical::after {
+    inset-block: 16px;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+  }
+
+  .workspace-resizer-horizontal {
+    cursor: row-resize;
+  }
+
+  .workspace-resizer-horizontal::after {
+    inset-inline: 18px;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+
+  .workspace-resizer-vertical:disabled,
+  .workspace-resizer-horizontal:disabled {
+    cursor: default;
+  }
+
   .dynamic-surface {
     position: relative;
     isolation: isolate;

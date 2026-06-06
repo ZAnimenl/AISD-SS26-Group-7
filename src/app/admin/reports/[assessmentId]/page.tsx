@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAggregateReport, isAuthenticationError } from "@/lib/api";
@@ -19,13 +19,15 @@ function formatEfficiency(value: TokenEfficiencyIndicator) {
   return EFFICIENCY_LABELS[value] ?? "Needs review";
 }
 
-export default function ReportDetailPage({ params }: { params: { assessmentId: string } }) {
+export default function ReportDetailPage() {
   const router = useRouter();
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
   const [report, setReport] = useState<AggregateReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAggregateReport(params.assessmentId).then(setReport).catch((exception) => {
+    getAggregateReport(assessmentId).then(setReport).catch((exception) => {
       if (isAuthenticationError(exception)) {
         router.replace("/login");
         return;
@@ -33,7 +35,7 @@ export default function ReportDetailPage({ params }: { params: { assessmentId: s
 
       setError(exception instanceof Error ? exception.message : "Unable to load report.");
     });
-  }, [params.assessmentId, router]);
+  }, [assessmentId, router]);
 
   if (error) {
     return <SectionHeader eyebrow="Report detail" title={error} />;

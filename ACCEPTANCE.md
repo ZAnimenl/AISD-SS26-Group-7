@@ -29,11 +29,34 @@
 
 ## Real Deployment Readiness
 
+- One-command local startup is documented in `docs/design/one-command-startup.md`.
+- `npm run dev` restores root npm dependencies and backend NuGet packages before starting local servers when required tools are available.
+- Repeated `npm run dev` starts do not reinstall root npm dependencies when the current `package-lock.json` hash already matches the ignored local install marker.
+- `npm run dev` prompts for missing PostgreSQL, seed administrator, and DeepSeek local configuration, writes secrets only to `.env.local`, and starts the frontend only after backend health succeeds.
 - Backend startup requires a configured `ConnectionStrings__DefaultConnection` value and does not use a hardcoded localhost database fallback.
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
+- Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL`; localhost API fallback is Development-only.
 - Login UI does not prefill or display demo credentials.
+
+## Truthful Optimistic UI
+
+- Truthful latency handling is documented in `docs/design/truthful-optimistic-ui.md`.
+- Workspace IDE panel behavior is documented in `docs/design/workspace-ide-panels.md`.
+- LLM draft generation, AI assistance, run, start-attempt, final submission, and admin mutation controls show real pending states while backend/provider work is in progress.
+- The UI does not mark generated, saved, submitted, or passed states until the backend confirms the real result.
+- Loading pages show backend-loading or backend-error states instead of appearing empty while data is still pending.
+- Failed long-running actions preserve user-entered data and show the real backend/provider error.
+- Dynamic assessment routes resolve the URL `assessment_id` on production Next.js builds and do not treat existing backend assessments as missing.
+- Workspace task, AI, and output panels can be collapsed/expanded and resized without changing backend state.
+- Sandbox output surfaces use opaque readable backgrounds and do not visually merge with editor or sidebar text.
+- Browser-preview runs for the platform Todo summary task resolve the visible starter file even when legacy tests import `TodoSummaryPanel`.
+- AI workspace assistance is documented in `docs/design/ai-agent-workspace-context.md`.
+- AI assist requests include active file name, visible selected-language files, and latest public run feedback when available.
+- AI Apply actions appear only for backend-validated structured suggestions targeting the active file and selected language.
+- Arbitrary Markdown code blocks in AI responses are not treated as file replacements.
+- AI structured suggestions preserve required public function names or exports from visible starter files before the frontend can apply them.
 
 ## Repository Synchronization
 

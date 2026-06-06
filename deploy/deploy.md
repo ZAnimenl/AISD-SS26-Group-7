@@ -42,6 +42,19 @@ The frontend uses localhost fallback URLs only for local development.
 
 AI assistance and LLM draft generation require a configured provider that returns content and token usage. Missing or failing providers return structured API errors such as `AI_PROVIDER_UNAVAILABLE`; the backend does not return mock guidance or template drafts as generated output.
 
+## Sandbox execution
+
+Run and submit require a real Docker-compatible container runtime for the backend `DockerCodeRunner`.
+
+For a lightweight local deployment on macOS, Colima can provide the Docker socket:
+
+```bash
+colima start --cpu 2 --memory 2 --disk 20 --runtime docker
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
+```
+
+If `DOCKER_HOST` is not set for Colima, the backend will look for the default Docker socket and run/submit will fail closed with a dependency error instead of fabricating results.
+
 ## Seed data
 
 Backend startup seeds or repairs only the configured administrator account. It does not create demo users, demo assessments, or demo prototype content in any environment.

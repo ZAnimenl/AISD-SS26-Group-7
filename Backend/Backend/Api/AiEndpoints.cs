@@ -75,7 +75,7 @@ public static class AiEndpoints
                 StatusCodes.Status400BadRequest);
         }
 
-        (string ResponseMarkdown, string[] SemanticTags, int InputTokens, int OutputTokens) assistantResult;
+        AiAssistantResult assistantResult;
         if (LooksLikeCompleteSolutionRequest(request.Message))
         {
             assistantResult = BuildDirectSolutionSafetyResponse();
@@ -88,7 +88,11 @@ public static class AiEndpoints
                     request.InteractionType,
                     request.Message,
                     selectedLanguage,
+                    request.ActiveFileName,
                     request.ActiveFileContent,
+                    request.VisibleFiles,
+                    GetVisibleStarterFiles(question, selectedLanguage),
+                    request.LastRunResult,
                     question.Title,
                     question.ProblemDescriptionMarkdown,
                     GetVisibleStarterFileNames(question, selectedLanguage),
@@ -129,6 +133,7 @@ public static class AiEndpoints
             interaction_id = interaction.Id,
             response_markdown = assistantResult.ResponseMarkdown,
             semantic_tags = assistantResult.SemanticTags,
+            suggestion = assistantResult.Suggestion,
             token_usage = new
             {
                 input_tokens = assistantResult.InputTokens,
@@ -236,9 +241,14 @@ public static class AiEndpoints
 
     private static string[] GetVisibleStarterFileNames(Question question, string selectedLanguage)
     {
+        return GetVisibleStarterFiles(question, selectedLanguage).Keys.OrderBy(name => name).ToArray();
+    }
+
+    private static Dictionary<string, string> GetVisibleStarterFiles(Question question, string selectedLanguage)
+    {
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
         return starterCode.TryGetValue(AssessmentPolicy.NormalizeLanguage(selectedLanguage), out var languageFiles)
-            ? languageFiles.Keys.OrderBy(name => name).ToArray()
+            ? languageFiles.ToDictionary(item => item.Key, item => item.Value)
             : [];
     }
 
@@ -269,16 +279,17 @@ public static class AiEndpoints
         return blockedPhrases.Any(normalized.Contains);
     }
 
-    private static (string ResponseMarkdown, string[] SemanticTags, int InputTokens, int OutputTokens) BuildDirectSolutionSafetyResponse()
+    private static AiAssistantResult BuildDirectSolutionSafetyResponse()
     {
         const string response = """
         I cannot provide a complete solution for the assessment task. I can still help you make progress: describe the failing behavior, explain the relevant concept, review a small code snippet, or suggest the next testable step.
         """;
 
-        return (
+        return new AiAssistantResult(
             response,
             ["assessment_safety", "direct_solution_request"],
             0,
-            0);
+            0,
+            null);
     }
 }

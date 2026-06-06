@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "lucide-react";
 import { getStudentAssessments, getStudentResults } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Assessment } from "@/lib/types";
 
-export default function StudentAssessmentReviewPage({ params }: { params: { assessmentId: string } }) {
+export default function StudentAssessmentReviewPage() {
   const router = useRouter();
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
   const searchParams = useSearchParams();
   const submissionId = searchParams.get("submissionId");
   const [results, setResults] = useState<Assessment[]>([]);
@@ -39,8 +41,8 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
   const result = useMemo(() => {
     const nextResult = submissionId
       ? results.find((item) => item.submission_id === submissionId)
-      : results.find((item) => item.assessment_id === params.assessmentId);
-    const assessment = assessments.find((item) => item.assessment_id === params.assessmentId);
+      : results.find((item) => item.assessment_id === assessmentId);
+    const assessment = assessments.find((item) => item.assessment_id === assessmentId);
 
     if (!nextResult) {
       return null;
@@ -50,8 +52,8 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
       ...nextResult,
       question_count: nextResult.question_count || assessment?.question_count || assessment?.questions.length || 0
     };
-  }, [assessments, params.assessmentId, results, submissionId]);
-  const canStartAnotherAttempt = assessments.some((assessment) => assessment.assessment_id === params.assessmentId);
+  }, [assessmentId, assessments, results, submissionId]);
+  const canStartAnotherAttempt = assessments.some((assessment) => assessment.assessment_id === assessmentId);
 
   if (isLoading) {
     return <SectionHeader eyebrow="Assessment review" title="Loading result..." />;
@@ -73,7 +75,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> Results</Link>
             {canStartAnotherAttempt ? (
-              <Link className="btn-secondary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+              <Link className="btn-secondary" href={`/student/assessments/${assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
             ) : null}
           </div>
         </section>
@@ -89,7 +91,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
         action={
           <div className="flex flex-wrap justify-end gap-2">
             {canStartAnotherAttempt ? (
-              <Link className="btn-primary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+              <Link className="btn-primary" href={`/student/assessments/${assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
             ) : null}
             <Link className="btn-secondary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>
           </div>
@@ -134,7 +136,7 @@ export default function StudentAssessmentReviewPage({ params }: { params: { asse
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Back to dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> View all results</Link>
             {canStartAnotherAttempt ? (
-              <Link className="btn-secondary" href={`/student/assessments/${params.assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+              <Link className="btn-secondary" href={`/student/assessments/${assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
             ) : null}
           </div>
         </div>

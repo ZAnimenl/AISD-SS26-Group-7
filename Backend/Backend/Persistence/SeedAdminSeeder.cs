@@ -11,8 +11,6 @@ public sealed class SeedAdminSeeder(
     PasswordHasher passwordHasher,
     IOptions<SeedAdminOptions> seedAdminOptions)
 {
-    private static readonly Guid AdminUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
-
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
         seedAdminOptions.Value.Validate();
@@ -24,7 +22,7 @@ public sealed class SeedAdminSeeder(
         {
             dbContext.Users.Add(new User
             {
-                Id = AdminUserId,
+                Id = Guid.NewGuid(),
                 FullName = "Seed Administrator",
                 Email = options.Email,
                 PasswordHash = passwordHasher.Hash(options.Password),

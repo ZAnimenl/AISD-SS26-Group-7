@@ -191,6 +191,34 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
+    public void Grader_test_files_create_legacy_pascal_case_aliases_for_snake_case_starter_files()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-alias-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["todo_summary_panel.py"] = "def render_summary_panel(todos):\n    return ''\n",
+                    ["already_named.py"] = "VALUE = 1\n",
+                    ["TodoSummaryPanel.py"] = "EXPLICIT = True\n"
+                },
+                "from TodoSummaryPanel import render_summary_panel\n",
+                GradingLanguage.Python);
+
+            Assert.True(File.Exists(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
+            Assert.Contains("EXPLICIT = True", File.ReadAllText(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
+            Assert.True(File.Exists(Path.Combine(directory.FullName, "AlreadyNamed.py")));
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public async Task Docker_runner_rejects_unsupported_language_without_starting_container()
     {
         var runner = new DockerCodeRunner();

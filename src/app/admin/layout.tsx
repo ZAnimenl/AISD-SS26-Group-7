@@ -3,27 +3,26 @@
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ParticleBackground } from "@/components/layout/ParticleBackground";
 import { TopBar } from "@/components/layout/TopBar";
-import { getStoredUser, hasStoredAuth } from "@/lib/api";
+import { useClientAuthState } from "@/lib/useClientAuthState";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
-  const user = getStoredUser();
-  const isAuthorized = hasStoredAuth() && user?.role === "administrator";
+  const authState = useClientAuthState("administrator");
 
   useEffect(() => {
-    if (!hasStoredAuth()) {
+    if (authState === "unauthenticated") {
       router.replace("/login");
       return;
     }
 
-    if (user?.role !== "administrator") {
+    if (authState === "wrong-role") {
       router.replace("/student/dashboard");
     }
-  }, [router, user?.role]);
+  }, [authState, router]);
 
-  if (!isAuthorized) {
+  if (authState !== "authorized") {
     return null;
   }
 
