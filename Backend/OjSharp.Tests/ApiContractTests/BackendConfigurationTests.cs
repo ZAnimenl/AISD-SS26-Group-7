@@ -74,6 +74,31 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
+    public void Backend_project_declares_sqlite_provider_for_local_startup()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Backend.csproj"));
+
+        Assert.Contains("Microsoft.EntityFrameworkCore.Sqlite", source);
+        Assert.Contains("Npgsql.EntityFrameworkCore.PostgreSQL", source);
+    }
+
+    [Fact]
+    public void Program_supports_sqlite_and_postgresql_providers()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Program.cs"));
+
+        Assert.Contains("UseSqlite", source);
+        Assert.Contains("UseNpgsql", source);
+        Assert.Contains("Database__Provider", source);
+    }
+
+    [Fact]
     public void Schema_compatibility_sql_escapes_json_default_for_execute_sql_raw()
     {
         var source = File.ReadAllText(Path.Combine(
@@ -84,6 +109,7 @@ public sealed class BackendConfigurationTests
 
         Assert.Contains("DEFAULT '{{}}'", source);
         Assert.DoesNotContain("DEFAULT '{}'", source);
+        Assert.Contains("IsSqliteProviderName", source);
         Assert.Contains("ALTER COLUMN \"Input\" DROP NOT NULL", source);
         Assert.Contains("ALTER COLUMN \"ExpectedOutput\" DROP NOT NULL", source);
         Assert.Contains("test_solution_exists", source);

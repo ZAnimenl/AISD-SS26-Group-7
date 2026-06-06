@@ -52,11 +52,10 @@ Security rules:
 - Node.js 20+
 - npm
 - .NET SDK compatible with `Backend/Backend.sln`
-- Docker-compatible container runtime for automatic local PostgreSQL and
-  run/submit verification. A lightweight local option is Docker Desktop or
-  Colima plus Docker CLI.
-- PostgreSQL only when you intentionally use an external database instead of
-  the default project-owned local Docker database.
+- Docker-compatible container runtime only for run/submit verification. The app
+  can still start without Docker.
+- PostgreSQL only for deployment or an explicitly configured external database.
+  Normal local startup uses a repository-owned SQLite file.
 
 The backend default local URL is:
 
@@ -97,9 +96,9 @@ Things users may configure:
 - `NEXT_PUBLIC_API_BASE_URL` - frontend API base URL. Optional for normal local development and required for production frontend deployments.
 - `ASPNETCORE_ENVIRONMENT` - backend environment, usually `Development` locally.
 - `BackendUrls` - backend listen URL, defaulting to `http://localhost:5140`.
-- `ConnectionStrings__DefaultConnection` - real PostgreSQL connection string for the target environment. Required for every backend run. Local startup creates a project-owned Docker PostgreSQL database automatically when this value is missing. The local startup script also accepts and converts `postgresql://...` or `postgres://...` URLs.
-- `DATABASE_URL`, `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` - optional existing local PostgreSQL environment variables that `npm run dev` can convert into `ConnectionStrings__DefaultConnection`.
-- `DOCKER_HOST` - Docker socket for the sandbox runner when the runtime is not available at `/var/run/docker.sock`, for example `unix://$HOME/.colima/default/docker.sock`.
+- `Database__Provider` - `Sqlite` for normal local startup, `PostgreSql` for deployment or explicit external database use.
+- `ConnectionStrings__DefaultConnection` - local startup writes a SQLite `Data Source=...` connection string automatically. Deployment/external database users may provide a real PostgreSQL connection string.
+- `DOCKER_HOST` - optional Docker socket for run/submit verification when the sandbox runtime is not available at `/var/run/docker.sock`, for example `unix://$HOME/.colima/default/docker.sock`.
 - `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run. Local startup uses `admin@example.com` / `Admin123!` when values are missing.
 
 AI provider keys:
@@ -132,12 +131,7 @@ This command:
 - records the current `package-lock.json` hash in ignored `node_modules` state
   so repeated starts skip npm install unless the lockfile changes
 - restores backend packages with `dotnet restore Backend/Backend.sln`
-- reuses existing `.env.local`, shell environment, `DATABASE_URL`, PG*
-  variables, and .NET user-secrets when present
-- creates or reuses the project-owned Docker PostgreSQL container
-  `ojsharp-postgres-dev` when local database config is missing
-- repairs local PostgreSQL password/database/permission startup failures by
-  switching to that project-owned Docker database and retrying once
+- creates `.local-data/ojsharp-dev.sqlite` as the local real database file
 - uses local seed administrator defaults when seed admin values are missing
 - prompts for the DeepSeek API key when it is missing; blank disables local AI
 - writes prompted local secrets only to `.env.local`; secrets already available
@@ -147,24 +141,18 @@ This command:
 The default local database is:
 
 ```text
-container: ojsharp-postgres-dev
-database:  aisd_ss26_group_7
-user:      postgres
-password:  postgres
-host:      127.0.0.1
-port:      first free port from 55432 to 55449
+provider:  Sqlite
+file:      .local-data/ojsharp-dev.sqlite
 ```
 
-The script reuses the same named container and volume on repeated starts, so it
-does not create duplicate dependency trees, duplicate PostgreSQL containers, or
-extra databases every time. If that project-owned container is unhealthy, the
-script may reset only `ojsharp-postgres-dev` and `ojsharp-postgres-dev-data`.
+The script reuses the same SQLite file on repeated starts, so it does not create
+duplicate dependency trees or duplicate database instances. `.local-data/` is
+gitignored.
 
-If a system prerequisite such as Node.js, the .NET SDK, Docker Desktop, or
-Colima is missing, install/configure it first and rerun the command. The
-startup script restores project dependencies and can provision the project
-database through Docker; it does not bypass operating-system permission prompts
-or silently install system runtimes.
+If a system prerequisite such as Node.js or the .NET SDK is missing,
+install/configure it first and rerun the command. The startup script restores
+project dependencies and creates the local database file; it does not bypass
+operating-system permission prompts or silently install system runtimes.
 
 Check your machine without starting servers or writing secrets:
 
@@ -172,9 +160,8 @@ Check your machine without starting servers or writing secrets:
 npm run dev:doctor
 ```
 
-The doctor output shows whether Node, npm, .NET, Docker, root npm dependencies,
-PostgreSQL config or auto-provisioning, seed administrator config, and DeepSeek
-config are ready.
+The doctor output shows whether Node, npm, .NET, root npm dependencies, local
+SQLite config, seed administrator config, and DeepSeek config are ready.
 
 ### Guided Setup For Teammates
 
@@ -185,20 +172,10 @@ cd "C:\path\to\AISD-SS26-Group-7"
 npm run dev
 ```
 
-On a normal machine with Docker running, no PostgreSQL password is needed. The
-script creates the project database automatically. If Docker Desktop, Colima,
-Windows, macOS, Node, or .NET shows an operating-system permission prompt,
-approve it and rerun the same command.
-
-If Docker is not ready, the CLI now stays on the Docker path:
-
-```text
-Press Enter after Docker is running, type M for manual PostgreSQL, or Q to quit:
-```
-
-Install or open Docker Desktop, approve the system prompt, wait until Docker
-says it is running, then press Enter in the same terminal. Type `M` only if you
-intentionally want to use your own PostgreSQL server.
+No PostgreSQL password, Docker setup, or database input is needed. The script
+creates `.local-data/ojsharp-dev.sqlite` automatically. If Windows, macOS, Node,
+or .NET shows an operating-system permission prompt, approve it and rerun the
+same command.
 
 When asked for the DeepSeek API key, paste the real key if you have one. Press
 Enter on a blank line to start without local AI assistance.
@@ -207,29 +184,6 @@ Open the app after startup:
 
 ```text
 http://localhost:3000
-```
-
-If Docker is unavailable and you intentionally want to use an existing
-PostgreSQL server, paste either a URL:
-
-```text
-postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7
-```
-
-or an Npgsql connection string:
-
-```text
-Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD
-```
-
-If startup says a local PostgreSQL password, role, database, or privilege is
-wrong, the script will try to switch to the project-owned Docker database and
-retry once. If you are using a remote/external database, repair that database
-manually. If startup says the external database does not exist, create it in
-pgAdmin or run:
-
-```powershell
-createdb -U postgres aisd_ss26_group_7
 ```
 
 The script does not bypass OS permissions or store secrets in tracked files.

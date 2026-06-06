@@ -35,6 +35,11 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
 
     private async Task EnsureCoreAsync(CancellationToken cancellationToken)
     {
+        if (DatabaseProviders.IsSqliteProviderName(dbContext.Database.ProviderName))
+        {
+            return;
+        }
+
         await using var schemaLock = await DatabaseAdvisoryLocks.AcquireSessionLockAsync(
             dbContext,
             DatabaseAdvisoryLocks.SchemaCompatibility,

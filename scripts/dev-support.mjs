@@ -137,7 +137,7 @@ export function diagnoseBackendFailure(logText, config = {}) {
   }
 
   if (lower.includes("connectionstrings__defaultconnection must be configured")) {
-    guidance.push("- Database config is missing. Start Docker Desktop/Colima, approve OS prompts, then rerun npm run dev so the local Docker database can be created.");
+    guidance.push("- Database config is missing. Rerun npm run dev so the local SQLite database file can be configured automatically.");
   }
 
   if (lower.includes("seed admin email") || lower.includes("seed admin password")) {
@@ -145,17 +145,17 @@ export function diagnoseBackendFailure(logText, config = {}) {
   }
 
   if (lower.includes("password authentication failed")) {
-    guidance.push("- PostgreSQL rejected the password. For local demo startup, rerun npm run dev with Docker running so the project-owned database can be used.");
+    guidance.push("- PostgreSQL rejected the password. Local npm run dev no longer needs PostgreSQL; rerun npm run dev to use the SQLite file database.");
     guidance.push("  If this is an external database, repair the remote credentials and update .env.local.");
   }
 
   if (lower.includes("role") && lower.includes("does not exist")) {
-    guidance.push("- The PostgreSQL user/role in the connection string does not exist. For local demo startup, use Docker auto-provisioning; for external databases, create the role or use an existing role.");
+    guidance.push("- The PostgreSQL user/role in the connection string does not exist. Local npm run dev no longer needs PostgreSQL; external databases still need a valid role.");
   }
 
   if (lower.includes("database") && lower.includes("does not exist")) {
     const databaseName = extractNpgsqlPart(config[connectionStringKey], "Database") || "aisd_ss26_group_7";
-    guidance.push("- The database does not exist. For local demo startup, rerun npm run dev with Docker running so the project-owned database can be used.");
+    guidance.push("- The database does not exist. Local npm run dev creates a SQLite file automatically; external databases must be repaired manually.");
     guidance.push(`  External database repair example: createdb -U postgres ${databaseName}`);
     guidance.push(`  PowerShell/psql alternative: psql -U postgres -c "CREATE DATABASE ${databaseName};"`);
   }
@@ -167,7 +167,7 @@ export function diagnoseBackendFailure(logText, config = {}) {
     const userName = extractNpgsqlPart(config[connectionStringKey], "Username")
       || extractNpgsqlPart(config[connectionStringKey], "User Id")
       || "YOUR_USER";
-    guidance.push("- PostgreSQL permissions are not enough for schema creation or seed repair. For local demo startup, use Docker auto-provisioning.");
+    guidance.push("- PostgreSQL permissions are not enough for schema creation or seed repair. Local npm run dev no longer needs PostgreSQL permissions.");
     guidance.push(`  Ask the DB owner to grant privileges, or run as an owner/admin: GRANT ALL PRIVILEGES ON DATABASE ${databaseName} TO ${userName};`);
   }
 
@@ -175,19 +175,18 @@ export function diagnoseBackendFailure(logText, config = {}) {
       || lower.includes("actively refused")
       || lower.includes("could not connect")
       || lower.includes("no route to host")) {
-    guidance.push("- PostgreSQL is unreachable. For local demo startup, start Docker Desktop/Colima and rerun npm run dev.");
+    guidance.push("- PostgreSQL is unreachable. Local npm run dev no longer needs PostgreSQL; rerun npm run dev to regenerate the SQLite local config.");
     guidance.push("  If this is an external database, verify host/port and confirm local firewalls/VPN are not blocking the configured port.");
   }
 
   if (lower.includes("cannot connect to the docker daemon")
       || lower.includes("docker daemon")
       || (lower.includes("permission denied") && lower.includes("docker"))) {
-    guidance.push("- Docker is unavailable or not authorized. Start Docker Desktop/Colima and approve any OS permission prompt.");
-    guidance.push("  macOS Colima: colima start --cpu 2 --memory 2 --disk 20 --runtime docker");
+    guidance.push("- Docker is unavailable or not authorized. The app can still start; Docker is only needed for sandbox run/submit verification.");
   }
 
   if (guidance.length === 1) {
-    guidance.push("- Read the backend log above. If it mentions credentials, database existence, or permissions, fix that in PostgreSQL and rerun npm run dev.");
+    guidance.push("- Read the backend log above. Rerun npm run dev to regenerate local SQLite config, or repair explicitly configured external database settings.");
   }
 
   return guidance;

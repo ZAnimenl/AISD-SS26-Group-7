@@ -4,7 +4,8 @@
 
 - Frontend: Next.js App Router, TypeScript, Tailwind CSS, and Monaco editor.
 - Backend: ASP.NET Core API.
-- Persistence: PostgreSQL through EF Core.
+- Persistence: SQLite through EF Core for local one-command startup, and
+  PostgreSQL through EF Core for explicit external database deployment.
 - Execution: sandboxed evaluation service owned by Module 3.
 - AI: backend-owned AI assistance and telemetry service owned by Module 4.
 
@@ -38,24 +39,21 @@
   structured provider-unavailable error.
 - AI-generated assessment and question drafts use configured provider-backed JSON
   output or return a structured generation error.
-- Local one-command startup restores project dependencies, auto-provisions a
-  project-owned Docker PostgreSQL database when local database config is
-  missing, guides interactive users to start Docker before falling back to
-  manual PostgreSQL, prompts only for AI provider secrets when Docker database
-  auto-provisioning is available, writes local secrets only to `.env.local`, and
-  waits for backend health before starting the frontend.
-- Local startup normalizes PostgreSQL URLs, reuses safe existing environment or
-  user-secret configuration, retries local PostgreSQL password/database/role/
-  privilege failures against the project-owned Docker database, and reports
-  concrete repair steps for missing database, credential, privilege, Docker, or
+- Local one-command startup restores project dependencies, creates a
+  repository-owned SQLite database file when local database config is missing,
+  prompts only for AI provider secrets, writes local secrets only to
+  `.env.local`, and waits for backend health before starting the frontend.
+- Local startup writes `Database__Provider=Sqlite` plus a SQLite connection
+  string automatically and reports concrete repair steps for local SQLite
+  regeneration, external database configuration, Docker sandbox permission, or
   system-runtime failures.
 - Local doctor mode reports prerequisite and configuration readiness without
   starting services, restoring dependencies, or writing secrets.
 - Root npm dependency restoration is lockfile-hash gated so repeated local
   starts do not reinstall duplicate dependency trees for the same
   `package-lock.json`.
-- Local Docker PostgreSQL provisioning uses a stable container and volume name
-  so repeated starts do not create duplicate local database dependencies.
+- Local SQLite provisioning uses a stable gitignored file path so repeated
+  starts do not create duplicate local database dependencies.
 - Backend startup requires an explicit database connection string and configured
   seed administrator credentials in every environment.
 - Student code is never executed in frontend JavaScript or normal backend
