@@ -35,16 +35,21 @@
 - `npm run dev` creates or reuses the gitignored SQLite database file `.local-data/ojsharp-dev.sqlite` without asking for database credentials, Docker setup, PostgreSQL setup, or administrator privileges.
 - `npm run dev` writes `Database__Provider=Sqlite`, a SQLite `ConnectionStrings__DefaultConnection`, and local seed administrator defaults to `.env.local` when needed.
 - `npm run dev` prompts only for missing DeepSeek local configuration, writes prompted secrets only to `.env.local`, and starts the frontend only after backend health succeeds.
+- `npm run dev` runs the backend seed step before backend startup, restarts an existing local Backend process on the configured port when it can be safely identified, and verifies that reused external backends accept the configured seed administrator.
 - `npm run dev` normalizes accidental repeated DeepSeek API key pastes and disables stale `LocalLlm__*` local overrides so local AI setup does not require provider-level troubleshooting.
 - `npm run dev` resolves Windows npm shims to an executable command and prints the frontend URL when the frontend startup step begins.
+- `npm run dev` restarts an old local Next.js process on the frontend port when it can be safely identified so the printed URL serves the pulled code.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness without starting servers or writing secrets.
 - Backend startup supports SQLite for local development and PostgreSQL for explicit external database deployment.
 - Backend startup failures produce CLI repair guidance for local SQLite regeneration, external database configuration, Docker sandbox permission, and missing-runtime failures.
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
+- Local development login exposes a quick fill action for the seeded administrator account and successful sign-in remains on the role dashboard instead of returning to `/login`.
+- After local default administrator sign-in, the administrator dashboard API succeeds under the repository-owned SQLite database.
+- Authentication state is cleared on backend 401 responses or explicit logout, not merely because the login page mounted or a non-auth data request failed.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL`; localhost API fallback is Development-only.
-- Login UI does not prefill or display demo credentials.
+- Production login UI does not prefill or display demo credentials.
 
 ## Truthful Optimistic UI
 

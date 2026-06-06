@@ -7,7 +7,7 @@ import { BarChart3, CheckCircle2, Clock, FileCode2 } from "lucide-react";
 import { AssessmentCard } from "@/components/student/AssessmentCard";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { getStudentAssessments, getStudentDashboard, getStudentResults } from "@/lib/api";
+import { getStudentAssessments, getStudentDashboard, getStudentResults, isAuthenticationError } from "@/lib/api";
 import type { Assessment, StudentDashboard } from "@/lib/types";
 
 export default function StudentDashboardPage() {
@@ -15,6 +15,7 @@ export default function StudentDashboardPage() {
   const [dashboard, setDashboard] = useState<StudentDashboard | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [results, setResults] = useState<Assessment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -27,13 +28,22 @@ export default function StudentDashboardPage() {
         setDashboard(nextDashboard);
         setAssessments(nextAssessments);
         setResults(nextResults);
-      } catch {
-        router.replace("/login");
+      } catch (exception) {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load student dashboard.");
       }
     }
 
     load();
   }, [router]);
+
+  if (error) {
+    return <SectionHeader eyebrow="Student" title={error} />;
+  }
 
   if (!dashboard) {
     return <SectionHeader eyebrow="Student" title="Connecting to backend..." />;

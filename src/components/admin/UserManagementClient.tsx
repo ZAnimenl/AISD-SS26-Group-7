@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { createAdminUser, getAdminUsers } from "@/lib/api";
+import { createAdminUser, getAdminUsers, isAuthenticationError } from "@/lib/api";
 import type { Role, UserAccount } from "@/lib/types";
 
 export function UserManagementClient() {
@@ -18,7 +18,19 @@ export function UserManagementClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    getAdminUsers().then(setUsers).catch(() => router.replace("/login"));
+    getAdminUsers()
+      .then((nextUsers) => {
+        setUsers(nextUsers);
+        setError(null);
+      })
+      .catch((exception) => {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load users.");
+      });
   }, [router]);
 
   async function handleCreateUser(event: React.FormEvent<HTMLFormElement>) {

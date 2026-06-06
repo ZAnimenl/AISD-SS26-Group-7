@@ -104,6 +104,12 @@ the active requirements. It does not replace automated test files.
 - Missing seed administrator values use `admin@example.com` and `Admin123!`;
   `Deepseek__ApiKey` is the only interactive secret prompt unless AI is
   explicitly disabled.
+- `npm run dev` runs the backend seed-admin-only path before backend health
+  reuse/start so the local administrator login is repaired without manual
+  database deletion.
+- If an existing local Backend process is already listening on the configured
+  backend port, `npm run dev` restarts it when that process can be safely
+  identified so the backend serves the current checkout and startup config.
 - If `.env.local` contains the same DeepSeek API key pasted repeatedly,
   `npm run dev` rewrites it to one key value before backend startup.
 - If `.env.local` contains stale `LocalLlm__*` values, `npm run dev` removes
@@ -112,6 +118,9 @@ the active requirements. It does not replace automated test files.
 - On Windows, npm command discovery prefers `npm.cmd` or another executable npm
   shim over the extensionless `npm` shim so frontend startup does not fail with
   `spawn ... npm ENOENT`.
+- If an old local Next.js process is already listening on the frontend port,
+  `npm run dev` restarts it when the process can be safely identified so the
+  printed frontend URL serves the current checkout.
 - When frontend startup begins, the CLI prints `http://localhost:3000` as the
   app URL.
 - Backend startup failures explain likely repair steps for missing database,
@@ -126,6 +135,18 @@ the active requirements. It does not replace automated test files.
   startup script.
 - Backend startup creates or repairs only the configured seed administrator and
   does not create demo users or demo assessments.
+- Local development login shows a quick fill action for
+  `admin@example.com` / `Admin123!`; production login builds do not expose that
+  local demo action.
+- Visiting `/login` with valid stored auth redirects to the stored user's
+  dashboard without clearing the token.
+- Successful login stores the backend token and stays on the matching
+  administrator or student dashboard.
+- After local default administrator login, `/api/v1/admin/dashboard` returns a
+  successful response under SQLite.
+- Backend 401 responses clear stored auth before navigation to `/login`.
+- Non-auth backend data errors remain on the current page and show the real
+  error instead of clearing auth or returning to `/login`.
 
 ## Reporting
 

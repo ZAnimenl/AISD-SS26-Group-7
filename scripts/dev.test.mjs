@@ -6,19 +6,24 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  buildBackendRunArgs,
   buildLocalDatabaseConfig,
   buildLocalSqliteConnectionString,
   cleanLocalAiConfig,
   convertPostgresUrlToNpgsql,
   diagnoseBackendFailure,
   isAcceptableDeepseekApiKey,
+  isSafeBackendProcessCommand,
+  isSafeFrontendProcessCommand,
   isSqliteConnectionString,
   isUsableConfigValue,
   mergeEffectiveConfig,
   normalizeDeepseekApiKey,
+  resolveBackendPort,
   parseEnvFileContent,
   parseDotnetUserSecrets,
   resolveBackendHealthUrl,
+  resolveUrlPort,
   selectPathCommandCandidate,
   serializeEnvFile,
   shouldRunNpmCi
@@ -175,6 +180,13 @@ test("buildLocalDatabaseConfig selects SQLite without external input", () => {
   assert.equal(isSqliteConnectionString(config.ConnectionStrings__DefaultConnection), true);
 });
 
+test("buildBackendRunArgs supports seed-only backend startup", () => {
+  assert.deepEqual(
+    buildBackendRunArgs(["--seed-admin-only"]),
+    ["run", "--project", path.join("Backend", "Backend", "Backend.csproj"), "--", "--seed-admin-only"]
+  );
+});
+
 test("selectPathCommandCandidate prefers executable Windows npm shim", () => {
   assert.equal(
     selectPathCommandCandidate("npm", [
@@ -197,6 +209,30 @@ test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {
     resolveBackendHealthUrl("http://localhost:5140;http://localhost:5141"),
     "http://localhost:5140/api/v1/health"
   );
+});
+
+test("resolveBackendPort uses the first ASP.NET URL", () => {
+  assert.equal(resolveBackendPort("http://localhost:5140;http://localhost:5141"), 5140);
+  assert.equal(resolveBackendPort("https://example.test"), 443);
+});
+
+test("resolveUrlPort uses explicit or protocol default ports", () => {
+  assert.equal(resolveUrlPort("http://localhost:3000"), 3000);
+  assert.equal(resolveUrlPort("http://localhost"), 80);
+});
+
+test("isSafeBackendProcessCommand recognizes Backend listeners only", () => {
+  assert.equal(isSafeBackendProcessCommand("/repo/Backend/Backend/bin/Debug/net9.0/Backend"), true);
+  assert.equal(isSafeBackendProcessCommand("C:\\repo\\Backend\\bin\\Debug\\Backend.exe"), true);
+  assert.equal(isSafeBackendProcessCommand("/usr/local/bin/dotnet /repo/Backend/Backend.dll"), true);
+  assert.equal(isSafeBackendProcessCommand("/usr/local/bin/node server.js"), false);
+});
+
+test("isSafeFrontendProcessCommand recognizes local Next.js listeners only", () => {
+  assert.equal(isSafeFrontendProcessCommand("next-server (v16.2.7)"), true);
+  assert.equal(isSafeFrontendProcessCommand("/repo/node_modules/.bin/next dev"), true);
+  assert.equal(isSafeFrontendProcessCommand("/usr/local/bin/node /repo/node_modules/.bin/next dev"), true);
+  assert.equal(isSafeFrontendProcessCommand("/usr/local/bin/node api.js"), false);
 });
 
 test("shouldRunNpmCi skips reinstall when package-lock hash marker matches", () => {

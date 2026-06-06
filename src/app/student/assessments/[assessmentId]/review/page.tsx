@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "lucide-react";
-import { getStudentAssessments, getStudentResults } from "@/lib/api";
+import { getStudentAssessments, getStudentResults, isAuthenticationError } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Assessment } from "@/lib/types";
@@ -28,8 +28,14 @@ export default function StudentAssessmentReviewPage() {
         ]);
         setResults(nextResults);
         setAssessments(nextAssessments);
-      } catch {
-        router.replace("/login");
+      } catch (exception) {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setResults([]);
+        setAssessments([]);
       } finally {
         setIsLoading(false);
       }

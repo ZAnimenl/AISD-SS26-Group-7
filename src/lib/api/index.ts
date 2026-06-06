@@ -26,6 +26,17 @@ import type {
   WorkspaceState
 } from "@/lib/types";
 import { normalizeTestCode } from "@/lib/languages";
+import {
+  clearStoredAuth,
+  getStoredToken,
+  storeAuth
+} from "@/lib/api/authStorage";
+
+export {
+  clearStoredAuth,
+  getStoredUser,
+  hasStoredAuth
+} from "@/lib/api/authStorage";
 
 const DEFAULT_API_BASE_URL = "http://localhost:5140/api/v1";
 const LOCAL_FALLBACK_API_BASE_URLS = [
@@ -40,8 +51,6 @@ const API_BASE_URLS = CONFIGURED_API_BASE_URL
   : IS_PRODUCTION_BUILD
     ? []
     : [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS];
-const TOKEN_KEY = "ojsharp.auth.token";
-const USER_KEY = "ojsharp.auth.user";
 const API_BASE_KEY = "ojsharp.api.base_url";
 const startAssessmentRequests = new Map<string, Promise<void>>();
 
@@ -81,14 +90,6 @@ interface BackendUser {
   created_at?: string;
 }
 
-function getToken() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
 async function apiRequest<T>(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -97,7 +98,7 @@ async function apiRequest<T>(path: string, init: RequestInit = {}) {
     headers.set("Content-Type", "application/json");
   }
 
-  const token = getToken();
+  const token = getStoredToken();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -107,6 +108,10 @@ async function apiRequest<T>(path: string, init: RequestInit = {}) {
   const { payload, bodyText } = await parseApiResponse<T>(response);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredAuth();
+    }
+
     throw new ApiRequestError(
       payload?.error?.message
         ?? getPlainTextError(bodyText)
@@ -207,65 +212,13 @@ function getPlainTextError(bodyText: string) {
   return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
-function isStoredAuthUser(user: Partial<AuthUser>): user is AuthUser {
-  return typeof user.user_id === "string"
-    && typeof user.email === "string"
-    && (user.role === "student" || user.role === "administrator");
-}
-
-export function getStoredUser() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const value = window.localStorage.getItem(USER_KEY);
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const user = JSON.parse(value) as Partial<AuthUser>;
-
-    if (!isStoredAuthUser(user)) {
-      window.localStorage.removeItem(USER_KEY);
-      return null;
-    }
-
-    return user;
-  } catch {
-    window.localStorage.removeItem(USER_KEY);
-    return null;
-  }
-}
-
-export function clearStoredAuth() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(USER_KEY);
-}
-
-export function hasStoredAuth(expectedRole?: Role) {
-  const token = getToken();
-  const user = getStoredUser();
-
-  if (!token || !user) {
-    return false;
-  }
-
-  return expectedRole ? user.role === expectedRole : true;
-}
-
 export async function login(email: string, password: string) {
   const result = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password })
   });
   const user = normalizeUser(result.user);
-  window.localStorage.setItem(TOKEN_KEY, result.token);
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  storeAuth(result.token, user);
   return user;
 }
 
