@@ -31,15 +31,22 @@ skip runtime dependencies that are required for real assessment flows.
   https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/
 - Next.js supports `.env.local` for local environment variables:
   https://nextjs.org/docs/pages/building-your-application/configuring/environment-variables
+- Npgsql documents keyword-based connection strings and standard PostgreSQL
+  environment variables:
+  https://www.npgsql.org/doc/connection-string-parameters
+- .NET user-secrets provide local development secret storage outside tracked
+  project files:
+  https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets
 
 ## State Machine
 
 ### Local Startup
 
-- States: prerequisite check, local config loading, missing config prompt,
-  dependency restore, backend starting, backend healthy, frontend starting,
-  running, failed.
-- Events: command started, required command missing, `.env.local` read, required
+- States: doctor check, prerequisite check, local config loading, missing config
+  prompt, dependency restore, backend starting, backend healthy, frontend
+  starting, running, failed.
+- Events: command started, required command missing, `.env.local` read,
+  environment variable found, user-secret found, PostgreSQL URL found, required
   value missing, user submits value, user skips AI key, restore command fails,
   backend health check passes, backend exits, frontend exits.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for project
@@ -56,7 +63,8 @@ skip runtime dependencies that are required for real assessment flows.
   gitignored local log files; start backend and frontend child processes.
 - Failure paths: missing non-interactive configuration fails with a clear list
   of variables; missing system runtimes fails with install guidance; backend
-  startup failure reports the health URL and recent backend error log.
+  startup failure reports the health URL, recent backend error log, and repair
+  guidance for common PostgreSQL, Docker, and permission failures.
 - Rollback path: restore `package.json` `dev` to the previous PowerShell command
   and remove `scripts/dev.mjs`, `scripts/dev.test.mjs`, and this document.
 
@@ -92,6 +100,8 @@ skip runtime dependencies that are required for real assessment flows.
 
 - `npm run dev` uses a cross-platform startup script instead of a
   PowerShell-only command.
+- `npm run dev:doctor` reports local readiness without starting servers,
+  restoring dependencies, or writing secrets.
 - On a fresh checkout with Node and npm available, the startup script installs
   root npm dependencies from `package-lock.json` when needed.
 - Repeated startups skip root npm installation when the current
@@ -99,8 +109,14 @@ skip runtime dependencies that are required for real assessment flows.
 - When `dotnet` is available, the startup script restores
   `Backend/Backend.sln` before starting the backend.
 - If required backend local configuration is missing, an interactive terminal
-  prompts for the PostgreSQL connection string, seed administrator email, and
-  seed administrator password before backend startup.
+  prompts for the PostgreSQL connection string or URL, seed administrator email,
+  and seed administrator password before backend startup.
+- Existing `ConnectionStrings__DefaultConnection`, `DATABASE_URL`, PG*
+  environment variables, and matching .NET user-secrets are reused before
+  prompting.
+- PostgreSQL URLs such as `postgresql://user:password@host:5432/database` are
+  normalized into Npgsql keyword connection strings before being written to
+  `.env.local`.
 - If `Deepseek__ApiKey` is missing and AI is not explicitly disabled, an
   interactive terminal prompts for a DeepSeek key; a blank response disables
   local AI instead of returning mock AI output.
@@ -110,3 +126,6 @@ skip runtime dependencies that are required for real assessment flows.
   user.
 - Missing system runtimes or failed restores stop startup with explicit
   remediation guidance.
+- Permission failures do not trigger unsafe automatic privilege escalation; the
+  CLI gives exact authorization or grant steps and waits for the user or OS to
+  complete them.
