@@ -190,6 +190,16 @@ script creates the project database automatically. If Docker Desktop, Colima,
 Windows, macOS, Node, or .NET shows an operating-system permission prompt,
 approve it and rerun the same command.
 
+If Docker is not ready, the CLI now stays on the Docker path:
+
+```text
+Press Enter after Docker is running, type M for manual PostgreSQL, or Q to quit:
+```
+
+Install or open Docker Desktop, approve the system prompt, wait until Docker
+says it is running, then press Enter in the same terminal. Type `M` only if you
+intentionally want to use your own PostgreSQL server.
+
 When asked for the DeepSeek API key, paste the real key if you have one. Press
 Enter on a blank line to start without local AI assistance.
 

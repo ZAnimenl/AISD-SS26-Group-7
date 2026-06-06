@@ -34,6 +34,7 @@
 - Repeated `npm run dev` starts do not reinstall root npm dependencies when the current `package-lock.json` hash already matches the ignored local install marker.
 - `npm run dev` reuses safe local configuration from `.env.local`, shell environment, `DATABASE_URL`, PG* variables, and .NET user-secrets before prompting.
 - `npm run dev` auto-provisions or reuses the project-owned Docker PostgreSQL container `ojsharp-postgres-dev` with database `aisd_ss26_group_7` when local database configuration is missing.
+- When Docker is missing or not running in an interactive terminal, `npm run dev` guides the user to install/start Docker and press Enter to retry instead of immediately asking for a PostgreSQL password.
 - `npm run dev` repairs local PostgreSQL password, missing database, privilege, or connection startup failures by switching to the project-owned Docker PostgreSQL database and retrying backend startup once.
 - `npm run dev` accepts PostgreSQL URLs, normalizes them to Npgsql connection strings, uses local seed administrator defaults when missing, prompts only for missing DeepSeek local configuration when Docker database auto-provisioning is available, writes secrets only to `.env.local`, and starts the frontend only after backend health succeeds.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness without starting servers or writing secrets.

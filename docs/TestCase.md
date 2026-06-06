@@ -96,6 +96,10 @@ the active requirements. It does not replace automated test files.
   creates or reuses project-owned container `ojsharp-postgres-dev` with
   database `aisd_ss26_group_7` and writes the generated local connection string
   to `.env.local`.
+- When database config is missing and Docker is unavailable in an interactive
+  terminal, `npm run dev` shows Docker install/start guidance and lets the user
+  press Enter to retry, type `M` to intentionally use manual PostgreSQL, or
+  type `Q` to quit.
 - Repeated `npm run dev` starts reuse `ojsharp-postgres-dev` and do not create
   additional PostgreSQL containers, volumes, databases, or duplicate npm
   dependency trees for the same lockfile.

@@ -36,6 +36,41 @@ export async function tryProvisionLocalPostgres({ docker, repoRoot, runCommand, 
   }
 }
 
+export async function ensureGuidedLocalPostgres({
+  delay,
+  docker,
+  interactive,
+  readLine,
+  repoRoot,
+  runCommand
+}) {
+  let dockerCommand = docker;
+  for (;;) {
+    const config = await tryProvisionLocalPostgres({ delay, docker: dockerCommand, repoRoot, runCommand });
+    if (config.ConnectionStrings__DefaultConnection) {
+      return config;
+    }
+
+    if (!interactive) {
+      return {};
+    }
+
+    printDockerSetupGuide(dockerCommand, repoRoot);
+    const answer = (await readLine("Press Enter after Docker is running, type M for manual PostgreSQL, or Q to quit: "))
+      .trim()
+      .toLowerCase();
+    if (isManualPostgresChoice(answer)) {
+      return {};
+    }
+
+    if (answer === "q" || answer === "quit" || answer === "exit") {
+      throw new Error("Docker is required for automatic local PostgreSQL setup. Start Docker Desktop/Colima and rerun npm run dev.");
+    }
+
+    dockerCommand = resolveDockerCommand(dockerCommand);
+  }
+}
+
 export function buildLocalPostgresConnectionString(port = localPostgres.portStart) {
   return [
     "Host=127.0.0.1",
@@ -62,6 +97,11 @@ export function getDockerDaemonStatus(docker, repoRoot) {
   }
 
   return "not reachable; start Docker Desktop/Colima and approve any OS permission prompt";
+}
+
+export function isManualPostgresChoice(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "m" || normalized === "manual";
 }
 
 async function ensureLocalPostgresContainer({ docker, repoRoot, runCommand, delay }) {
@@ -308,6 +348,40 @@ function readCurrentDockerHost(docker, repoRoot) {
   } catch {
     return result.stdout.trim();
   }
+}
+
+function printDockerSetupGuide(docker, repoRoot) {
+  console.log("");
+  console.log("Automatic local PostgreSQL needs Docker, but Docker is not ready yet.");
+  console.log(`Docker status: ${getDockerDaemonStatus(docker, repoRoot)}`);
+  console.log("");
+  console.log("Recommended path:");
+  if (process.platform === "win32") {
+    console.log("  1. Install Docker Desktop if needed: winget install -e --id Docker.DockerDesktop");
+    console.log("  2. Open Docker Desktop and wait until it says the engine is running.");
+  } else if (process.platform === "darwin") {
+    console.log("  1. Open Docker Desktop, or run: colima start --cpu 2 --memory 2 --disk 20 --runtime docker");
+  } else {
+    console.log("  1. Start your Docker-compatible runtime and make sure docker ps works.");
+  }
+  console.log("  2. Approve any Windows/macOS/admin permission prompt.");
+  console.log("  3. Come back here and press Enter. The script will retry automatically.");
+  console.log("");
+  console.log("Manual PostgreSQL is only for people who intentionally want to use their own DB.");
+}
+
+function resolveDockerCommand(existingCommand) {
+  if (existingCommand) {
+    return existingCommand;
+  }
+
+  const checker = process.platform === "win32"
+    ? spawnSync("where", ["docker"], { encoding: "utf8" })
+    : spawnSync("sh", ["-c", "command -v docker"], { encoding: "utf8" });
+
+  return checker.status === 0
+    ? checker.stdout.trim().split(/\r?\n/)[0] || ""
+    : "";
 }
 
 function extractConnectionPart(connectionString, key) {
