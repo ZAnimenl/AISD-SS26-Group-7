@@ -1,8 +1,9 @@
 import type {
   AdminDashboard,
   AggregateReport,
-  AiUsageSummary,
+  AiAssistantResponse,
   AiInteractionType,
+  AiUsageSummary,
   Assessment,
   AssessmentStatus,
   AttemptStatus,
@@ -32,10 +33,13 @@ const LOCAL_FALLBACK_API_BASE_URLS = [
   "http://localhost:5040/api/v1",
   "http://localhost:5041/api/v1"
 ];
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
-const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
-  ? [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS]
-  : [API_BASE_URL];
+const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
+const API_BASE_URLS = CONFIGURED_API_BASE_URL
+  ? [CONFIGURED_API_BASE_URL]
+  : IS_PRODUCTION_BUILD
+    ? []
+    : [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS];
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
 const API_BASE_KEY = "ojsharp.api.base_url";
@@ -157,6 +161,10 @@ async function fetchApi(path: string, init: RequestInit, headers: Headers) {
 }
 
 function getApiBaseUrlOrder() {
+  if (API_BASE_URLS.length === 0) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL must be configured for production frontend deployments.");
+  }
+
   if (typeof window === "undefined") {
     return API_BASE_URLS;
   }
@@ -608,17 +616,31 @@ export async function getAiResponse(input: {
   message: string;
   selected_language: Language;
   active_file_content: string;
+  active_file_name: string;
+  visible_files: Record<string, string>;
+  last_run_result?: RunResult | null;
 }) {
-  const response = await apiRequest<{
-    response_markdown: string;
-    token_usage: { input_tokens: number; output_tokens: number; total_tokens: number };
-  }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/assist`, {
+  const response = await apiRequest<AiAssistantResponse>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/assist`, {
     method: "POST",
     body: JSON.stringify({
       interaction_type: input.interaction_type,
       message: input.message,
       selected_language: input.selected_language,
-      active_file_content: input.active_file_content
+      active_file_content: input.active_file_content,
+      active_file_name: input.active_file_name,
+      visible_files: input.visible_files,
+      last_run_result: input.last_run_result
+        ? {
+          status: input.last_run_result.status,
+          stdout: input.last_run_result.stdout,
+          stderr: input.last_run_result.stderr,
+          test_results: input.last_run_result.test_results.map((test) => ({
+            name: test.name,
+            passed: test.passed,
+            output: test.output
+          }))
+        }
+        : null
     })
   });
   return response;

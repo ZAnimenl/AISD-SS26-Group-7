@@ -22,7 +22,7 @@ public static class AiEndpoints
         HttpContext httpContext,
         OjSharpDbContext dbContext,
         CurrentUserAccessor currentUserAccessor,
-        AiMockService aiMockService,
+        AiAssistantService aiAssistantService,
         CancellationToken cancellationToken)
     {
         var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
@@ -75,17 +75,37 @@ public static class AiEndpoints
                 StatusCodes.Status400BadRequest);
         }
 
-        var (responseMarkdown, tags, inputTokens, outputTokens) = LooksLikeCompleteSolutionRequest(request.Message)
-            ? BuildDirectSolutionSafetyResponse(request.Message)
-            : await aiMockService.GenerateResponseAsync(
-                request.InteractionType,
-                request.Message,
-                selectedLanguage,
-                request.ActiveFileContent,
-                question.Title,
-                question.ProblemDescriptionMarkdown,
-                GetVisibleStarterFileNames(question, selectedLanguage),
-                cancellationToken);
+        AiAssistantResult assistantResult;
+        if (LooksLikeCompleteSolutionRequest(request.Message))
+        {
+            assistantResult = BuildDirectSolutionSafetyResponse();
+        }
+        else
+        {
+            try
+            {
+                assistantResult = await aiAssistantService.GenerateResponseAsync(
+                    request.InteractionType,
+                    request.Message,
+                    selectedLanguage,
+                    request.ActiveFileName,
+                    request.ActiveFileContent,
+                    request.VisibleFiles,
+                    GetVisibleStarterFiles(question, selectedLanguage),
+                    request.LastRunResult,
+                    question.Title,
+                    question.ProblemDescriptionMarkdown,
+                    GetVisibleStarterFileNames(question, selectedLanguage),
+                    cancellationToken);
+            }
+            catch (AiProviderUnavailableException exception)
+            {
+                return ApiResults.Error(
+                    "AI_PROVIDER_UNAVAILABLE",
+                    exception.Message,
+                    StatusCodes.Status503ServiceUnavailable);
+            }
+        }
 
         var interaction = new AiInteraction
         {
@@ -97,11 +117,11 @@ public static class AiEndpoints
             Message = request.Message,
             SelectedLanguage = selectedLanguage,
             ActiveFileContent = request.ActiveFileContent,
-            ResponseMarkdown = responseMarkdown,
-            SemanticTagsJson = JsonDocumentSerializer.Serialize(tags),
-            InputTokens = inputTokens,
-            OutputTokens = outputTokens,
-            TotalTokens = inputTokens + outputTokens,
+            ResponseMarkdown = assistantResult.ResponseMarkdown,
+            SemanticTagsJson = JsonDocumentSerializer.Serialize(assistantResult.SemanticTags),
+            InputTokens = assistantResult.InputTokens,
+            OutputTokens = assistantResult.OutputTokens,
+            TotalTokens = assistantResult.InputTokens + assistantResult.OutputTokens,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -111,13 +131,14 @@ public static class AiEndpoints
         return ApiResults.Success(new
         {
             interaction_id = interaction.Id,
-            response_markdown = responseMarkdown,
-            semantic_tags = tags,
+            response_markdown = assistantResult.ResponseMarkdown,
+            semantic_tags = assistantResult.SemanticTags,
+            suggestion = assistantResult.Suggestion,
             token_usage = new
             {
-                input_tokens = inputTokens,
-                output_tokens = outputTokens,
-                total_tokens = inputTokens + outputTokens
+                input_tokens = assistantResult.InputTokens,
+                output_tokens = assistantResult.OutputTokens,
+                total_tokens = assistantResult.InputTokens + assistantResult.OutputTokens
             },
             created_at = interaction.CreatedAt
         });
@@ -220,9 +241,14 @@ public static class AiEndpoints
 
     private static string[] GetVisibleStarterFileNames(Question question, string selectedLanguage)
     {
+        return GetVisibleStarterFiles(question, selectedLanguage).Keys.OrderBy(name => name).ToArray();
+    }
+
+    private static Dictionary<string, string> GetVisibleStarterFiles(Question question, string selectedLanguage)
+    {
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
         return starterCode.TryGetValue(AssessmentPolicy.NormalizeLanguage(selectedLanguage), out var languageFiles)
-            ? languageFiles.Keys.OrderBy(name => name).ToArray()
+            ? languageFiles.ToDictionary(item => item.Key, item => item.Value)
             : [];
     }
 
@@ -253,21 +279,17 @@ public static class AiEndpoints
         return blockedPhrases.Any(normalized.Contains);
     }
 
-    private static (string ResponseMarkdown, string[] SemanticTags, int InputTokens, int OutputTokens) BuildDirectSolutionSafetyResponse(string message)
+    private static AiAssistantResult BuildDirectSolutionSafetyResponse()
     {
         const string response = """
         I cannot provide a complete solution for the assessment task. I can still help you make progress: describe the failing behavior, explain the relevant concept, review a small code snippet, or suggest the next testable step.
         """;
 
-        return (
+        return new AiAssistantResult(
             response,
             ["assessment_safety", "direct_solution_request"],
-            EstimateTokens(message),
-            EstimateTokens(response));
-    }
-
-    private static int EstimateTokens(string text)
-    {
-        return Math.Max(1, (int)Math.Ceiling(text.Length / 4.0));
+            0,
+            0,
+            null);
     }
 }

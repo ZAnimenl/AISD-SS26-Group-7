@@ -6,9 +6,9 @@ public sealed class LocalLlmOptions
 
     public bool Enabled { get; set; }
 
-    public string BaseUrl { get; set; } = "http://localhost:11434/v1";
+    public string BaseUrl { get; set; } = string.Empty;
 
-    public string Model { get; set; } = "llama3.1";
+    public string Model { get; set; } = string.Empty;
 
     public string? ApiKey { get; set; }
 

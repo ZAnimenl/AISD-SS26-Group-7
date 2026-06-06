@@ -4,33 +4,20 @@ namespace OjSharp.Tests.ApiContractTests;
 
 public sealed class BackendConfigurationTests
 {
-    private const string ProductionConnectionString = "Host=localhost:5432;Database=ai_coding;Username=ai_coding;password=password";
-    private const string DevelopmentConnectionString = "Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password";
-
     [Fact]
-    public void Appsettings_uses_production_postgres_port()
+    public void Appsettings_does_not_store_production_connection_string()
     {
         using var document = ReadAppsettings("appsettings.json");
 
-        var connectionString = document.RootElement
-            .GetProperty("ConnectionStrings")
-            .GetProperty("DefaultConnection")
-            .GetString();
-
-        Assert.Equal(ProductionConnectionString, connectionString);
+        Assert.False(document.RootElement.TryGetProperty("ConnectionStrings", out _));
     }
 
     [Fact]
-    public void Development_appsettings_uses_debug_postgres_port()
+    public void Development_appsettings_does_not_store_connection_string()
     {
         using var document = ReadAppsettings("appsettings.Development.json");
 
-        var connectionString = document.RootElement
-            .GetProperty("ConnectionStrings")
-            .GetProperty("DefaultConnection")
-            .GetString();
-
-        Assert.Equal(DevelopmentConnectionString, connectionString);
+        Assert.False(document.RootElement.TryGetProperty("ConnectionStrings", out _));
     }
 
     [Fact]
@@ -42,28 +29,37 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
-    public void Development_appsettings_configures_local_seed_admin_demo_login()
+    public void Development_appsettings_does_not_store_seed_admin_credentials()
     {
         using var document = ReadAppsettings("appsettings.Development.json");
 
-        var seedAdmin = document.RootElement.GetProperty("SeedAdmin");
-
-        Assert.Equal("admin@example.com", seedAdmin.GetProperty("Email").GetString());
-        Assert.Equal("password", seedAdmin.GetProperty("Password").GetString());
+        Assert.False(document.RootElement.TryGetProperty("SeedAdmin", out _));
     }
 
     [Fact]
-    public void Development_appsettings_configures_deepseek_without_api_key()
+    public void Development_appsettings_disables_deepseek_without_api_key()
     {
         using var document = ReadAppsettings("appsettings.Development.json");
 
         var deepseek = document.RootElement.GetProperty("Deepseek");
 
-        Assert.True(deepseek.GetProperty("Enabled").GetBoolean());
+        Assert.False(deepseek.GetProperty("Enabled").GetBoolean());
         Assert.Equal("https://api.deepseek.com", deepseek.GetProperty("BaseUrl").GetString());
         Assert.Equal("deepseek-v4-flash", deepseek.GetProperty("Model").GetString());
         Assert.Equal(string.Empty, deepseek.GetProperty("ApiKey").GetString());
         Assert.False(deepseek.GetProperty("ThinkingEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public void Backend_startup_does_not_register_demo_seed_data()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Program.cs"));
+
+        Assert.DoesNotContain("DemoDataSeeder", source);
+        Assert.DoesNotContain("Host=localhost:5433", source);
     }
 
     [Fact]

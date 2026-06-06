@@ -95,7 +95,7 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
-    public async Task Todo_summary_preview_uses_safe_static_fallback_when_grader_is_unavailable()
+    public async Task Todo_summary_preview_reports_internal_error_when_grader_is_unavailable()
     {
         var runner = new RecordingCodeRunner([
             new CodeRunResult(string.Empty, "Grader container unavailable: Connection failed", 1, false)
@@ -123,10 +123,10 @@ public sealed class CodeEvaluationServiceTests
             "python",
             CancellationToken.None);
 
-        Assert.Equal(ExecutionStatuses.Passed, result.Status);
-        Assert.True(result.TestResults[0].Passed);
-        Assert.Contains("Todo Summary", result.TestResults[0].Output);
-        Assert.Null(result.Stderr);
+        Assert.Equal(ExecutionStatuses.InternalError, result.Status);
+        Assert.Equal(ExecutionStatuses.InternalError, result.TestResults[0].Status);
+        Assert.False(result.TestResults[0].Passed);
+        Assert.Contains("Run environment unavailable", result.Stderr);
     }
 
     [Fact]
@@ -187,6 +187,34 @@ public sealed class CodeEvaluationServiceTests
             pythonDirectory.Delete(true);
             javascriptDirectory.Delete(true);
             typeScriptDirectory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Grader_test_files_create_legacy_pascal_case_aliases_for_snake_case_starter_files()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-alias-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["todo_summary_panel.py"] = "def render_summary_panel(todos):\n    return ''\n",
+                    ["already_named.py"] = "VALUE = 1\n",
+                    ["TodoSummaryPanel.py"] = "EXPLICIT = True\n"
+                },
+                "from TodoSummaryPanel import render_summary_panel\n",
+                GradingLanguage.Python);
+
+            Assert.True(File.Exists(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
+            Assert.Contains("EXPLICIT = True", File.ReadAllText(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
+            Assert.True(File.Exists(Path.Combine(directory.FullName, "AlreadyNamed.py")));
+        }
+        finally
+        {
+            directory.Delete(true);
         }
     }
 

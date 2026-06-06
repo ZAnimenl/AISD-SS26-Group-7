@@ -27,8 +27,7 @@ builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower;
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                       ?? "Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password";
+var connectionString = ResolveConnectionString(builder);
 
 builder.Services.AddDbContext<OjSharpDbContext>(options => options.UseNpgsql(
     connectionString,
@@ -57,10 +56,10 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.Configure<LocalLlmOptions>(builder.Configuration.GetSection(LocalLlmOptions.SectionName));
 builder.Services.Configure<DeepseekOptions>(builder.Configuration.GetSection(DeepseekOptions.SectionName));
-builder.Services.AddSingleton<IAiResponseProvider, DeepseekAiResponseProvider>();
-builder.Services.AddSingleton<IAiResponseProvider, LocalLlmAiResponseProvider>();
-builder.Services.AddSingleton<AiMockService>();
-builder.Services.AddScoped<DemoDataSeeder>();
+builder.Services.AddSingleton<AiCompletionService>();
+builder.Services.AddSingleton<AiAssistantService>();
+builder.Services.AddSingleton<AssessmentDraftGenerationService>();
+builder.Services.AddScoped<SeedAdminSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();
 builder.Services.Configure<SeedAdminOptions>(builder.Configuration.GetSection(SeedAdminOptions.SectionName));
 
@@ -134,12 +133,24 @@ static async Task SeedDatabaseAsync(WebApplication app)
 
         await dbContext.Database.EnsureCreatedAsync();
         await scope.ServiceProvider.GetRequiredService<SchemaCompatibilityService>().EnsureAsync(CancellationToken.None);
-        await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<SeedAdminSeeder>().SeedAsync(CancellationToken.None);
     }
     catch (Exception exception)
     {
         Backend.StartupDiagnostics.LogDatabaseInitializationFailure(app.Logger, exception);
+        throw;
     }
+}
+
+static string ResolveConnectionString(WebApplicationBuilder builder)
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (!string.IsNullOrWhiteSpace(connectionString))
+    {
+        return connectionString;
+    }
+
+    throw new InvalidOperationException("ConnectionStrings__DefaultConnection must be configured.");
 }
 
 static PostgresException? FindPostgresException(Exception exception)

@@ -13,9 +13,13 @@ public sealed class DockerCodeRunnerIntegrationTests
     {
         try
         {
-            var endpoint = OperatingSystem.IsWindows()
-                ? "npipe://./pipe/docker_engine"
-                : "unix:///var/run/docker.sock";
+            var endpoint = Environment.GetEnvironmentVariable("DOCKER_HOST");
+            if (string.IsNullOrWhiteSpace(endpoint))
+            {
+                endpoint = OperatingSystem.IsWindows()
+                    ? "npipe://./pipe/docker_engine"
+                    : "unix:///var/run/docker.sock";
+            }
             
             using var client = new DockerClientConfiguration(new Uri(endpoint)).CreateClient();
             var task = client.System.PingAsync();
@@ -91,6 +95,76 @@ public sealed class DockerCodeRunnerIntegrationTests
 
         var result = await runner.RunAsync(
             new Dictionary<string, string> { ["solution.js"] = "function solve(a, b) {\n    return a + b;\n}\nmodule.exports = { solve };\n" },
+            "javascript",
+            testCase,
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(result.TimedOut);
+        Assert.Null(result.Stderr);
+    }
+
+    [Fact]
+    public async Task Snake_case_python_starter_file_can_satisfy_legacy_pascal_case_import()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "from TodoSummaryPanel import build_summary\n\ndef test_summary():\n    assert build_summary([{'completed': True}, {'completed': False}])['pending'] == 1\n",
+            ""
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["todo_summary_panel.py"] = """
+                def build_summary(todos):
+                    total = len(todos)
+                    completed = sum(1 for todo in todos if todo.get("completed") is True)
+                    return {"total": total, "completed": completed, "pending": total - completed, "message": ""}
+                """
+            },
+            "python",
+            testCase,
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(result.TimedOut);
+        Assert.Null(result.Stderr);
+    }
+
+    [Fact]
+    public async Task Snake_case_javascript_starter_file_can_satisfy_legacy_pascal_case_require()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "",
+            "const { buildSummary } = require('./TodoSummaryPanel');\ntest('summary', () => {\n  expect(buildSummary([{ completed: true }, { completed: false }]).pending).toBe(1);\n});\n"
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["todo_summary_panel.js"] = """
+                function buildSummary(todos) {
+                  const total = todos.length;
+                  const completed = todos.filter((todo) => todo.completed === true).length;
+                  return { total, completed, pending: total - completed, message: "" };
+                }
+                module.exports = { buildSummary };
+                """
+            },
             "javascript",
             testCase,
             CancellationToken.None
