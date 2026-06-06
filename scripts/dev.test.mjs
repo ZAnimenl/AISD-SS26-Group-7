@@ -6,12 +6,17 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  buildLocalPostgresConnectionString,
   convertPostgresUrlToNpgsql,
   diagnoseBackendFailure,
+  isDatabaseStartupFailure,
+  isDockerCredentialHelperFailure,
+  isLocalDatabaseTarget,
   isUsableConfigValue,
   mergeEffectiveConfig,
   parseEnvFileContent,
   parseDotnetUserSecrets,
+  parseDockerPortOutput,
   resolveBackendHealthUrl,
   serializeEnvFile,
   shouldRunNpmCi
@@ -96,6 +101,38 @@ test("diagnoseBackendFailure gives database repair guidance", () => {
   ).join("\n");
 
   assert.match(guidance, /createdb -U postgres aisd_ss26_group_7/);
+});
+
+test("buildLocalPostgresConnectionString uses the project-owned demo database", () => {
+  assert.equal(
+    buildLocalPostgresConnectionString(55432),
+    "Host=127.0.0.1;Port=55432;Database=aisd_ss26_group_7;Username=postgres;Password=postgres"
+  );
+});
+
+test("parseDockerPortOutput reads the published host port", () => {
+  assert.equal(parseDockerPortOutput("127.0.0.1:55432"), 55432);
+  assert.equal(parseDockerPortOutput("0.0.0.0:55433\n:::55433"), 55433);
+});
+
+test("isDockerCredentialHelperFailure recognizes missing Docker helper output", () => {
+  assert.equal(
+    isDockerCredentialHelperFailure("docker: error getting credentials - err: exec: \"docker-credential-desktop\": executable file not found in $PATH"),
+    true
+  );
+  assert.equal(isDockerCredentialHelperFailure("docker: Cannot connect to the Docker daemon"), false);
+});
+
+test("isDatabaseStartupFailure recognizes local PostgreSQL repair signals", () => {
+  assert.equal(isDatabaseStartupFailure("Npgsql.PostgresException: 28P01: password authentication failed for user postgres"), true);
+  assert.equal(isDatabaseStartupFailure("Connection refused 127.0.0.1:5432"), true);
+  assert.equal(isDatabaseStartupFailure("The frontend failed to compile"), false);
+});
+
+test("isLocalDatabaseTarget allows only local PostgreSQL targets for automatic repair", () => {
+  assert.equal(isLocalDatabaseTarget("Host=localhost;Database=aisd_ss26_group_7"), true);
+  assert.equal(isLocalDatabaseTarget("Host=127.0.0.1;Database=aisd_ss26_group_7"), true);
+  assert.equal(isLocalDatabaseTarget("Host=db.example.com;Database=aisd_ss26_group_7"), false);
 });
 
 test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {

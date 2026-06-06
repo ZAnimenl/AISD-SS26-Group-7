@@ -17,6 +17,14 @@ import {
   normalizePostgresConnectionString,
   parseDotnetUserSecrets
 } from "./dev-support.mjs";
+import {
+  getDockerDaemonStatus,
+  isDatabaseStartupFailure,
+  isLocalDatabaseTarget,
+  localPostgres,
+  localSeedAdminDefaults,
+  tryProvisionLocalPostgres
+} from "./dev-postgres.mjs";
 
 export {
   convertPostgresUrlToNpgsql,
@@ -24,6 +32,13 @@ export {
   isUsableConfigValue,
   parseDotnetUserSecrets
 } from "./dev-support.mjs";
+export {
+  buildLocalPostgresConnectionString,
+  isDatabaseStartupFailure,
+  isDockerCredentialHelperFailure,
+  isLocalDatabaseTarget,
+  parseDockerPortOutput
+} from "./dev-postgres.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -68,11 +83,10 @@ const requiredLocalConfig = [
     normalize: normalizePostgresConnectionString,
     validate: (value) => isUsableConfigValue(value),
     help: [
-      "Paste either format:",
+      "Docker was not available for automatic local PostgreSQL setup.",
+      "If you intentionally use an existing PostgreSQL server, paste either format:",
       "  postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7",
-      "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD",
-      "If the database does not exist yet, create it in pgAdmin or run:",
-      "  createdb -U postgres aisd_ss26_group_7"
+      "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD"
     ],
     error: "A real PostgreSQL connection string or URL is required for every backend run."
   },
@@ -307,7 +321,7 @@ async function main() {
     return;
   }
 
-  const backend = await ensureBackend(config);
+  const backend = await ensureBackendWithLocalDatabaseRepair(config, fileConfig);
   if (options.backendOnly) {
     if (backend) {
       await waitForChildExit(backend.process);
@@ -346,6 +360,9 @@ async function runDoctor() {
   const npmCommand = resolveCommand("npm");
   const dotnetCommand = resolveCommand("dotnet");
   const dockerCommand = resolveCommand("docker");
+  const dockerDaemonStatus = getDockerDaemonStatus(dockerCommand, repoRoot);
+  const canAutoProvisionDatabase = !isUsableConfigValue(effectiveConfig[connectionStringKey])
+    && dockerDaemonStatus.startsWith("running");
 
   console.log("Local startup doctor");
   console.log("");
@@ -354,10 +371,10 @@ async function runDoctor() {
   console.log(`.NET SDK: ${dotnetCommand ? `OK (${dotnetCommand})` : "missing"}`);
   console.log(`Root npm dependencies: ${shouldRunNpmCi(repoRoot) ? "need restore on next npm run dev" : "ready for current package-lock.json"}`);
   console.log(`Docker CLI: ${dockerCommand ? `found (${dockerCommand})` : "missing or not in PATH"}`);
-  console.log(`Docker daemon: ${getDockerDaemonStatus(dockerCommand)}`);
-  console.log(`PostgreSQL config: ${describeConfigPresence(effectiveConfig[connectionStringKey])}`);
-  console.log(`Seed admin email: ${describeConfigPresence(effectiveConfig.SeedAdmin__Email)}`);
-  console.log(`Seed admin password: ${describeConfigPresence(effectiveConfig.SeedAdmin__Password)}`);
+  console.log(`Docker daemon: ${dockerDaemonStatus}`);
+  console.log(`PostgreSQL config: ${describeDatabaseConfig(effectiveConfig, canAutoProvisionDatabase)}`);
+  console.log(`Seed admin email: ${describeSeedAdminConfig(effectiveConfig.SeedAdmin__Email, "email")}`);
+  console.log(`Seed admin password: ${describeSeedAdminConfig(effectiveConfig.SeedAdmin__Password, "password")}`);
   console.log(`DeepSeek API key: ${describeAiConfig(effectiveConfig)}`);
   console.log("");
   console.log("Next step:");
@@ -365,9 +382,9 @@ async function runDoctor() {
   const missing = [];
   if (!npmCommand) missing.push("install Node.js 20+ with npm");
   if (!dotnetCommand) missing.push("install .NET 9 SDK or set DOTNET_CLI");
-  if (!isUsableConfigValue(effectiveConfig[connectionStringKey])) missing.push("enter or set PostgreSQL connection info");
-  if (!isUsableConfigValue(effectiveConfig.SeedAdmin__Email)) missing.push("enter SeedAdmin__Email");
-  if (!isUsableConfigValue(effectiveConfig.SeedAdmin__Password)) missing.push("enter SeedAdmin__Password");
+  if (!isUsableConfigValue(effectiveConfig[connectionStringKey]) && !canAutoProvisionDatabase) {
+    missing.push("start Docker Desktop/Colima or enter PostgreSQL connection info");
+  }
   if (!isExplicitlyDisabled(effectiveConfig.Deepseek__Enabled)
       && !isUsableConfigValue(effectiveConfig.Deepseek__ApiKey)) {
     missing.push("enter Deepseek__ApiKey or leave it blank to disable local AI");
@@ -389,6 +406,26 @@ function describeConfigPresence(value) {
   return isUsableConfigValue(String(value ?? "")) ? "configured" : "missing";
 }
 
+function describeDatabaseConfig(config, canAutoProvisionDatabase) {
+  if (isUsableConfigValue(config[connectionStringKey])) {
+    return "configured";
+  }
+
+  return canAutoProvisionDatabase
+    ? `will auto-provision Docker container ${localPostgres.containerName}`
+    : "missing";
+}
+
+function describeSeedAdminConfig(value, kind) {
+  if (isUsableConfigValue(String(value ?? ""))) {
+    return "configured";
+  }
+
+  return kind === "email"
+    ? `will use local default ${localSeedAdminDefaults.email}`
+    : "will use local default password";
+}
+
 function describeAiConfig(config) {
   if (isExplicitlyDisabled(config.Deepseek__Enabled)) {
     return "disabled locally";
@@ -397,27 +434,31 @@ function describeAiConfig(config) {
   return describeConfigPresence(config.Deepseek__ApiKey);
 }
 
-function getDockerDaemonStatus(dockerCommand) {
-  if (!dockerCommand) {
-    return "cannot check until Docker CLI is installed";
-  }
-
-  const result = spawnSync(dockerCommand, ["version", "--format", "{{.Server.Version}}"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  if (result.status === 0 && result.stdout.trim()) {
-    return `running (${result.stdout.trim()})`;
-  }
-
-  return "not reachable; start Docker Desktop/Colima and approve any OS permission prompt";
-}
-
 async function ensureLocalConfig(fileConfig, options) {
   const discoveredConfig = await discoverLocalConfig(fileConfig);
   const writableConfig = { ...defaultConfig, ...fileConfig };
+
+  if (!isUsableConfigValue(mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig })[connectionStringKey])) {
+    const localPostgresConfig = await tryProvisionLocalPostgres({
+      delay,
+      docker: resolveCommand("docker"),
+      repoRoot,
+      runCommand
+    });
+    if (isUsableConfigValue(localPostgresConfig[connectionStringKey])) {
+      writableConfig[connectionStringKey] = localPostgresConfig[connectionStringKey];
+    }
+  }
+
+  const configWithDatabase = mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig });
+  if (!isUsableConfigValue(configWithDatabase.SeedAdmin__Email)) {
+    writableConfig.SeedAdmin__Email = localSeedAdminDefaults.email;
+  }
+
+  if (!isUsableConfigValue(configWithDatabase.SeedAdmin__Password)) {
+    writableConfig.SeedAdmin__Password = localSeedAdminDefaults.password;
+  }
+
   const effectiveConfig = mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig });
   const prompts = [];
 
@@ -452,12 +493,12 @@ async function ensureLocalConfig(fileConfig, options) {
         "  cd \"C:\\path\\to\\AISD-SS26-Group-7\"",
         "  npm run dev",
         "",
-        "The PostgreSQL prompt accepts either:",
+        "When Docker is running, local PostgreSQL is created automatically; otherwise the PostgreSQL prompt accepts either:",
         "  postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7",
         "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD",
         "",
-        "If a system or permission prompt appears for Node, .NET, PostgreSQL, Docker Desktop, or Colima, approve it and rerun npm run dev.",
-        "If PostgreSQL says the database is missing, create aisd_ss26_group_7 in pgAdmin or run: createdb -U postgres aisd_ss26_group_7"
+        "If a system or permission prompt appears for Node, .NET, Docker Desktop, or Colima, approve it and rerun npm run dev.",
+        "Remote PostgreSQL targets are not overwritten automatically; repair remote databases manually."
       ].join("\n"));
     }
 
@@ -483,6 +524,68 @@ async function ensureLocalConfig(fileConfig, options) {
 
   await fsp.writeFile(localEnvPath, serializeEnvFile(writableConfig), { mode: 0o600 });
   return mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig });
+}
+
+async function ensureBackendWithLocalDatabaseRepair(config, fileConfig) {
+  try {
+    return await ensureBackend(config);
+  } catch (exception) {
+    const repairedConfig = await tryRepairLocalDatabaseStartup(exception, config, fileConfig);
+    if (!repairedConfig) {
+      throw exception;
+    }
+
+    console.log("Retrying backend with the project-owned local PostgreSQL database ...");
+    return ensureBackend(repairedConfig);
+  }
+}
+
+async function tryRepairLocalDatabaseStartup(exception, config, fileConfig) {
+  if (!isDatabaseStartupFailure(exception?.message)
+      || !isLocalDatabaseTarget(config[connectionStringKey])) {
+    return null;
+  }
+
+  console.log("Local PostgreSQL startup failed; preparing a project-owned Docker PostgreSQL database with default demo credentials.");
+  const localPostgresConfig = await tryProvisionLocalPostgres({
+    delay,
+    docker: resolveCommand("docker"),
+    repoRoot,
+    runCommand
+  });
+
+  if (!isUsableConfigValue(localPostgresConfig[connectionStringKey])) {
+    return null;
+  }
+
+  const writableConfig = {
+    ...defaultConfig,
+    ...fileConfig,
+    ...localPostgresConfig
+  };
+  const repairedConfig = {
+    ...config,
+    ...writableConfig
+  };
+
+  if (!isUsableConfigValue(repairedConfig.SeedAdmin__Email)) {
+    writableConfig.SeedAdmin__Email = localSeedAdminDefaults.email;
+    repairedConfig.SeedAdmin__Email = localSeedAdminDefaults.email;
+  }
+
+  if (!isUsableConfigValue(repairedConfig.SeedAdmin__Password)) {
+    writableConfig.SeedAdmin__Password = localSeedAdminDefaults.password;
+    repairedConfig.SeedAdmin__Password = localSeedAdminDefaults.password;
+  }
+
+  const dockerHost = writableConfig.DOCKER_HOST || detectDockerHostFromContext();
+  if (dockerHost) {
+    writableConfig.DOCKER_HOST = dockerHost;
+    repairedConfig.DOCKER_HOST = dockerHost;
+  }
+
+  await fsp.writeFile(localEnvPath, serializeEnvFile(writableConfig), { mode: 0o600 });
+  return repairedConfig;
 }
 
 async function discoverLocalConfig(fileConfig) {

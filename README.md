@@ -52,9 +52,11 @@ Security rules:
 - Node.js 20+
 - npm
 - .NET SDK compatible with `Backend/Backend.sln`
-- PostgreSQL for backend local development or deployment
-- Docker-compatible container runtime for run/submit verification. A lightweight
-  local option is Colima plus Docker CLI.
+- Docker-compatible container runtime for automatic local PostgreSQL and
+  run/submit verification. A lightweight local option is Docker Desktop or
+  Colima plus Docker CLI.
+- PostgreSQL only when you intentionally use an external database instead of
+  the default project-owned local Docker database.
 
 The backend default local URL is:
 
@@ -95,10 +97,10 @@ Things users may configure:
 - `NEXT_PUBLIC_API_BASE_URL` - frontend API base URL. Optional for normal local development and required for production frontend deployments.
 - `ASPNETCORE_ENVIRONMENT` - backend environment, usually `Development` locally.
 - `BackendUrls` - backend listen URL, defaulting to `http://localhost:5140`.
-- `ConnectionStrings__DefaultConnection` - real PostgreSQL connection string for the target environment. Required for every backend run. The local startup script also accepts and converts `postgresql://...` or `postgres://...` URLs.
+- `ConnectionStrings__DefaultConnection` - real PostgreSQL connection string for the target environment. Required for every backend run. Local startup creates a project-owned Docker PostgreSQL database automatically when this value is missing. The local startup script also accepts and converts `postgresql://...` or `postgres://...` URLs.
 - `DATABASE_URL`, `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` - optional existing local PostgreSQL environment variables that `npm run dev` can convert into `ConnectionStrings__DefaultConnection`.
 - `DOCKER_HOST` - Docker socket for the sandbox runner when the runtime is not available at `/var/run/docker.sock`, for example `unix://$HOME/.colima/default/docker.sock`.
-- `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run.
+- `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run. Local startup uses `admin@example.com` / `Admin123!` when values are missing.
 
 AI provider keys:
 
@@ -132,15 +134,37 @@ This command:
 - restores backend packages with `dotnet restore Backend/Backend.sln`
 - reuses existing `.env.local`, shell environment, `DATABASE_URL`, PG*
   variables, and .NET user-secrets when present
-- prompts for missing local PostgreSQL, seed administrator, and DeepSeek values
+- creates or reuses the project-owned Docker PostgreSQL container
+  `ojsharp-postgres-dev` when local database config is missing
+- repairs local PostgreSQL password/database/permission startup failures by
+  switching to that project-owned Docker database and retrying once
+- uses local seed administrator defaults when seed admin values are missing
+- prompts for the DeepSeek API key when it is missing; blank disables local AI
 - writes prompted local secrets only to `.env.local`; secrets already available
   from shell environment or .NET user-secrets are reused without being copied
 - starts the backend, waits for `/api/v1/health`, then starts Next.js
 
-If a system prerequisite such as the .NET SDK, PostgreSQL, or Docker-compatible
-runtime is missing, install/configure it first and rerun the command. The
-startup script restores project dependencies; it does not silently install
-system runtimes or provision a database.
+The default local database is:
+
+```text
+container: ojsharp-postgres-dev
+database:  aisd_ss26_group_7
+user:      postgres
+password:  postgres
+host:      127.0.0.1
+port:      first free port from 55432 to 55449
+```
+
+The script reuses the same named container and volume on repeated starts, so it
+does not create duplicate dependency trees, duplicate PostgreSQL containers, or
+extra databases every time. If that project-owned container is unhealthy, the
+script may reset only `ojsharp-postgres-dev` and `ojsharp-postgres-dev-data`.
+
+If a system prerequisite such as Node.js, the .NET SDK, Docker Desktop, or
+Colima is missing, install/configure it first and rerun the command. The
+startup script restores project dependencies and can provision the project
+database through Docker; it does not bypass operating-system permission prompts
+or silently install system runtimes.
 
 Check your machine without starting servers or writing secrets:
 
@@ -149,7 +173,8 @@ npm run dev:doctor
 ```
 
 The doctor output shows whether Node, npm, .NET, Docker, root npm dependencies,
-PostgreSQL config, seed administrator config, and DeepSeek config are ready.
+PostgreSQL config or auto-provisioning, seed administrator config, and DeepSeek
+config are ready.
 
 ### Guided Setup For Teammates
 
@@ -160,7 +185,22 @@ cd "C:\path\to\AISD-SS26-Group-7"
 npm run dev
 ```
 
-When asked for the PostgreSQL value, paste either a URL:
+On a normal machine with Docker running, no PostgreSQL password is needed. The
+script creates the project database automatically. If Docker Desktop, Colima,
+Windows, macOS, Node, or .NET shows an operating-system permission prompt,
+approve it and rerun the same command.
+
+When asked for the DeepSeek API key, paste the real key if you have one. Press
+Enter on a blank line to start without local AI assistance.
+
+Open the app after startup:
+
+```text
+http://localhost:3000
+```
+
+If Docker is unavailable and you intentionally want to use an existing
+PostgreSQL server, paste either a URL:
 
 ```text
 postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7
@@ -172,18 +212,17 @@ or an Npgsql connection string:
 Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD
 ```
 
-If startup says the database does not exist, create it in pgAdmin or run:
+If startup says a local PostgreSQL password, role, database, or privilege is
+wrong, the script will try to switch to the project-owned Docker database and
+retry once. If you are using a remote/external database, repair that database
+manually. If startup says the external database does not exist, create it in
+pgAdmin or run:
 
 ```powershell
 createdb -U postgres aisd_ss26_group_7
 ```
 
-If startup says the PostgreSQL role, password, or permissions are wrong, fix
-them in pgAdmin or ask the database owner to grant privileges, then rerun
-`npm run dev`. If Windows, Docker Desktop, Colima, PostgreSQL, Node, or .NET
-shows an operating-system permission prompt, approve it and rerun the same
-command. The script does not bypass OS permissions or store secrets in tracked
-files.
+The script does not bypass OS permissions or store secrets in tracked files.
 
 Prepare local config and restore dependencies without starting servers:
 
