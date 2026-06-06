@@ -1,8 +1,9 @@
 import type {
   AdminDashboard,
   AggregateReport,
-  AiUsageSummary,
+  AiAssistantResponse,
   AiInteractionType,
+  AiUsageSummary,
   Assessment,
   AssessmentStatus,
   AttemptStatus,
@@ -615,17 +616,31 @@ export async function getAiResponse(input: {
   message: string;
   selected_language: Language;
   active_file_content: string;
+  active_file_name: string;
+  visible_files: Record<string, string>;
+  last_run_result?: RunResult | null;
 }) {
-  const response = await apiRequest<{
-    response_markdown: string;
-    token_usage: { input_tokens: number; output_tokens: number; total_tokens: number };
-  }>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/assist`, {
+  const response = await apiRequest<AiAssistantResponse>(`/assessments/${input.assessment_id}/questions/${input.question_id}/ai/assist`, {
     method: "POST",
     body: JSON.stringify({
       interaction_type: input.interaction_type,
       message: input.message,
       selected_language: input.selected_language,
-      active_file_content: input.active_file_content
+      active_file_content: input.active_file_content,
+      active_file_name: input.active_file_name,
+      visible_files: input.visible_files,
+      last_run_result: input.last_run_result
+        ? {
+          status: input.last_run_result.status,
+          stdout: input.last_run_result.stdout,
+          stderr: input.last_run_result.stderr,
+          test_results: input.last_run_result.test_results.map((test) => ({
+            name: test.name,
+            passed: test.passed,
+            output: test.output
+          }))
+        }
+        : null
     })
   });
   return response;

@@ -151,7 +151,7 @@ function BrowserPreviewFrame({ runResult }: {
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950">
-      <span className="absolute right-2 top-2 z-10 rounded border border-emerald-500/25 bg-black/55 px-2 py-1 text-[10px] text-emerald-300 backdrop-blur">
+      <span className="absolute right-2 top-2 z-10 rounded border border-emerald-500/25 bg-[#07111d] px-2 py-1 text-[10px] text-emerald-300">
         Sandbox output
       </span>
       <iframe
@@ -173,10 +173,10 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
   const isBrowserPreview = question?.verification_mode === "browser_ui_preview";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0f1a]">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#07111d]">
       {!isBrowserPreview ? (
-        <div className="flex items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-black/20 text-cyanGlow">
+        <div className="flex items-center gap-3 border-b border-white/10 bg-[#0e1726] px-4 py-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-[#07111d] text-cyanGlow">
             <SemanticIcon name={iconName} size={16} />
           </span>
           <div className="min-w-0">
@@ -208,9 +208,9 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
             <BrowserPreviewFrame
               runResult={runResult}
             />
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="mt-3 rounded-xl border border-white/10 bg-[#0e1726] p-3">
               <div className="flex items-start gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-cyanGlow/10 text-cyanGlow">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyanGlow/15 bg-[#07111d] text-cyanGlow">
                   <SemanticIcon name="file" size={16} />
                 </span>
                 <div className="min-w-0">
@@ -222,9 +222,9 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
             </div>
           </>
         ) : (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-white/10 bg-[#0e1726] p-4">
             <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-cyanGlow/10 text-cyanGlow">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-cyanGlow/15 bg-[#07111d] text-cyanGlow">
                 <SemanticIcon name="file" size={17} />
               </span>
               <div className="min-w-0">
@@ -239,7 +239,7 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
         {hasRun && !isBrowserPreview ? (
           <div className="mt-4 space-y-2">
             {runResult.test_results.map((test) => (
-              <div key={test.name} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs">
+              <div key={test.name} className="flex items-start gap-3 rounded-lg border border-white/10 bg-[#0e1726] px-3 py-2 text-xs">
                 <SemanticIcon name={test.passed ? "check" : "fail"} size={14} className={test.passed ? "text-emerald-400" : "text-rose-400"} />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-white/80">{test.name}</p>
@@ -249,7 +249,7 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
             ))}
           </div>
         ) : !hasRun && !isBrowserPreview ? (
-          <div className="mt-4 rounded-lg border border-dashed border-white/10 px-3 py-6 text-center text-sm text-white/35">
+          <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-[#0e1726] px-3 py-6 text-center text-sm text-white/35">
             Run the selected task to populate this verification area. Hidden tests remain private.
           </div>
         ) : null}

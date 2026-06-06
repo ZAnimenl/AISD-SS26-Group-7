@@ -186,10 +186,19 @@ public static class ExecutionEndpoints
     private static TestCase CreateBrowserPreviewTest(Question question, string selectedLanguage)
     {
         var metadata = JsonDocumentSerializer.Deserialize(question.VerificationMetadataJson, new Dictionary<string, string>());
-        var defaultEntry = AssessmentPolicy.NormalizeLanguage(selectedLanguage) == "javascript"
+        var normalizedLanguage = AssessmentPolicy.NormalizeLanguage(selectedLanguage);
+        var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
+        var defaultEntry = normalizedLanguage == "javascript"
             ? "TodoSummaryPanel.js"
             : "TodoSummaryPanel.py";
-        var previewEntry = metadata.GetValueOrDefault("preview_entry") ?? defaultEntry;
+        var languageStarterEntry = starterCode
+            .GetValueOrDefault(normalizedLanguage, new Dictionary<string, string>())
+            .Keys
+            .FirstOrDefault();
+        var configuredPreviewEntry = metadata.GetValueOrDefault("preview_entry");
+        var previewEntry = IsPreviewEntryForLanguage(configuredPreviewEntry, normalizedLanguage)
+            ? configuredPreviewEntry!
+            : languageStarterEntry ?? defaultEntry;
         var pythonModule = GetSafePythonModuleName(previewEntry, "TodoSummaryPanel");
         var javascriptModule = GetSafeJavaScriptModulePath(previewEntry, "TodoSummaryPanel.js");
 
@@ -249,6 +258,19 @@ public static class ExecutionEndpoints
                 ["requirements"] = "REQ-18e,REQ-30c"
             })
         };
+    }
+
+    private static bool IsPreviewEntryForLanguage(string? previewEntry, string selectedLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(previewEntry))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(previewEntry);
+        return selectedLanguage == "javascript"
+            ? extension.Equals(".js", StringComparison.OrdinalIgnoreCase)
+            : extension.Equals(".py", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetSafePythonModuleName(string previewEntry, string fallback)

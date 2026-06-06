@@ -37,9 +37,15 @@ internal sealed class GradingWorkspace
 
     private static string GetDefaultHostRoot()
     {
-        return OperatingSystem.IsWindows()
+        if (OperatingSystem.IsWindows())
+        {
+            return Path.Combine(Path.GetTempPath(), "ojsharp-grader-workspace");
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(home)
             ? Path.Combine(Path.GetTempPath(), "ojsharp-grader-workspace")
-            : "/tmp/ojsharp-grader-workspace";
+            : Path.Combine(home, ".ojsharp", "grader-workspace");
     }
 }
 

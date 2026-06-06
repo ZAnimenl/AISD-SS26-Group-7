@@ -134,28 +134,24 @@ internal sealed class DockerGraderContainer
         var container = await FindContainerAsync(cancellationToken);
         if (container is null)
         {
-            var createResponse = await dockerClient.Containers.CreateContainerAsync(
-                new CreateContainerParameters
-                {
-                    Image = ImageTag,
-                    Name = ContainerName,
-                    Cmd = ["sleep", "infinity"],
-                    NetworkDisabled = true,
-                    HostConfig = new HostConfig
-                    {
-                        AutoRemove = false,
-                        Binds = [$"{workspaceHostRoot}:/workspace"],
-                        Memory = 256 * 1024 * 1024, // 256 MB memory limit
-                        NanoCPUs = 1000000000,      // 1 CPU Core limit
-                        CapDrop = new[] { "ALL" }    // Drop all Linux capabilities
-                    }
-                },
+            return await CreateContainerAsync(cancellationToken);
+        }
+
+        if (!HasExpectedWorkspaceBind(container))
+        {
+            if (container.State.Equals("running", StringComparison.OrdinalIgnoreCase))
+            {
+                await dockerClient.Containers.StopContainerAsync(
+                    container.ID,
+                    new ContainerStopParameters(),
+                    cancellationToken);
+            }
+
+            await dockerClient.Containers.RemoveContainerAsync(
+                container.ID,
+                new ContainerRemoveParameters { Force = true },
                 cancellationToken);
-            await dockerClient.Containers.StartContainerAsync(
-                createResponse.ID,
-                new ContainerStartParameters(),
-                cancellationToken);
-            return createResponse.ID;
+            return await CreateContainerAsync(cancellationToken);
         }
 
         if (!container.State.Equals("running", StringComparison.OrdinalIgnoreCase))
@@ -167,6 +163,32 @@ internal sealed class DockerGraderContainer
         }
 
         return container.ID;
+    }
+
+    private async Task<string> CreateContainerAsync(CancellationToken cancellationToken)
+    {
+        var createResponse = await dockerClient.Containers.CreateContainerAsync(
+            new CreateContainerParameters
+            {
+                Image = ImageTag,
+                Name = ContainerName,
+                Cmd = ["sleep", "infinity"],
+                NetworkDisabled = true,
+                HostConfig = new HostConfig
+                {
+                    AutoRemove = false,
+                    Binds = [$"{workspaceHostRoot}:/workspace"],
+                    Memory = 256 * 1024 * 1024,
+                    NanoCPUs = 1000000000,
+                    CapDrop = new[] { "ALL" }
+                }
+            },
+            cancellationToken);
+        await dockerClient.Containers.StartContainerAsync(
+            createResponse.ID,
+            new ContainerStartParameters(),
+            cancellationToken);
+        return createResponse.ID;
     }
 
     private async Task<ContainerListResponse?> FindContainerAsync(CancellationToken cancellationToken)
@@ -184,6 +206,13 @@ internal sealed class DockerGraderContainer
 
         return containers.FirstOrDefault(container =>
             container.Names.Any(name => name.TrimStart('/').Equals(ContainerName, StringComparison.Ordinal)));
+    }
+
+    private bool HasExpectedWorkspaceBind(ContainerListResponse container)
+    {
+        return container.Mounts.Any(mount =>
+            string.Equals(mount.Source, workspaceHostRoot, StringComparison.Ordinal)
+            && string.Equals(mount.Destination, "/workspace", StringComparison.Ordinal));
     }
 
     private static DockerClient CreateDockerClient()

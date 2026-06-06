@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { WorkspaceClient } from "@/components/workspace/WorkspaceClient";
 import { getWorkspace, getWorkspaceContext, isAuthenticationError, startAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Assessment, WorkspaceState } from "@/lib/types";
 
-export default function WorkspacePage({ params }: { params: { assessmentId: string } }) {
+export default function WorkspacePage() {
   const router = useRouter();
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,9 +19,9 @@ export default function WorkspacePage({ params }: { params: { assessmentId: stri
     async function load() {
       setError(null);
       try {
-        await startAssessment(params.assessmentId);
-        const nextAssessment = await getWorkspaceContext(params.assessmentId);
-        const nextWorkspace = await getWorkspace(params.assessmentId);
+        await startAssessment(assessmentId);
+        const nextAssessment = await getWorkspaceContext(assessmentId);
+        const nextWorkspace = await getWorkspace(assessmentId);
         setAssessment(nextAssessment);
         setWorkspace(nextWorkspace);
       } catch (exception) {
@@ -33,7 +35,7 @@ export default function WorkspacePage({ params }: { params: { assessmentId: stri
     }
 
     load();
-  }, [params.assessmentId, router]);
+  }, [assessmentId, router]);
 
   if (error) {
     return <SectionHeader eyebrow="Workspace" title={error} />;

@@ -3,12 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "dev": "node scripts/dev.mjs",
+    "dev:setup": "node scripts/dev.mjs --setup-only",
     "dev:frontend": "next dev",
-    "dev:backend": "dotnet run --project Backend\\Backend\\Backend.csproj",
+    "dev:backend": "node scripts/dev.mjs --backend-only",
     "build": "next build",
     "lint": "eslint .",
+    "test:startup": "node --test scripts/dev.test.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
