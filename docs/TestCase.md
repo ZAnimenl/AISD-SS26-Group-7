@@ -92,15 +92,27 @@ the active requirements. It does not replace automated test files.
   local install marker already matches the current `package-lock.json` hash.
 - `npm run dev` reuses existing `.env.local`, shell environment, `DATABASE_URL`,
   PG* variables, and .NET user-secrets before prompting for missing values.
+- When database config is missing and Docker is available, `npm run dev`
+  creates or reuses project-owned container `ojsharp-postgres-dev` with
+  database `aisd_ss26_group_7` and writes the generated local connection string
+  to `.env.local`.
+- Repeated `npm run dev` starts reuse `ojsharp-postgres-dev` and do not create
+  additional PostgreSQL containers, volumes, databases, or duplicate npm
+  dependency trees for the same lockfile.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness
   without starting servers or writing secrets.
 - PostgreSQL URLs such as
   `postgresql://postgres:password@localhost:5432/aisd_ss26_group_7` are
   accepted and normalized into backend-compatible Npgsql connection strings.
-- When local configuration is missing in an interactive terminal, `npm run dev`
-  prompts for `ConnectionStrings__DefaultConnection`, `SeedAdmin__Email`,
-  `SeedAdmin__Password`, and `Deepseek__ApiKey` unless AI is explicitly
-  disabled.
+- When local database auto-provisioning is available, missing seed administrator
+  values use `admin@example.com` and `Admin123!`; `Deepseek__ApiKey` is the only
+  interactive secret prompt unless AI is explicitly disabled.
+- If backend startup fails because a local PostgreSQL target has a bad password,
+  missing database, missing role, insufficient privileges, or refused local
+  connection, `npm run dev` switches to the project-owned Docker PostgreSQL
+  database and retries backend startup once.
+- Remote PostgreSQL targets are not silently overwritten by automatic local
+  repair.
 - Backend startup failures explain likely repair steps for missing database,
   wrong credentials, insufficient PostgreSQL privileges, Docker permission
   issues, and missing system runtimes.

@@ -12,14 +12,19 @@ skip runtime dependencies that are required for real assessment flows.
 - Keep `scripts/dev.ps1` as the only startup path: rejected because it is
   PowerShell-specific and does not handle dependency restore or missing local
   configuration.
-- Use Docker Compose for every dependency: rejected for this step because the
-  repository does not currently define containerized PostgreSQL or backend
-  deployment ownership, and adding it would expand the task into database
-  provisioning.
+- Use Docker Compose for every dependency: rejected for this step because it
+  would expand the task into containerizing the backend/frontend deployment
+  path.
+- Use a project-owned Docker PostgreSQL container only for local development:
+  selected for missing or broken local PostgreSQL configuration. It avoids
+  asking teammates for host PostgreSQL passwords, uses real PostgreSQL instead
+  of a mock database, and can be reset without touching existing host
+  PostgreSQL installations or remote databases.
 - Use a cross-platform Node startup coordinator: selected. The repo already
   requires Node for Next.js, and a Node script can restore npm packages, run
-  `dotnet restore`, prompt for local secrets, load `.env.local` for the backend,
-  and start both processes without adding dependencies.
+  `dotnet restore`, prepare a local Docker PostgreSQL database, prompt only for
+  AI secrets when database auto-provisioning is available, load `.env.local` for
+  the backend, and start both processes without adding Node dependencies.
 
 ## Research Basis
 
@@ -37,36 +42,59 @@ skip runtime dependencies that are required for real assessment flows.
 - .NET user-secrets provide local development secret storage outside tracked
   project files:
   https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets
+- Docker port publishing can bind a container port to a host address and port;
+  binding to `127.0.0.1` keeps the local PostgreSQL port on the loopback
+  interface:
+  https://docs.docker.com/engine/network/port-publishing/
+- The official PostgreSQL Docker image supports `POSTGRES_DB`,
+  `POSTGRES_USER`, and `POSTGRES_PASSWORD` for first-run database and role
+  initialization:
+  https://hub.docker.com/_/postgres
 
 ## State Machine
 
 ### Local Startup
 
-- States: doctor check, prerequisite check, local config loading, missing config
-  prompt, dependency restore, backend starting, backend healthy, frontend
-  starting, running, failed.
+- States: doctor check, prerequisite check, local config loading, local Docker
+  database check, local Docker database ready, missing config prompt, dependency
+  restore, backend starting, backend failed with local database error, local
+  database repair, backend retrying, backend healthy, frontend starting,
+  running, failed.
 - Events: command started, required command missing, `.env.local` read,
   environment variable found, user-secret found, PostgreSQL URL found, required
-  value missing, user submits value, user skips AI key, restore command fails,
-  backend health check passes, backend exits, frontend exits.
+  value missing, Docker CLI found, Docker daemon reachable, project PostgreSQL
+  container missing, project PostgreSQL container unhealthy, local database
+  password failure, local database missing, local database privilege failure,
+  user submits value, user skips AI key, restore command fails, backend health
+  check passes, backend exits, frontend exits.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for project
-  dependency restoration; `ConnectionStrings__DefaultConnection`,
-  `SeedAdmin__Email`, and `SeedAdmin__Password` must have real non-placeholder
-  values before backend startup.
-- Transitions: missing required local values move to prompt; accepted values
-  move to dependency restore; backend health success moves to frontend startup;
-  missing system commands, restore failure, or backend health timeout move to
-  failed.
+  dependency restoration; `ConnectionStrings__DefaultConnection` must have a
+  real non-placeholder value before backend startup; missing local database
+  config may be satisfied only by the project-owned Docker PostgreSQL database
+  or by user-provided real PostgreSQL configuration; automatic database repair
+  is allowed only for local database targets, not remote hosts.
+- Transitions: missing database config with a reachable Docker daemon moves to
+  local Docker database check; missing database config without Docker moves to
+  prompt; missing seed admin values move to local defaults; missing AI key moves
+  to optional prompt; accepted or generated values move to dependency restore;
+  local database startup failure moves to local database repair and one backend
+  retry; backend health success moves to frontend startup; missing system
+  commands, restore failure, remote database failure, or backend health timeout
+  after retry move to failed.
 - Side effects: write or update `.env.local` only; run `npm ci` when root
   dependencies are absent or the ignored local lockfile hash marker does not
-  match `package-lock.json`; run `dotnet restore`; append backend logs to
-  gitignored local log files; start backend and frontend child processes.
+  match `package-lock.json`; run `dotnet restore`; create/start/reuse Docker
+  container `ojsharp-postgres-dev`; reset only `ojsharp-postgres-dev` and
+  `ojsharp-postgres-dev-data` when that project-owned database is unhealthy;
+  append backend logs to gitignored local log files; start backend and frontend
+  child processes.
 - Failure paths: missing non-interactive configuration fails with a clear list
   of variables; missing system runtimes fails with install guidance; backend
   startup failure reports the health URL, recent backend error log, and repair
   guidance for common PostgreSQL, Docker, and permission failures.
 - Rollback path: restore `package.json` `dev` to the previous PowerShell command
-  and remove `scripts/dev.mjs`, `scripts/dev.test.mjs`, and this document.
+  and remove `scripts/dev.mjs`, `scripts/dev-postgres.mjs`,
+  `scripts/dev.test.mjs`, and this document.
 
 ### AI Local Configuration
 
@@ -108,9 +136,22 @@ skip runtime dependencies that are required for real assessment flows.
   `package-lock.json` hash already matches the ignored marker in `node_modules`.
 - When `dotnet` is available, the startup script restores
   `Backend/Backend.sln` before starting the backend.
-- If required backend local configuration is missing, an interactive terminal
-  prompts for the PostgreSQL connection string or URL, seed administrator email,
-  and seed administrator password before backend startup.
+- If database configuration is missing and Docker is reachable, startup creates
+  or reuses Docker container `ojsharp-postgres-dev` with database
+  `aisd_ss26_group_7`, user `postgres`, password `postgres`, and the first free
+  loopback host port from `55432` through `55449`.
+- Repeated startups reuse the same project-owned PostgreSQL container and named
+  volume and do not create duplicate local database dependencies.
+- If the project-owned PostgreSQL container exists but cannot become ready,
+  startup resets only `ojsharp-postgres-dev` and `ojsharp-postgres-dev-data`.
+- If a local PostgreSQL target fails backend startup because of bad password,
+  missing database, missing role, insufficient privileges, or refused local
+  connection, startup switches to the project-owned Docker PostgreSQL database
+  and retries backend startup once.
+- Remote PostgreSQL targets are not silently replaced by automatic local
+  database repair.
+- Missing seed administrator values use `admin@example.com` and `Admin123!`
+  for local startup.
 - Existing `ConnectionStrings__DefaultConnection`, `DATABASE_URL`, PG*
   environment variables, and matching .NET user-secrets are reused before
   prompting.

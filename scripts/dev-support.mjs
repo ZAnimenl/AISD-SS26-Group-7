@@ -137,7 +137,7 @@ export function diagnoseBackendFailure(logText, config = {}) {
   }
 
   if (lower.includes("connectionstrings__defaultconnection must be configured")) {
-    guidance.push("- Database config is missing. Rerun npm run dev interactively and paste your PostgreSQL URL or Npgsql connection string.");
+    guidance.push("- Database config is missing. Start Docker Desktop/Colima, approve OS prompts, then rerun npm run dev so the local Docker database can be created.");
   }
 
   if (lower.includes("seed admin email") || lower.includes("seed admin password")) {
@@ -145,16 +145,18 @@ export function diagnoseBackendFailure(logText, config = {}) {
   }
 
   if (lower.includes("password authentication failed")) {
-    guidance.push("- PostgreSQL rejected the password. Reopen pgAdmin/PostgreSQL settings, copy the correct user password, then rerun npm run dev and update .env.local.");
+    guidance.push("- PostgreSQL rejected the password. For local demo startup, rerun npm run dev with Docker running so the project-owned database can be used.");
+    guidance.push("  If this is an external database, repair the remote credentials and update .env.local.");
   }
 
   if (lower.includes("role") && lower.includes("does not exist")) {
-    guidance.push("- The PostgreSQL user/role in the connection string does not exist. Create it in pgAdmin or use an existing role such as postgres.");
+    guidance.push("- The PostgreSQL user/role in the connection string does not exist. For local demo startup, use Docker auto-provisioning; for external databases, create the role or use an existing role.");
   }
 
   if (lower.includes("database") && lower.includes("does not exist")) {
     const databaseName = extractNpgsqlPart(config[connectionStringKey], "Database") || "aisd_ss26_group_7";
-    guidance.push(`- The database does not exist. Create it, for example: createdb -U postgres ${databaseName}`);
+    guidance.push("- The database does not exist. For local demo startup, rerun npm run dev with Docker running so the project-owned database can be used.");
+    guidance.push(`  External database repair example: createdb -U postgres ${databaseName}`);
     guidance.push(`  PowerShell/psql alternative: psql -U postgres -c "CREATE DATABASE ${databaseName};"`);
   }
 
@@ -165,7 +167,7 @@ export function diagnoseBackendFailure(logText, config = {}) {
     const userName = extractNpgsqlPart(config[connectionStringKey], "Username")
       || extractNpgsqlPart(config[connectionStringKey], "User Id")
       || "YOUR_USER";
-    guidance.push("- PostgreSQL permissions are not enough for schema creation or seed repair.");
+    guidance.push("- PostgreSQL permissions are not enough for schema creation or seed repair. For local demo startup, use Docker auto-provisioning.");
     guidance.push(`  Ask the DB owner to grant privileges, or run as an owner/admin: GRANT ALL PRIVILEGES ON DATABASE ${databaseName} TO ${userName};`);
   }
 
@@ -173,9 +175,8 @@ export function diagnoseBackendFailure(logText, config = {}) {
       || lower.includes("actively refused")
       || lower.includes("could not connect")
       || lower.includes("no route to host")) {
-    guidance.push("- PostgreSQL is unreachable. Start PostgreSQL, verify host/port, and confirm local firewalls/VPN are not blocking port 5432.");
-    guidance.push("  Windows: open Services and start postgresql-x64-* or start it from pgAdmin.");
-    guidance.push("  macOS Homebrew: brew services start postgresql@16 (or your installed PostgreSQL version).");
+    guidance.push("- PostgreSQL is unreachable. For local demo startup, start Docker Desktop/Colima and rerun npm run dev.");
+    guidance.push("  If this is an external database, verify host/port and confirm local firewalls/VPN are not blocking the configured port.");
   }
 
   if (lower.includes("cannot connect to the docker daemon")
