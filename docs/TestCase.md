@@ -90,33 +90,20 @@ the active requirements. It does not replace automated test files.
   `dotnet restore Backend/Backend.sln` before backend startup.
 - Repeated `npm run dev` starts skip root npm installation when the ignored
   local install marker already matches the current `package-lock.json` hash.
-- `npm run dev` reuses existing `.env.local`, shell environment, `DATABASE_URL`,
-  PG* variables, and .NET user-secrets before prompting for missing values.
-- When database config is missing and Docker is available, `npm run dev`
-  creates or reuses project-owned container `ojsharp-postgres-dev` with
-  database `aisd_ss26_group_7` and writes the generated local connection string
-  to `.env.local`.
-- When database config is missing and Docker is unavailable in an interactive
-  terminal, `npm run dev` shows Docker install/start guidance and lets the user
-  press Enter to retry, type `M` to intentionally use manual PostgreSQL, or
-  type `Q` to quit.
-- Repeated `npm run dev` starts reuse `ojsharp-postgres-dev` and do not create
-  additional PostgreSQL containers, volumes, databases, or duplicate npm
-  dependency trees for the same lockfile.
+- `npm run dev` writes `Database__Provider=Sqlite` and a SQLite
+  `ConnectionStrings__DefaultConnection` pointing to
+  `.local-data/ojsharp-dev.sqlite` without prompting for database information.
+- Repeated `npm run dev` starts reuse `.local-data/ojsharp-dev.sqlite` and do
+  not create additional database instances or duplicate npm dependency trees for
+  the same lockfile.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness
   without starting servers or writing secrets.
 - PostgreSQL URLs such as
   `postgresql://postgres:password@localhost:5432/aisd_ss26_group_7` are
-  accepted and normalized into backend-compatible Npgsql connection strings.
-- When local database auto-provisioning is available, missing seed administrator
-  values use `admin@example.com` and `Admin123!`; `Deepseek__ApiKey` is the only
-  interactive secret prompt unless AI is explicitly disabled.
-- If backend startup fails because a local PostgreSQL target has a bad password,
-  missing database, missing role, insufficient privileges, or refused local
-  connection, `npm run dev` switches to the project-owned Docker PostgreSQL
-  database and retries backend startup once.
-- Remote PostgreSQL targets are not silently overwritten by automatic local
-  repair.
+  still accepted and normalized for explicit external database use.
+- Missing seed administrator values use `admin@example.com` and `Admin123!`;
+  `Deepseek__ApiKey` is the only interactive secret prompt unless AI is
+  explicitly disabled.
 - Backend startup failures explain likely repair steps for missing database,
   wrong credentials, insufficient PostgreSQL privileges, Docker permission
   issues, and missing system runtimes.
@@ -125,7 +112,8 @@ the active requirements. It does not replace automated test files.
 - The frontend starts only after the backend health endpoint returns a
   successful response.
 - Backend startup fails when `ConnectionStrings__DefaultConnection`,
-  `SeedAdmin__Email`, or `SeedAdmin__Password` is missing.
+  `SeedAdmin__Email`, or `SeedAdmin__Password` is missing outside the local
+  startup script.
 - Backend startup creates or repairs only the configured seed administrator and
   does not create demo users or demo assessments.
 

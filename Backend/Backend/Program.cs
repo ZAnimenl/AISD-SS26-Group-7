@@ -6,6 +6,7 @@ using Backend.Persistence;
 using Backend.Services;
 using Backend.Services.Grading;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -28,13 +29,23 @@ builder.Services.Configure<JsonOptions>(options =>
 });
 
 var connectionString = ResolveConnectionString(builder);
+var databaseProvider = ResolveDatabaseProvider(builder, connectionString);
 
-builder.Services.AddDbContext<OjSharpDbContext>(options => options.UseNpgsql(
-    connectionString,
-    npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(
-        maxRetryCount: 5,
-        maxRetryDelay: TimeSpan.FromSeconds(2),
-        errorCodesToAdd: new[] { "40P01", "40001" })));
+builder.Services.AddDbContext<OjSharpDbContext>(options =>
+{
+    if (DatabaseProviders.IsSqlite(databaseProvider))
+    {
+        options.UseSqlite(connectionString);
+        return;
+    }
+
+    options.UseNpgsql(
+        connectionString,
+        npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(2),
+            errorCodesToAdd: new[] { "40P01", "40001" }));
+});
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -78,8 +89,7 @@ app.Use(async (context, next) =>
             throw;
         }
 
-        var postgresException = FindPostgresException(exception);
-        var isTransientDatabaseConflict = postgresException?.SqlState is "40P01" or "40001";
+        var isTransientDatabaseConflict = IsTransientDatabaseConflict(exception);
         app.Logger.LogError(exception, "Unhandled API exception.");
 
         context.Response.Clear();
@@ -142,6 +152,21 @@ static async Task SeedDatabaseAsync(WebApplication app)
     }
 }
 
+static string ResolveDatabaseProvider(WebApplicationBuilder builder, string connectionString)
+{
+    var configuredProvider = builder.Configuration["Database:Provider"]
+        ?? builder.Configuration["Database__Provider"];
+
+    if (!string.IsNullOrWhiteSpace(configuredProvider))
+    {
+        return configuredProvider;
+    }
+
+    return connectionString.TrimStart().StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+        ? DatabaseProviders.Sqlite
+        : DatabaseProviders.PostgreSql;
+}
+
 static string ResolveConnectionString(WebApplicationBuilder builder)
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -153,20 +178,25 @@ static string ResolveConnectionString(WebApplicationBuilder builder)
     throw new InvalidOperationException("ConnectionStrings__DefaultConnection must be configured.");
 }
 
-static PostgresException? FindPostgresException(Exception exception)
+static bool IsTransientDatabaseConflict(Exception exception)
 {
     Exception? current = exception;
     while (current is not null)
     {
         if (current is PostgresException postgresException)
         {
-            return postgresException;
+            return postgresException.SqlState is "40P01" or "40001";
+        }
+
+        if (current is SqliteException sqliteException)
+        {
+            return sqliteException.SqliteErrorCode is 5 or 6;
         }
 
         current = current.InnerException;
     }
 
-    return null;
+    return false;
 }
 
 public partial class Program;

@@ -20,7 +20,9 @@ Runtime paths must not use hardcoded demo data, mock AI responses, static execut
 
 - States: configuration loading, database initialization, seed admin initialization, ready, failed.
 - Events: configuration resolved, database unavailable, seed admin missing, initialization complete.
-- Guards: every backend run requires `ConnectionStrings__DefaultConnection`, `SeedAdmin__Email`, and `SeedAdmin__Password`.
+- Guards: every backend run requires `ConnectionStrings__DefaultConnection`,
+  `SeedAdmin__Email`, and `SeedAdmin__Password`; local startup supplies these
+  through generated `.env.local` SQLite and seed-admin values.
 - Transitions: missing configuration goes to failed; successful seed admin initialization goes to ready.
 - Side effects: create or repair the configured seed administrator only.
 - Failure paths: fail startup when database initialization or seed administrator validation fails.
@@ -66,7 +68,9 @@ Runtime paths must not use hardcoded demo data, mock AI responses, static execut
 
 ## Primitive Acceptance Criteria
 
-- The backend does not use a hardcoded local database connection string when `ConnectionStrings__DefaultConnection` is absent.
+- The backend does not use a hardcoded local database connection string when
+  `ConnectionStrings__DefaultConnection` is absent; `npm run dev` generates the
+  local SQLite connection string before backend startup.
 - The backend does not seed demo student users or demo assessments automatically in any environment.
 - AI assistance never returns mock guidance when no configured provider returns a response.
 - LLM draft generation never labels template content as LLM-generated.

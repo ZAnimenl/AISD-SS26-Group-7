@@ -6,19 +6,15 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  buildLocalPostgresConnectionString,
+  buildLocalDatabaseConfig,
+  buildLocalSqliteConnectionString,
   convertPostgresUrlToNpgsql,
   diagnoseBackendFailure,
-  ensureGuidedLocalPostgres,
-  isDatabaseStartupFailure,
-  isDockerCredentialHelperFailure,
-  isLocalDatabaseTarget,
-  isManualPostgresChoice,
+  isSqliteConnectionString,
   isUsableConfigValue,
   mergeEffectiveConfig,
   parseEnvFileContent,
   parseDotnetUserSecrets,
-  parseDockerPortOutput,
   resolveBackendHealthUrl,
   serializeEnvFile,
   shouldRunNpmCi
@@ -80,10 +76,19 @@ test("mergeEffectiveConfig derives database config from DATABASE_URL", () => {
     DATABASE_URL: "postgres://postgres:secret@localhost:5432/aisd_ss26_group_7"
   });
 
+  assert.equal(merged.Database__Provider, "PostgreSql");
   assert.equal(
     merged.ConnectionStrings__DefaultConnection,
     "Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=secret"
   );
+});
+
+test("mergeEffectiveConfig keeps local SQLite provider for generated config", () => {
+  const repoRoot = path.join(os.tmpdir(), "ojsharp repo");
+  const merged = mergeEffectiveConfig(buildLocalDatabaseConfig(repoRoot), {});
+
+  assert.equal(merged.Database__Provider, "Sqlite");
+  assert.equal(isSqliteConnectionString(merged.ConnectionStrings__DefaultConnection), true);
 });
 
 test("parseDotnetUserSecrets reads colon-delimited config keys", () => {
@@ -96,7 +101,7 @@ test("parseDotnetUserSecrets reads colon-delimited config keys", () => {
   assert.equal(parsed["ConnectionStrings:DefaultConnection"], "Host=localhost;Database=app");
 });
 
-test("diagnoseBackendFailure gives database repair guidance", () => {
+test("diagnoseBackendFailure gives external database repair guidance", () => {
   const guidance = diagnoseBackendFailure(
     "Npgsql.PostgresException: 3D000: database \"aisd_ss26_group_7\" does not exist",
     { ConnectionStrings__DefaultConnection: "Host=localhost;Database=aisd_ss26_group_7;Username=postgres" }
@@ -105,71 +110,20 @@ test("diagnoseBackendFailure gives database repair guidance", () => {
   assert.match(guidance, /createdb -U postgres aisd_ss26_group_7/);
 });
 
-test("buildLocalPostgresConnectionString uses the project-owned demo database", () => {
+test("buildLocalSqliteConnectionString uses the repository-owned local database file", () => {
+  const repoRoot = path.join(os.tmpdir(), "ojsharp repo");
   assert.equal(
-    buildLocalPostgresConnectionString(55432),
-    "Host=127.0.0.1;Port=55432;Database=aisd_ss26_group_7;Username=postgres;Password=postgres"
+    buildLocalSqliteConnectionString(repoRoot),
+    `Data Source=${path.join(repoRoot, ".local-data", "ojsharp-dev.sqlite")}`
   );
 });
 
-test("parseDockerPortOutput reads the published host port", () => {
-  assert.equal(parseDockerPortOutput("127.0.0.1:55432"), 55432);
-  assert.equal(parseDockerPortOutput("0.0.0.0:55433\n:::55433"), 55433);
-});
+test("buildLocalDatabaseConfig selects SQLite without external input", () => {
+  const repoRoot = path.join(os.tmpdir(), "ojsharp repo");
+  const config = buildLocalDatabaseConfig(repoRoot);
 
-test("isDockerCredentialHelperFailure recognizes missing Docker helper output", () => {
-  assert.equal(
-    isDockerCredentialHelperFailure("docker: error getting credentials - err: exec: \"docker-credential-desktop\": executable file not found in $PATH"),
-    true
-  );
-  assert.equal(isDockerCredentialHelperFailure("docker: Cannot connect to the Docker daemon"), false);
-});
-
-test("isDatabaseStartupFailure recognizes local PostgreSQL repair signals", () => {
-  assert.equal(isDatabaseStartupFailure("Npgsql.PostgresException: 28P01: password authentication failed for user postgres"), true);
-  assert.equal(isDatabaseStartupFailure("Connection refused 127.0.0.1:5432"), true);
-  assert.equal(isDatabaseStartupFailure("The frontend failed to compile"), false);
-});
-
-test("isLocalDatabaseTarget allows only local PostgreSQL targets for automatic repair", () => {
-  assert.equal(isLocalDatabaseTarget("Host=localhost;Database=aisd_ss26_group_7"), true);
-  assert.equal(isLocalDatabaseTarget("Host=127.0.0.1;Database=aisd_ss26_group_7"), true);
-  assert.equal(isLocalDatabaseTarget("Host=db.example.com;Database=aisd_ss26_group_7"), false);
-});
-
-test("isManualPostgresChoice recognizes the explicit manual database escape hatch", () => {
-  assert.equal(isManualPostgresChoice("m"), true);
-  assert.equal(isManualPostgresChoice("manual"), true);
-  assert.equal(isManualPostgresChoice(""), false);
-});
-
-test("ensureGuidedLocalPostgres requires an explicit manual database choice", async () => {
-  const prompts = [];
-  const originalLog = console.log;
-  console.log = () => {};
-
-  let config;
-  try {
-    config = await ensureGuidedLocalPostgres({
-      delay: async () => {},
-      docker: "",
-      interactive: true,
-      readLine: async (prompt) => {
-        prompts.push(prompt);
-        return "M";
-      },
-      repoRoot: process.cwd(),
-      runCommand: async () => {
-        throw new Error("should not run without Docker");
-      }
-    });
-  } finally {
-    console.log = originalLog;
-  }
-
-  assert.deepEqual(config, {});
-  assert.equal(prompts.length, 1);
-  assert.match(prompts[0], /manual PostgreSQL/);
+  assert.equal(config.Database__Provider, "Sqlite");
+  assert.equal(isSqliteConnectionString(config.ConnectionStrings__DefaultConnection), true);
 });
 
 test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {
