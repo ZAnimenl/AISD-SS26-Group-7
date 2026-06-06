@@ -104,6 +104,11 @@ the active requirements. It does not replace automated test files.
 - Missing seed administrator values use `admin@example.com` and `Admin123!`;
   `Deepseek__ApiKey` is the only interactive secret prompt unless AI is
   explicitly disabled.
+- If `.env.local` contains the same DeepSeek API key pasted repeatedly,
+  `npm run dev` rewrites it to one key value before backend startup.
+- If `.env.local` contains stale `LocalLlm__*` values, `npm run dev` removes
+  those provider settings and writes `LocalLlm__Enabled=false` so local startup
+  uses only the supported DeepSeek configuration path.
 - Backend startup failures explain likely repair steps for missing database,
   wrong credentials, insufficient PostgreSQL privileges, Docker permission
   issues, and missing system runtimes.

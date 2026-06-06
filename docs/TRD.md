@@ -47,6 +47,9 @@
   string automatically and reports concrete repair steps for local SQLite
   regeneration, external database configuration, Docker sandbox permission, or
   system-runtime failures.
+- Local startup normalizes accidental repeated DeepSeek key pastes and disables
+  stale `LocalLlm__*` overrides so old local files do not activate a second AI
+  provider path.
 - Local doctor mode reports prerequisite and configuration readiness without
   starting services, restoring dependencies, or writing secrets.
 - Root npm dependency restoration is lockfile-hash gated so repeated local

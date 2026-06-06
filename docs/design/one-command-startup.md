@@ -45,25 +45,29 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - States: doctor check, prerequisite check, local config loading, SQLite config
   write, dependency restore, backend starting, backend healthy, frontend
   starting, running, failed.
-- Events: command started, required command missing, `.env.local` read, SQLite
-  directory missing, SQLite config written, AI key found, AI key missing, user
-  enters AI key, user submits blank AI key, restore command fails, backend
-  health check passes, backend exits, frontend exits.
+- Events: command started, required command missing, `.env.local` read, stale
+  `LocalLlm__*` values found, repeated AI key paste found, SQLite directory
+  missing, SQLite config written, AI key found, AI key missing, user enters AI
+  key, user submits blank AI key, restore command fails, backend health check
+  passes, backend exits, frontend exits.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for
   dependency restoration; local startup always supplies
   `Database__Provider=Sqlite`, `ConnectionStrings__DefaultConnection`,
   `SeedAdmin__Email`, and `SeedAdmin__Password`; only `Deepseek__ApiKey` may be
   requested from the user.
-- Transitions: missing SQLite directory moves to directory creation; generated
-  SQLite config moves to dependency restore; missing AI key moves to optional
-  prompt; blank AI key disables local AI; backend health success moves to
-  frontend startup; missing system commands, restore failure, or backend health
-  timeout move to failed.
-- Side effects: create `.local-data/`; write or update `.env.local`; run
-  `npm ci` when root dependencies are absent or the ignored lockfile hash marker
-  does not match `package-lock.json`; run `dotnet restore`; create the SQLite
-  database through EF Core backend startup; append backend logs to gitignored
-  local log files; start backend and frontend child processes.
+- Transitions: stale `LocalLlm__*` values move to local AI cleanup; repeated
+  DeepSeek key pastes move to key normalization; missing SQLite directory moves
+  to directory creation; generated SQLite config moves to dependency restore;
+  missing AI key moves to optional prompt; blank AI key disables local AI;
+  backend health success moves to frontend startup; missing system commands,
+  restore failure, or backend health timeout move to failed.
+- Side effects: create `.local-data/`; write or update `.env.local`; remove
+  stale local `LocalLlm__*` provider settings and write
+  `LocalLlm__Enabled=false`; run `npm ci` when root dependencies are absent or
+  the ignored lockfile hash marker does not match `package-lock.json`; run
+  `dotnet restore`; create the SQLite database through EF Core backend startup;
+  append backend logs to gitignored local log files; start backend and frontend
+  child processes.
 - Failure paths: missing non-interactive AI configuration may disable local AI;
   missing system runtimes fail with install guidance; backend startup failure
   reports the health URL, recent backend error log, and repair guidance for
@@ -74,15 +78,17 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 
 ### AI Local Configuration
 
-- States: key configured, key missing, prompt shown, key stored, AI explicitly
-  disabled.
-- Events: `Deepseek__ApiKey` found in shell or `.env.local`, key missing, user
+- States: key configured, repeated key repair, key invalid, key missing, prompt
+  shown, key stored, AI explicitly disabled.
+- Events: `Deepseek__ApiKey` found in shell or `.env.local`, same key pasted
+  more than once, multiple different key fragments found, key missing, user
   enters key, user submits blank value, `Deepseek__Enabled=false` configured.
 - Guards: frontend never receives provider keys; provider calls remain backend
   owned; blank key cannot be treated as a real AI provider.
-- Transitions: existing key starts normally; entered key is stored in
-  `.env.local` with `Deepseek__Enabled=true`; blank input stores
-  `Deepseek__Enabled=false` and the backend returns structured provider
+- Transitions: existing valid key starts normally; repeated same-key paste is
+  normalized to one key value; invalid key moves to optional prompt; entered
+  valid key is stored in `.env.local` with `Deepseek__Enabled=true`; blank input
+  stores `Deepseek__Enabled=false` and the backend returns structured provider
   unavailable errors for AI features.
 - Side effects: write AI provider key only to `.env.local`, which remains
   untracked.
@@ -123,6 +129,10 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - If `Deepseek__ApiKey` is missing and AI is not explicitly disabled, an
   interactive terminal prompts for a DeepSeek key; a blank response disables
   local AI instead of returning mock AI output.
+- If `.env.local` contains the same DeepSeek key pasted repeatedly, startup
+  rewrites it to a single key value.
+- If `.env.local` contains stale `LocalLlm__*` provider settings, startup
+  removes those values and disables LocalLlm for the one-command local run.
 - Startup writes secrets only to `.env.local` or process environment, never to
   tracked config files.
 - The backend supports SQLite for local startup and PostgreSQL for explicitly
