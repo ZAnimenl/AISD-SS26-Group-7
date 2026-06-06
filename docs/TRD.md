@@ -34,6 +34,12 @@
 - Hidden tests and grading implementation are not returned to student-facing
   APIs.
 - Frontend does not call the database, sandbox, or external AI providers.
+- Backend AI assistance uses configured provider-backed completion or returns a
+  structured provider-unavailable error.
+- AI-generated assessment and question drafts use configured provider-backed JSON
+  output or return a structured generation error.
+- Backend startup requires an explicit database connection string and configured
+  seed administrator credentials in every environment.
 - Student code is never executed in frontend JavaScript or normal backend
   request handlers.
 - Secrets remain out of tracked files.
@@ -41,5 +47,6 @@
 ## Verification Requirements
 
 - Frontend changes run typecheck and build at minimum.
+- Frontend dependency or tooling changes also run lint and root `npm audit`.
 - Backend changes run build and relevant tests.
 - Cross-module changes run frontend checks, backend checks, and a reviewer pass.

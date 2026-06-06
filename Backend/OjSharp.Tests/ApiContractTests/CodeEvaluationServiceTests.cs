@@ -95,7 +95,7 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
-    public async Task Todo_summary_preview_uses_safe_static_fallback_when_grader_is_unavailable()
+    public async Task Todo_summary_preview_reports_internal_error_when_grader_is_unavailable()
     {
         var runner = new RecordingCodeRunner([
             new CodeRunResult(string.Empty, "Grader container unavailable: Connection failed", 1, false)
@@ -123,10 +123,10 @@ public sealed class CodeEvaluationServiceTests
             "python",
             CancellationToken.None);
 
-        Assert.Equal(ExecutionStatuses.Passed, result.Status);
-        Assert.True(result.TestResults[0].Passed);
-        Assert.Contains("Todo Summary", result.TestResults[0].Output);
-        Assert.Null(result.Stderr);
+        Assert.Equal(ExecutionStatuses.InternalError, result.Status);
+        Assert.Equal(ExecutionStatuses.InternalError, result.TestResults[0].Status);
+        Assert.False(result.TestResults[0].Passed);
+        Assert.Contains("Run environment unavailable", result.Stderr);
     }
 
     [Fact]

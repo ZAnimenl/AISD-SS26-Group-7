@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
+import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass } from "@/components/workspace/ConsolePanel";
+import { extractSuggestedCode, renderMarkdown } from "@/components/workspace/workspaceMarkdown";
 import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
 import type { AiInteractionType, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
@@ -117,20 +119,6 @@ function mergeQuestionStates(current: WorkspaceState["questions"], saved: Worksp
   }), current);
 }
 
-function parseInlineCode(text: string) {
-  const parts = text.split("`");
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      return (
-        <code key={index} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
-          {part}
-        </code>
-      );
-    }
-    return part;
-  });
-}
-
 function formatTaskType(taskType?: TaskType) {
   return taskType ? TASK_LABELS[taskType] : "Practical task";
 }
@@ -178,248 +166,6 @@ function getVisibleLanguages(question: Question | undefined) {
   return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
 }
 
-function renderMarkdown(text: string) {
-  if (!text) return null;
-
-  const elements: React.ReactNode[] = [];
-  const lines = text.split("\n");
-  let inCodeBlock = false;
-  let codeBlockLines: string[] = [];
-  let codeBlockLang = "";
-
-  const parseBoldAndInlineCode = (str: string): React.ReactNode => {
-    const boldParts = str.split("**");
-    return boldParts.map((boldPart, bIdx) => {
-      const isBold = bIdx % 2 === 1;
-      const codeParts = boldPart.split("`");
-      const renderedCodeParts = codeParts.map((codePart, cIdx) => {
-        if (cIdx % 2 === 1) {
-          return (
-            <code key={`code-${bIdx}-${cIdx}`} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
-              {codePart}
-            </code>
-          );
-        }
-        return codePart;
-      });
-
-      if (isBold) {
-        return <strong key={`bold-${bIdx}`} className="font-semibold text-white">{renderedCodeParts}</strong>;
-      }
-      return <span key={`text-${bIdx}`}>{renderedCodeParts}</span>;
-    });
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("```")) {
-      if (inCodeBlock) {
-        const codeContent = codeBlockLines.join("\n");
-        elements.push(
-          <div key={`code-${i}`} className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
-            {codeBlockLang && (
-              <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40">
-                <span>{codeBlockLang}</span>
-              </div>
-            )}
-            <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
-              {codeContent}
-            </pre>
-          </div>
-        );
-        inCodeBlock = false;
-        codeBlockLines = [];
-        codeBlockLang = "";
-      } else {
-        inCodeBlock = true;
-        codeBlockLang = trimmed.slice(3).trim();
-      }
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeBlockLines.push(line);
-      continue;
-    }
-
-    if (trimmed.startsWith("### ")) {
-      elements.push(
-        <h4 key={i} className="mt-4 text-xs font-semibold uppercase tracking-wider text-cyanGlow/90">
-          {parseBoldAndInlineCode(trimmed.slice(4))}
-        </h4>
-      );
-    } else if (trimmed.startsWith("## ")) {
-      elements.push(
-        <h3 key={i} className="mt-5 text-sm font-bold uppercase tracking-wider text-white">
-          {parseBoldAndInlineCode(trimmed.slice(3))}
-        </h3>
-      );
-    } else if (trimmed.startsWith("# ")) {
-      elements.push(
-        <h2 key={i} className="mt-6 text-base font-extrabold text-white">
-          {parseBoldAndInlineCode(trimmed.slice(2))}
-        </h2>
-      );
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      elements.push(
-        <div key={i} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
-          <span className="text-cyanGlow select-none mt-0.5">-</span>
-          <span>{parseBoldAndInlineCode(trimmed.slice(2))}</span>
-        </div>
-      );
-    } else if (trimmed.startsWith("> ")) {
-      elements.push(
-        <blockquote key={i} className="my-2 border-l-2 border-cyanGlow/40 bg-cyanGlow/5 py-1.5 pl-3 pr-2 text-xs italic leading-5 text-white/60 rounded-r-lg">
-          {parseBoldAndInlineCode(trimmed.slice(2))}
-        </blockquote>
-      );
-    } else if (trimmed === "") {
-      elements.push(<div key={i} className="h-2" />);
-    } else if (trimmed.startsWith("| ")) {
-      const tableLines: string[] = [trimmed];
-      let j = i + 1;
-      while (j < lines.length && lines[j].trim().startsWith("|")) {
-        tableLines.push(lines[j].trim());
-        j++;
-      }
-      const headerCells = tableLines[0].split("|").filter(Boolean).map(c => c.trim());
-      const dataRows = tableLines.slice(2);
-      elements.push(
-        <div key={i} className="my-3 overflow-x-auto rounded-lg border border-white/10">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-white/10 bg-white/5">
-                {headerCells.map((cell, ci) => (
-                  <th key={ci} className="px-3 py-1.5 text-left font-semibold text-white/70">{cell}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dataRows.map((row, ri) => {
-                const cells = row.split("|").filter(Boolean).map(c => c.trim());
-                return (
-                  <tr key={ri} className="border-b border-white/5">
-                    {cells.map((cell, ci) => (
-                      <td key={ci} className="px-3 py-1.5 text-white/55">{parseBoldAndInlineCode(cell)}</td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      );
-      i = j - 1;
-    } else {
-      elements.push(
-        <p key={i} className="mt-1 text-sm leading-6 text-white/65">
-          {parseBoldAndInlineCode(line)}
-        </p>
-      );
-    }
-  }
-
-  if (inCodeBlock && codeBlockLines.length > 0) {
-    elements.push(
-      <div key="code-unclosed" className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
-        <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
-          {codeBlockLines.join("\n")}
-        </pre>
-      </div>
-    );
-  }
-
-  return elements;
-}
-
-function extractSuggestedCode(markdown: string, language: Language) {
-  const codeBlocks = Array.from(markdown.matchAll(/```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g));
-  if (!codeBlocks.length) {
-    return null;
-  }
-
-  const preferredLanguages = language === "python" ? ["python", "py"] : ["javascript", "js"];
-  const matchingBlock = codeBlocks.find((block) => preferredLanguages.includes((block[1] ?? "").toLowerCase())) ?? codeBlocks[0];
-  const code = matchingBlock[2]?.trim();
-  return code ? code : null;
-}
-
-function isTodoSummaryQuestion(question: Question | undefined) {
-  const title = question?.title.toLowerCase() ?? "";
-  return title.includes("todo summary") || title.includes("summary panel");
-}
-
-function buildTodoSummarySuggestedCode(language: Language) {
-  if (language === "javascript") {
-    return [
-      "function buildSummary(todos) {",
-      "  const total = todos.length;",
-      "  const completed = todos.filter((todo) => todo.completed === true).length;",
-      "  const pending = total - completed;",
-      "  const message = total > 0 && completed === total ? 'All tasks complete' : '';",
-      "",
-      "  return { total, completed, pending, message };",
-      "}",
-      "",
-      "function renderSummaryPanel(todos) {",
-      "  const summary = buildSummary(todos);",
-      "  return [",
-      "    '<section data-testid=\"todo-summary\">',",
-      "    '<h2>Todo Summary</h2>',",
-      "    `<p>Total: ${summary.total}</p>`,",
-      "    `<p>Completed: ${summary.completed}</p>`,",
-      "    `<p>Pending: ${summary.pending}</p>`,",
-      "    `<p>${summary.message}</p>`,",
-      "    '</section>',",
-      "  ].join('');",
-      "}",
-      "",
-      "module.exports = { buildSummary, renderSummaryPanel };"
-    ].join("\n");
-  }
-
-  return [
-    "def build_summary(todos):",
-    "    total = len(todos)",
-    "    completed = sum(1 for todo in todos if todo.get(\"completed\") is True)",
-    "    pending = total - completed",
-    "    message = \"All tasks complete\" if total > 0 and completed == total else \"\"",
-    "",
-    "    return {",
-    "        \"total\": total,",
-    "        \"completed\": completed,",
-    "        \"pending\": pending,",
-    "        \"message\": message",
-    "    }",
-    "",
-    "def render_summary_panel(todos):",
-    "    summary = build_summary(todos)",
-    "    return (",
-    "        '<section data-testid=\"todo-summary\">'",
-    "        '<h2>Todo Summary</h2>'",
-    "        f'<p>Total: {summary[\"total\"]}</p>'",
-    "        f'<p>Completed: {summary[\"completed\"]}</p>'",
-    "        f'<p>Pending: {summary[\"pending\"]}</p>'",
-    "        f'<p>{summary[\"message\"]}</p>'",
-    "        '</section>'",
-    "    )"
-  ].join("\n");
-}
-
-function getTodoSummaryFileName(_question: Question | undefined, language: Language) {
-  return language === "javascript" ? "TodoSummaryPanel.js" : "TodoSummaryPanel.py";
-}
-
-function normalizeSuggestedCode(question: Question | undefined, language: Language, _code: string | null) {
-  if (!isTodoSummaryQuestion(question)) {
-    return _code;
-  }
-
-  return buildTodoSummarySuggestedCode(language);
-}
-
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   if (!firstQuestion) {
@@ -445,155 +191,6 @@ function EmptyTaskWorkspace() {
           ))}
         </div>
       </section>
-    </div>
-  );
-}
-
-function formatExecutionStatus(status: RunResult["status"]) {
-  return status.replaceAll("_", " ");
-}
-
-function hasRuntimeErrorMarker(stderr: string | null) {
-  if (!stderr) {
-    return false;
-  }
-
-  const markers = [
-    "Traceback (most recent call last)",
-    "SyntaxError",
-    "TypeError",
-    "NameError",
-    "ModuleNotFoundError",
-    "ImportError",
-    "IndentationError",
-    "ReferenceError",
-    "Cannot find module"
-  ];
-
-  return markers.some((marker) => stderr.toLowerCase().includes(marker.toLowerCase()));
-}
-
-function isRunEnvironmentUnavailable(stderr: string | null) {
-  return Boolean(stderr?.includes("Run environment unavailable") || stderr?.includes("Grader container unavailable"));
-}
-
-function getDisplayStatus(runResult: RunResult) {
-  if (isRunEnvironmentUnavailable(runResult.stderr)) {
-    return "internal_error" as RunResult["status"];
-  }
-
-  if (
-    runResult.status === "runtime_error"
-    && runResult.test_results.length > 0
-    && runResult.stdout.toLowerCase().includes("tests passed")
-    && !hasRuntimeErrorMarker(runResult.stderr)
-  ) {
-    return "failed" as RunResult["status"];
-  }
-
-  return runResult.status;
-}
-
-function getStatusClass(status: RunResult["status"]) {
-  switch (status) {
-    case "passed":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-    case "failed":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-    case "time_limit_exceeded":
-    case "memory_limit_exceeded":
-    case "runtime_error":
-    case "internal_error":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
-    default:
-      return "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow";
-  }
-}
-
-function ConsolePanel({ isRunning, runResult, taskError }: {
-  isRunning: boolean;
-  runResult: RunResult | null;
-  taskError: string | null;
-}) {
-  if (isRunning) {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-cyanGlow/20 bg-black/35 p-4 text-sm text-cyanGlow">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyanGlow" />
-          Running public checks...
-        </div>
-      </div>
-    );
-  }
-
-  if (taskError) {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-rose-500/20 bg-black/40 text-sm text-rose-200">
-        <div className="shrink-0 border-b border-rose-500/10 bg-rose-500/5 px-4 py-3">
-          <p className="font-semibold">Run request failed</p>
-        </div>
-        <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto p-4">
-          <p className="whitespace-pre-wrap text-rose-200/75">{taskError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!runResult) {
-    return (
-      <div className="grid h-full min-h-0 place-items-center rounded-xl border border-dashed border-white/10 bg-black/30 p-4 text-center text-sm text-white/35">
-        Run this task to see public test status, safe output, and resource metrics. Hidden tests stay private.
-      </div>
-    );
-  }
-
-  const isEnvironmentUnavailable = isRunEnvironmentUnavailable(runResult.stderr);
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 text-sm text-white/70">
-      <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pr-2">
-        <div className="grid gap-2 pb-3">
-          {isEnvironmentUnavailable ? (
-            <section className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08]">
-              <div className="border-b border-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200/90">Run environment unavailable</div>
-              <p className="p-3 text-xs leading-5 text-amber-100/75">
-                The sandbox grader is not reachable right now. This is an environment issue, not a code stderr output.
-              </p>
-            </section>
-          ) : null}
-
-          {runResult.test_results.map((test) => (
-            <div key={test.name} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <SemanticIcon name={test.passed ? "check" : "fail"} size={14} className={test.passed ? "text-emerald-300" : "text-rose-300"} />
-                <span className="min-w-0 flex-1 truncate font-medium text-white/80">{test.name}</span>
-                <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${test.passed ? "border-emerald-500/20 text-emerald-300" : "border-rose-500/20 text-rose-300"}`}>
-                  {test.passed ? "PASS" : "FAIL"}
-                </span>
-              </div>
-              {test.output ? (
-                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-black/35 p-2 font-mono text-xs text-white/45">
-                  {test.output}
-                </pre>
-              ) : null}
-            </div>
-          ))}
-
-          {runResult.stdout ? (
-            <section className="rounded-lg border border-white/10 bg-black/25">
-              <div className="border-b border-white/10 px-3 py-2 text-xs font-medium text-white/55">stdout</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-white/45">{runResult.stdout}</pre>
-            </section>
-          ) : null}
-
-          {runResult.stderr && !isEnvironmentUnavailable ? (
-            <section className="rounded-lg border border-rose-500/20 bg-rose-500/5">
-              <div className="border-b border-rose-500/10 px-3 py-2 text-xs font-medium text-rose-200/80">stderr</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-rose-200/80">{runResult.stderr}</pre>
-            </section>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }
@@ -673,7 +270,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }, [activeFile, activeQuestion, activeQuestionId, code, language]);
 
   useEffect(() => {
-    setSaveState("unsaved");
     const saving = window.setTimeout(() => setSaveState("saving"), 450);
     const saved = window.setTimeout(async () => {
       try {
@@ -696,6 +292,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }, [activeQuestionId, assessment.assessment_id, persistCurrentCode]);
 
   function updateCode(nextCode: string) {
+    setSaveState("unsaved");
     setCode(nextCode);
     setQuestionStates((current) => {
       const currentQuestionState = current[activeQuestionId] ?? createQuestionState(activeQuestion, language);
@@ -827,7 +424,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
     setError(null);
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     const requestLanguage = language;
-    const requestFile = isTodoSummaryQuestion(activeQuestion) ? getTodoSummaryFileName(activeQuestion, requestLanguage) : activeFile;
     setAiState("running");
     try {
       const response = await getAiResponse({
@@ -838,7 +434,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         selected_language: requestLanguage,
         active_file_content: code
       });
-      const suggestedCode = normalizeSuggestedCode(activeQuestion, requestLanguage, extractSuggestedCode(response.response_markdown, requestLanguage));
+      const suggestedCode = extractSuggestedCode(response.response_markdown, requestLanguage);
       setMessages((current) => [
         ...current,
         { role: "student", text: message },
@@ -847,7 +443,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           text: response.response_markdown,
           suggestedCode: suggestedCode ?? undefined,
           suggestedLanguage: suggestedCode ? requestLanguage : undefined,
-          targetFile: suggestedCode ? requestFile : undefined,
+          targetFile: suggestedCode ? activeFile : undefined,
           tokenUsage: response.token_usage
         }
       ]);

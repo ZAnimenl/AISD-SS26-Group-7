@@ -73,34 +73,7 @@ function getHtmlOutput(runResult: RunResult | null) {
   return runResult?.test_results.find((test) => /<\/?[a-z][\s\S]*>/i.test(test.output))?.output ?? null;
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function buildFallbackPreviewHtml(question: Question | undefined, hasRun: boolean, passed: number, total: number) {
-  const status = hasRun
-    ? `${passed}/${total} public checks passed`
-    : "Run the task to refresh the sandbox preview";
-
-  return `
-    <section data-testid="todo-summary" class="summary-card">
-      <p class="eyebrow">${escapeHtml(question?.title ?? "Todo prototype")}</p>
-      <h2>Todo Summary</h2>
-      <div class="metrics">
-        <article><strong>3</strong><span>Total</span></article>
-        <article><strong>1</strong><span>Completed</span></article>
-        <article><strong>2</strong><span>Pending</span></article>
-      </div>
-      <p class="status">${escapeHtml(status)}</p>
-    </section>
-  `;
-}
-
-function buildPreviewDocument(bodyHtml: string, source: "sandbox" | "fallback") {
+function buildPreviewDocument(bodyHtml: string) {
   return `<!doctype html>
 <html>
   <head>
@@ -127,7 +100,7 @@ function buildPreviewDocument(bodyHtml: string, source: "sandbox" | "fallback") 
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255,255,255,0.08);
       }
       .canvas { padding: 12px; }
-      section[data-testid="todo-summary"], .summary-card {
+      section[data-testid="todo-summary"] {
         border: 1px solid rgba(255,255,255,0.10);
         background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(0,229,255,0.05));
         padding: 14px;
@@ -141,8 +114,8 @@ function buildPreviewDocument(bodyHtml: string, source: "sandbox" | "fallback") 
       strong { display: block; color: #ffffff; font-size: 24px; line-height: 1; text-shadow: 0 0 18px rgba(0,229,255,0.22); }
       span { color: rgba(238,247,255,0.55); font-size: 12px; }
       .status {
-        border-left: 3px solid ${source === "sandbox" ? "#34d399" : "#00e5ff"};
-        background: ${source === "sandbox" ? "rgba(16,185,129,0.10)" : "rgba(0,229,255,0.08)"};
+        border-left: 3px solid #34d399;
+        background: rgba(16,185,129,0.10);
         padding: 10px 12px;
         color: rgba(238,247,255,0.76);
       }
@@ -158,26 +131,33 @@ function buildPreviewDocument(bodyHtml: string, source: "sandbox" | "fallback") 
 </html>`;
 }
 
-function BrowserPreviewFrame({ question, runResult, hasRun, passed, total }: {
-  question: Question | undefined;
+function BrowserPreviewFrame({ runResult }: {
   runResult: RunResult | null;
-  hasRun: boolean;
-  passed: number;
-  total: number;
 }) {
   const htmlOutput = getHtmlOutput(runResult);
-  const source = htmlOutput ? "sandbox" : "fallback";
-  const previewHtml = htmlOutput ?? buildFallbackPreviewHtml(question, hasRun, passed, total);
+
+  if (!htmlOutput) {
+    return (
+      <div className="grid h-[170px] place-items-center rounded-xl border border-white/10 bg-slate-950 px-6 text-center xl:h-[190px]">
+        <div>
+          <p className="text-sm font-semibold text-white">No sandbox preview output</p>
+          <p className="mt-2 text-xs leading-5 text-white/50">
+            Run must return browser HTML before this panel can render a preview.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950">
-      <span className={`absolute right-2 top-2 z-10 rounded border bg-black/55 px-2 py-1 text-[10px] backdrop-blur ${source === "sandbox" ? "border-emerald-500/25 text-emerald-300" : "border-white/10 text-white/50"}`}>
-        {source === "sandbox" ? "Sandbox output" : "Sample preview"}
+      <span className="absolute right-2 top-2 z-10 rounded border border-emerald-500/25 bg-black/55 px-2 py-1 text-[10px] text-emerald-300 backdrop-blur">
+        Sandbox output
       </span>
       <iframe
         className="h-[170px] w-full bg-[#07111d] xl:h-[190px]"
         sandbox=""
-        srcDoc={buildPreviewDocument(previewHtml, source)}
+        srcDoc={buildPreviewDocument(htmlOutput)}
         title="Browser UI preview"
       />
     </div>
@@ -226,11 +206,7 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
         {isBrowserPreview ? (
           <>
             <BrowserPreviewFrame
-              question={question}
               runResult={runResult}
-              hasRun={hasRun}
-              passed={passed}
-              total={total}
             />
             <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="flex items-start gap-3">

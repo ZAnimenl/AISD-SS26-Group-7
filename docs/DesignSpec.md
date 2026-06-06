@@ -20,6 +20,8 @@ feedback, and report review.
   supported language, run output, submit state, and AI assistance when enabled.
 - The verification area adapts to task type.
 - Frontend UI extension tasks show direct browser UI preview.
+- Browser preview renders only sandbox-produced HTML; when no preview output is
+  returned, it shows a no-output state instead of sample task content.
 - REST API, database, and bug-fix tasks show task-appropriate verification
   output rather than forcing a browser preview.
 

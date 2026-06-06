@@ -15,7 +15,8 @@ the active requirements. It does not replace automated test files.
 - Administrators can create an assessment with title, description, duration,
   status, AI enabled state, and shared prototype reference.
 - Administrators can create tasks using the supported task categories.
-- AI-generated assessment drafts are editable before publication.
+- AI-generated assessment drafts are provider-backed, editable before
+  publication, and never template fallbacks labeled as LLM output.
 
 ## Student Workspace
 
@@ -23,11 +24,15 @@ the active requirements. It does not replace automated test files.
 - Workspace context displays public task details and starter files.
 - Workspace APIs do not require frontend-sent `session_id` or `attempt_id`.
 - Autosave persists selected language, active file, file contents, and version.
+- Browser preview renders sandbox-produced HTML or a no-output state, never
+  sample task content.
 
 ## Run and Submit
 
 - Run uses public checks and returns safe stdout, stderr, status, and public test
   feedback.
+- If the sandbox grader is unavailable, run and submit report `internal_error`
+  rather than static task-specific pass/fail results.
 - Submit evaluates final work and returns visible and hidden test summary counts
   without hidden inputs or expected outputs.
 - Expired or closed attempts reject new runs and submissions.
@@ -39,6 +44,15 @@ the active requirements. It does not replace automated test files.
   tokens, total tokens, assessment, task, and attempt ownership.
 - Direct complete-solution requests receive a safety response rather than a full
   answer.
+- Missing or failing AI providers return a structured unavailable error instead
+  of mock guidance.
+
+## Startup Configuration
+
+- Backend startup fails when `ConnectionStrings__DefaultConnection`,
+  `SeedAdmin__Email`, or `SeedAdmin__Password` is missing.
+- Backend startup creates or repairs only the configured seed administrator and
+  does not create demo users or demo assessments.
 
 ## Reporting
 

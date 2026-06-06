@@ -175,7 +175,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       task_type: "rest_api_development",
       difficulty: "medium",
       verification_mode: "api_response_check",
-      starter_prototype_reference: assessment.shared_prototype_reference ?? "todo-app",
+      starter_prototype_reference: assessment.shared_prototype_reference ?? null,
       problem_description_markdown: "Describe the task.",
       admin_notes: "",
       sort_order: sortOrder,
@@ -204,7 +204,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       task_type: draftTaskType,
       difficulty: draftDifficulty,
       supported_languages: draftLanguages,
-      starter_prototype_reference: assessment.shared_prototype_reference ?? "todo-app"
+      starter_prototype_reference: assessment.shared_prototype_reference ?? null
     });
 
     onAssessmentChange({
@@ -404,7 +404,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr]">
                   <label className="grid gap-2 text-sm text-white/60">
                     Starter prototype reference
-                    <input className="field w-full" value={question.starter_prototype_reference ?? ""} onChange={(event) => updateQuestionState(question.question_id, { starter_prototype_reference: event.target.value })} placeholder="todo-app" />
+                    <input className="field w-full" value={question.starter_prototype_reference ?? ""} onChange={(event) => updateQuestionState(question.question_id, { starter_prototype_reference: event.target.value })} />
                   </label>
                   <div className="grid gap-2 text-sm text-white/60">
                     Supported student languages
