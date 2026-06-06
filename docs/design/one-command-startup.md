@@ -65,22 +65,24 @@ skip runtime dependencies that are required for real assessment flows.
   value missing, Docker CLI found, Docker daemon reachable, project PostgreSQL
   container missing, project PostgreSQL container unhealthy, local database
   password failure, local database missing, local database privilege failure,
-  user submits value, user skips AI key, restore command fails, backend health
-  check passes, backend exits, frontend exits.
+  Docker retry requested, manual PostgreSQL selected, quit selected, user
+  submits value, user skips AI key, restore command fails, backend health check
+  passes, backend exits, frontend exits.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for project
   dependency restoration; `ConnectionStrings__DefaultConnection` must have a
   real non-placeholder value before backend startup; missing local database
   config may be satisfied only by the project-owned Docker PostgreSQL database
   or by user-provided real PostgreSQL configuration; automatic database repair
   is allowed only for local database targets, not remote hosts.
-- Transitions: missing database config with a reachable Docker daemon moves to
-  local Docker database check; missing database config without Docker moves to
-  prompt; missing seed admin values move to local defaults; missing AI key moves
-  to optional prompt; accepted or generated values move to dependency restore;
-  local database startup failure moves to local database repair and one backend
-  retry; backend health success moves to frontend startup; missing system
-  commands, restore failure, remote database failure, or backend health timeout
-  after retry move to failed.
+- Transitions: missing database config moves to local Docker database check;
+  missing or stopped Docker in an interactive terminal moves to Docker guidance
+  and retry; explicit manual PostgreSQL selection moves to the PostgreSQL
+  connection prompt; missing seed admin values move to local defaults; missing
+  AI key moves to optional prompt; accepted or generated values move to
+  dependency restore; local database startup failure moves to local database
+  repair and one backend retry; backend health success moves to frontend
+  startup; missing system commands, restore failure, remote database failure, or
+  backend health timeout after retry move to failed.
 - Side effects: write or update `.env.local` only; run `npm ci` when root
   dependencies are absent or the ignored local lockfile hash marker does not
   match `package-lock.json`; run `dotnet restore`; create/start/reuse Docker
@@ -140,6 +142,9 @@ skip runtime dependencies that are required for real assessment flows.
   or reuses Docker container `ojsharp-postgres-dev` with database
   `aisd_ss26_group_7`, user `postgres`, password `postgres`, and the first free
   loopback host port from `55432` through `55449`.
+- If database configuration is missing and Docker is unavailable in an
+  interactive terminal, startup gives Docker install/start guidance and lets the
+  user press Enter to retry before any manual PostgreSQL prompt is shown.
 - Repeated startups reuse the same project-owned PostgreSQL container and named
   volume and do not create duplicate local database dependencies.
 - If the project-owned PostgreSQL container exists but cannot become ready,

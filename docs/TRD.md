@@ -40,7 +40,8 @@
   output or return a structured generation error.
 - Local one-command startup restores project dependencies, auto-provisions a
   project-owned Docker PostgreSQL database when local database config is
-  missing, prompts only for AI provider secrets when Docker database
+  missing, guides interactive users to start Docker before falling back to
+  manual PostgreSQL, prompts only for AI provider secrets when Docker database
   auto-provisioning is available, writes local secrets only to `.env.local`, and
   waits for backend health before starting the frontend.
 - Local startup normalizes PostgreSQL URLs, reuses safe existing environment or

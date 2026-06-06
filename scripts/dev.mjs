@@ -18,6 +18,7 @@ import {
   parseDotnetUserSecrets
 } from "./dev-support.mjs";
 import {
+  ensureGuidedLocalPostgres,
   getDockerDaemonStatus,
   isDatabaseStartupFailure,
   isLocalDatabaseTarget,
@@ -34,9 +35,11 @@ export {
 } from "./dev-support.mjs";
 export {
   buildLocalPostgresConnectionString,
+  ensureGuidedLocalPostgres,
   isDatabaseStartupFailure,
   isDockerCredentialHelperFailure,
   isLocalDatabaseTarget,
+  isManualPostgresChoice,
   parseDockerPortOutput
 } from "./dev-postgres.mjs";
 
@@ -82,12 +85,7 @@ const requiredLocalConfig = [
     secret: true,
     normalize: normalizePostgresConnectionString,
     validate: (value) => isUsableConfigValue(value),
-    help: [
-      "Docker was not available for automatic local PostgreSQL setup.",
-      "If you intentionally use an existing PostgreSQL server, paste either format:",
-      "  postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7",
-      "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD"
-    ],
+    help: ["Manual PostgreSQL examples: postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7 or Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD"],
     error: "A real PostgreSQL connection string or URL is required for every backend run."
   },
   {
@@ -439,9 +437,11 @@ async function ensureLocalConfig(fileConfig, options) {
   const writableConfig = { ...defaultConfig, ...fileConfig };
 
   if (!isUsableConfigValue(mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig })[connectionStringKey])) {
-    const localPostgresConfig = await tryProvisionLocalPostgres({
+    const localPostgresConfig = await ensureGuidedLocalPostgres({
       delay,
       docker: resolveCommand("docker"),
+      interactive: !options.noPrompt && process.stdin.isTTY,
+      readLine,
       repoRoot,
       runCommand
     });

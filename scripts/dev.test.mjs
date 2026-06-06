@@ -9,9 +9,11 @@ import {
   buildLocalPostgresConnectionString,
   convertPostgresUrlToNpgsql,
   diagnoseBackendFailure,
+  ensureGuidedLocalPostgres,
   isDatabaseStartupFailure,
   isDockerCredentialHelperFailure,
   isLocalDatabaseTarget,
+  isManualPostgresChoice,
   isUsableConfigValue,
   mergeEffectiveConfig,
   parseEnvFileContent,
@@ -133,6 +135,41 @@ test("isLocalDatabaseTarget allows only local PostgreSQL targets for automatic r
   assert.equal(isLocalDatabaseTarget("Host=localhost;Database=aisd_ss26_group_7"), true);
   assert.equal(isLocalDatabaseTarget("Host=127.0.0.1;Database=aisd_ss26_group_7"), true);
   assert.equal(isLocalDatabaseTarget("Host=db.example.com;Database=aisd_ss26_group_7"), false);
+});
+
+test("isManualPostgresChoice recognizes the explicit manual database escape hatch", () => {
+  assert.equal(isManualPostgresChoice("m"), true);
+  assert.equal(isManualPostgresChoice("manual"), true);
+  assert.equal(isManualPostgresChoice(""), false);
+});
+
+test("ensureGuidedLocalPostgres requires an explicit manual database choice", async () => {
+  const prompts = [];
+  const originalLog = console.log;
+  console.log = () => {};
+
+  let config;
+  try {
+    config = await ensureGuidedLocalPostgres({
+      delay: async () => {},
+      docker: "",
+      interactive: true,
+      readLine: async (prompt) => {
+        prompts.push(prompt);
+        return "M";
+      },
+      repoRoot: process.cwd(),
+      runCommand: async () => {
+        throw new Error("should not run without Docker");
+      }
+    });
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.deepEqual(config, {});
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /manual PostgreSQL/);
 });
 
 test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {
