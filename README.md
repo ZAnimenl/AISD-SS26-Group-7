@@ -196,6 +196,30 @@ Open the app after startup:
 http://localhost:3000
 ```
 
+Local development seeds and repairs this administrator account:
+
+```text
+admin@example.com
+Admin123!
+```
+
+Every `npm run dev` run repairs that configured seed administrator before the
+backend is reused or started, so teammates should not need to delete the local
+SQLite file when the demo password changes.
+
+If an older local Backend process is already listening on the configured backend
+port, the startup script restarts that Backend process when it can identify it
+safely, so the backend also serves the current pulled code. If the OS blocks
+that restart, close the old Backend process or approve the system prompt, then
+rerun `npm run dev`.
+
+If an old local Next.js process is still using `http://localhost:3000`, the
+startup script restarts it when it can identify it safely, so the printed link
+serves the current pulled code.
+
+The login page shows a development-only "Use local admin" action that fills
+those credentials for quick demos. It is not shown in production builds.
+
 On Windows, the startup script resolves the executable `npm.cmd` shim instead
 of the non-executable `npm` shim, so `spawn ... npm ENOENT` should not appear
 after pulling the latest version.

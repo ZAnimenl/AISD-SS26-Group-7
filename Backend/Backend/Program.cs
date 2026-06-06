@@ -76,6 +76,12 @@ builder.Services.Configure<SeedAdminOptions>(builder.Configuration.GetSection(Se
 
 var app = builder.Build();
 
+if (args.Contains("--seed-admin-only", StringComparer.OrdinalIgnoreCase))
+{
+    await SeedDatabaseAsync(app);
+    return;
+}
+
 app.Use(async (context, next) =>
 {
     try

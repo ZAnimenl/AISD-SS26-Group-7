@@ -6,20 +6,34 @@ import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getStudentResults } from "@/lib/api";
+import { getStudentResults, isAuthenticationError } from "@/lib/api";
 import type { Assessment } from "@/lib/types";
 
 export default function StudentResultsPage() {
   const router = useRouter();
   const [results, setResults] = useState<Assessment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getStudentResults().then(setResults).catch(() => router.replace("/login"));
+    getStudentResults()
+      .then((nextResults) => {
+        setResults(nextResults);
+        setError(null);
+      })
+      .catch((exception) => {
+        if (isAuthenticationError(exception)) {
+          router.replace("/login");
+          return;
+        }
+
+        setError(exception instanceof Error ? exception.message : "Unable to load results.");
+      });
   }, [router]);
 
   return (
     <div>
       <SectionHeader eyebrow="Student" title="Results" />
+      {error ? <section className="panel text-sm text-pinkGlow">{error}</section> : null}
       <section className="panel">
         <div className="relative overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">

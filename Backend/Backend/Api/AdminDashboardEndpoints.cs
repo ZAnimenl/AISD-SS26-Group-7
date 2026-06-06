@@ -26,34 +26,59 @@ public static class AdminDashboardEndpoints
         }
 
         var submissions = await dbContext.Submissions.ToListAsync(cancellationToken);
-        var recentAssessments = await dbContext.Assessments
-            .OrderByDescending(assessment => assessment.CreatedAt)
-            .Take(5)
-            .Select(assessment => new
-            {
-                assessment_id = assessment.Id,
-                assessment.Title,
-                assessment.Status,
-                created_at = assessment.CreatedAt
-            })
-            .ToListAsync(cancellationToken);
-        var recentSubmissions = await dbContext.Submissions
-            .Include(submission => submission.Session)
-            .ThenInclude(session => session!.User)
-            .Include(submission => submission.Session)
-            .ThenInclude(session => session!.Assessment)
-            .OrderByDescending(submission => submission.SubmittedAt)
-            .Take(5)
-            .Select(submission => new
-            {
-                submission_id = submission.Id,
-                student_name = submission.Session!.User!.FullName,
-                assessment_title = submission.Session.Assessment!.Title,
-                submission.Score,
-                max_score = submission.MaxScore,
-                submitted_at = submission.SubmittedAt
-            })
-            .ToListAsync(cancellationToken);
+        var usesSqlite = DatabaseProviders.IsSqliteProviderName(dbContext.Database.ProviderName);
+        var recentAssessments = usesSqlite
+            ? (await dbContext.Assessments
+                .Select(assessment => new
+                {
+                    assessment_id = assessment.Id,
+                    assessment.Title,
+                    assessment.Status,
+                    created_at = assessment.CreatedAt
+                })
+                .ToListAsync(cancellationToken))
+                .OrderByDescending(assessment => assessment.created_at)
+                .Take(5)
+                .ToList()
+            : await dbContext.Assessments
+                .OrderByDescending(assessment => assessment.CreatedAt)
+                .Take(5)
+                .Select(assessment => new
+                {
+                    assessment_id = assessment.Id,
+                    assessment.Title,
+                    assessment.Status,
+                    created_at = assessment.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+        var recentSubmissions = usesSqlite
+            ? (await dbContext.Submissions
+                .Select(submission => new
+                {
+                    submission_id = submission.Id,
+                    student_name = submission.Session!.User!.FullName,
+                    assessment_title = submission.Session.Assessment!.Title,
+                    submission.Score,
+                    max_score = submission.MaxScore,
+                    submitted_at = submission.SubmittedAt
+                })
+                .ToListAsync(cancellationToken))
+                .OrderByDescending(submission => submission.submitted_at)
+                .Take(5)
+                .ToList()
+            : await dbContext.Submissions
+                .OrderByDescending(submission => submission.SubmittedAt)
+                .Take(5)
+                .Select(submission => new
+                {
+                    submission_id = submission.Id,
+                    student_name = submission.Session!.User!.FullName,
+                    assessment_title = submission.Session.Assessment!.Title,
+                    submission.Score,
+                    max_score = submission.MaxScore,
+                    submitted_at = submission.SubmittedAt
+                })
+                .ToListAsync(cancellationToken);
 
         return ApiResults.Success(new
         {

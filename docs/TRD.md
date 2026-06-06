@@ -52,6 +52,15 @@
   provider path.
 - Local startup resolves Windows npm shims to executable commands and prints
   the frontend URL before handing over to Next.js.
+- Local startup restarts an old local Next.js listener on the frontend port when
+  the process can be safely identified, so the printed frontend URL serves the
+  current checkout instead of stale code.
+- Local startup runs the backend `--seed-admin-only` path before backend health
+  reuse/start so the configured seed administrator is repaired through the same
+  EF Core path as normal backend startup.
+- Local startup restarts an existing local Backend listener on the configured
+  backend port when its process can be safely identified, then verifies reused
+  external backend health with the configured seed administrator login.
 - Local doctor mode reports prerequisite and configuration readiness without
   starting services, restoring dependencies, or writing secrets.
 - Root npm dependency restoration is lockfile-hash gated so repeated local
@@ -59,6 +68,9 @@
   `package-lock.json`.
 - Local SQLite provisioning uses a stable gitignored file path so repeated
   starts do not create duplicate local database dependencies.
+- Local development login exposes the seeded administrator credentials through a
+  development-only quick fill action; auth storage is cleared on backend 401 or
+  logout, not on login page mount or non-auth data errors.
 - Backend startup requires an explicit database connection string and configured
   seed administrator credentials in every environment.
 - Student code is never executed in frontend JavaScript or normal backend

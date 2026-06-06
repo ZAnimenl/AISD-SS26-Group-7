@@ -12,7 +12,11 @@ function subscribeToAuthStorage(onStoreChange: () => void) {
   }
 
   window.addEventListener("storage", onStoreChange);
-  return () => window.removeEventListener("storage", onStoreChange);
+  window.addEventListener("ojsharp-auth", onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener("ojsharp-auth", onStoreChange);
+  };
 }
 
 function getServerSnapshot(): ClientAuthState {

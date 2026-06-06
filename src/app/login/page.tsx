@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Code2, LogIn, UserPlus } from "lucide-react";
-import { clearStoredAuth, login, registerStudent } from "@/lib/api";
+import { Code2, KeyRound, LogIn, UserPlus } from "lucide-react";
+import { getStoredUser, login, registerStudent } from "@/lib/api";
 
 type AuthAction = "login" | "register";
+const localDemoAdmin = {
+  email: "admin@example.com",
+  password: "Admin123!"
+};
+const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
   const [fullName, setFullName] = useState("");
@@ -17,8 +22,11 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    clearStoredAuth();
-  }, []);
+    const user = getStoredUser();
+    if (user) {
+      router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
+    }
+  }, [router]);
 
   async function handleSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,6 +61,14 @@ export default function LoginPage() {
     } finally {
       setSubmittingAction(null);
     }
+  }
+
+  function fillLocalAdminAccount() {
+    setEmail(localDemoAdmin.email);
+    setPassword(localDemoAdmin.password);
+    setFullName("");
+    setError(null);
+    setNotice("Local administrator account filled.");
   }
 
   return (
@@ -90,6 +106,12 @@ export default function LoginPage() {
                 <LogIn size={18} />
                 {submittingAction === "login" ? "Connecting..." : "Sign in"}
               </button>
+              {showLocalDemoAccount ? (
+                <button className="btn-secondary" type="button" onClick={fillLocalAdminAccount} disabled={submittingAction !== null}>
+                  <KeyRound size={18} />
+                  Use local admin
+                </button>
+              ) : null}
               <button className="btn-secondary" type="button" onClick={handleRegisterStudent} disabled={submittingAction !== null}>
                 <UserPlus size={18} />
                 {submittingAction === "register" ? "Creating..." : "Register Student"}
@@ -116,6 +138,11 @@ admin_users = "/api/v1/admin/users";`}
             </pre>
           </div>
           <div className="mt-6 grid gap-3 text-sm text-white/55">
+            {showLocalDemoAccount ? (
+              <p className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                Local admin: <span className="text-white">admin@example.com</span> / <span className="text-white">Admin123!</span>
+              </p>
+            ) : null}
             <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Self registration always creates a student account.</p>
             <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Administrator accounts are created from configured backend credentials or by existing administrators.</p>
           </div>
