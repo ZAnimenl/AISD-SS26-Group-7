@@ -45,22 +45,23 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - States: doctor check, prerequisite check, local config loading, SQLite config
   write, dependency restore, backend starting, backend healthy, frontend
   starting, running, failed.
-- Events: command started, required command missing, `.env.local` read, stale
-  `LocalLlm__*` values found, repeated AI key paste found, SQLite directory
-  missing, SQLite config written, AI key found, AI key missing, user enters AI
-  key, user submits blank AI key, restore command fails, backend health check
-  passes, backend exits, frontend exits.
+- Events: command started, required command missing, Windows npm shim discovered,
+  `.env.local` read, stale `LocalLlm__*` values found, repeated AI key paste
+  found, SQLite directory missing, SQLite config written, AI key found, AI key
+  missing, user enters AI key, user submits blank AI key, restore command fails,
+  backend health check passes, backend exits, frontend exits.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for
   dependency restoration; local startup always supplies
   `Database__Provider=Sqlite`, `ConnectionStrings__DefaultConnection`,
   `SeedAdmin__Email`, and `SeedAdmin__Password`; only `Deepseek__ApiKey` may be
   requested from the user.
-- Transitions: stale `LocalLlm__*` values move to local AI cleanup; repeated
+- Transitions: Windows npm discovery prefers an executable shim such as
+  `npm.cmd`; stale `LocalLlm__*` values move to local AI cleanup; repeated
   DeepSeek key pastes move to key normalization; missing SQLite directory moves
   to directory creation; generated SQLite config moves to dependency restore;
   missing AI key moves to optional prompt; blank AI key disables local AI;
-  backend health success moves to frontend startup; missing system commands,
-  restore failure, or backend health timeout move to failed.
+  backend health success moves to frontend startup and URL output; missing
+  system commands, restore failure, or backend health timeout move to failed.
 - Side effects: create `.local-data/`; write or update `.env.local`; remove
   stale local `LocalLlm__*` provider settings and write
   `LocalLlm__Enabled=false`; run `npm ci` when root dependencies are absent or
@@ -133,6 +134,9 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
   rewrites it to a single key value.
 - If `.env.local` contains stale `LocalLlm__*` provider settings, startup
   removes those values and disables LocalLlm for the one-command local run.
+- On Windows, startup resolves npm to an executable shim instead of an
+  extensionless command path.
+- When frontend startup begins, startup prints `http://localhost:3000`.
 - Startup writes secrets only to `.env.local` or process environment, never to
   tracked config files.
 - The backend supports SQLite for local startup and PostgreSQL for explicitly

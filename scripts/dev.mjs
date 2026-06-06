@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -24,6 +24,9 @@ import {
   localDatabase,
   localSeedAdminDefaults
 } from "./dev-local-database.mjs";
+import {
+  createCommandRunner
+} from "./dev-command-runner.mjs";
 
 export {
   convertPostgresUrlToNpgsql,
@@ -36,6 +39,9 @@ export {
   buildLocalSqliteConnectionString,
   isSqliteConnectionString
 } from "./dev-local-database.mjs";
+export {
+  selectPathCommandCandidate
+} from "./dev-command-runner.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -45,8 +51,15 @@ const backendSolutionPath = path.join("Backend", "Backend.sln");
 const backendOutPath = path.join(repoRoot, "backend-dev.log");
 const backendErrPath = path.join(repoRoot, "backend-dev.err.log");
 const npmInstallMarkerFileName = ".ojsharp-package-lock.sha256";
-const resolvedCommands = new Map();
 const connectionStringKey = "ConnectionStrings__DefaultConnection";
+const frontendUrl = "http://localhost:3000";
+const {
+  buildChildEnv,
+  ensureCommand,
+  resolveCommand,
+  runCommand,
+  spawnCommand
+} = createCommandRunner();
 
 const defaultConfig = {
   NEXT_PUBLIC_API_BASE_URL: "http://localhost:5140/api/v1",
@@ -736,13 +749,13 @@ async function restoreDependencies() {
   ensureRestoreCommands();
 
   if (shouldRunNpmCi(repoRoot)) {
-    await runCommand(resolveCommand("npm"), ["ci"], { stdio: "inherit" });
+    await runCommand("npm", ["ci"], { stdio: "inherit" });
   }
 
   await writeNpmInstallMarker();
   console.log("Node dependencies are ready for the current lockfile.");
 
-  await runCommand(resolveCommand("dotnet"), ["restore", backendSolutionPath], {
+  await runCommand("dotnet", ["restore", backendSolutionPath], {
     env: buildChildEnv(),
     stdio: "inherit"
   });
@@ -779,80 +792,6 @@ function ensureRestoreCommands() {
   ].join("\n"));
 }
 
-function ensureCommand(command, guidance) {
-  const resolved = resolveCommand(command);
-
-  if (!resolved) {
-    throw new Error(`${command} is required but was not found.\n${guidance}`);
-  }
-}
-
-function resolveCommand(command) {
-  if (resolvedCommands.has(command)) {
-    return resolvedCommands.get(command);
-  }
-
-  const resolved = command === "dotnet"
-    ? resolveDotnetCommand()
-    : resolvePathCommand(command);
-  resolvedCommands.set(command, resolved);
-  return resolved;
-}
-
-function resolvePathCommand(command) {
-  const checker = process.platform === "win32"
-    ? spawnSync("where", [command], { encoding: "utf8" })
-    : spawnSync("sh", ["-c", `command -v ${command}`], { encoding: "utf8" });
-
-  if (checker.status !== 0) {
-    return "";
-  }
-
-  return checker.stdout.trim().split(/\r?\n/)[0] || command;
-}
-
-function resolveDotnetCommand() {
-  const candidates = [
-    process.env.DOTNET_CLI,
-    resolvePathCommand("dotnet"),
-    "/opt/homebrew/opt/dotnet@9/libexec/dotnet",
-    "/opt/homebrew/opt/dotnet/libexec/dotnet",
-    "/usr/local/share/dotnet/dotnet",
-    "/usr/local/bin/dotnet"
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    const result = spawnSync(candidate, ["--version"], {
-      env: buildChildEnv(undefined, candidate),
-      stdio: "ignore"
-    });
-    if (result.status === 0) {
-      return candidate;
-    }
-  }
-
-  return "";
-}
-
-function buildChildEnv(config = {}, dotnetCommand = resolveCommand("dotnet")) {
-  const env = { ...process.env, ...config };
-  const dotnetRoot = resolveDotnetRoot(dotnetCommand);
-  if (dotnetRoot && !env.DOTNET_ROOT) {
-    env.DOTNET_ROOT = dotnetRoot;
-  }
-
-  return env;
-}
-
-function resolveDotnetRoot(dotnetCommand) {
-  if (!dotnetCommand || dotnetCommand === "dotnet" || !path.isAbsolute(dotnetCommand)) {
-    return "";
-  }
-
-  const directory = path.dirname(dotnetCommand);
-  return path.basename(directory) === "libexec" ? directory : "";
-}
-
 async function ensureBackend(config) {
   const healthUrl = resolveBackendHealthUrl(config.BackendUrls);
   if (await isBackendHealthy(healthUrl)) {
@@ -865,7 +804,7 @@ async function ensureBackend(config) {
 
   const out = fs.openSync(backendOutPath, "a");
   const err = fs.openSync(backendErrPath, "a");
-  const backend = spawn(resolveCommand("dotnet"), ["run", "--project", backendProjectPath], {
+  const backend = spawnCommand("dotnet", ["run", "--project", backendProjectPath], {
     cwd: repoRoot,
     env: buildChildEnv(config),
     stdio: ["ignore", out, err]
@@ -917,8 +856,9 @@ async function waitForBackend(backend, healthUrl, seconds) {
 }
 
 async function startFrontend(backend) {
-  console.log("Starting frontend on http://localhost:3000 ...");
-  const frontend = spawn(resolveCommand("npm"), ["run", "dev:frontend"], {
+  console.log(`Starting frontend on ${frontendUrl} ...`);
+  console.log(`Open the app: ${frontendUrl}`);
+  const frontend = spawnCommand("npm", ["run", "dev:frontend"], {
     cwd: repoRoot,
     env: process.env,
     stdio: "inherit"
@@ -956,7 +896,10 @@ function waitForChildExit(child) {
     return new Promise(() => {});
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    child.once("error", (exception) => {
+      reject(new Error(`Failed to start child process: ${exception.message}`));
+    });
     child.on("exit", (code) => resolve(code));
   });
 }
@@ -968,20 +911,6 @@ async function readTail(filePath, lineCount) {
   } catch {
     return "";
   }
-}
-
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: repoRoot, ...options });
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${command} ${args.join(" ")} failed with exit code ${code}.`));
-      }
-    });
-  });
 }
 
 function delay(ms) {

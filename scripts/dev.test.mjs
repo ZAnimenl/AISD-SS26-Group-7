@@ -19,6 +19,7 @@ import {
   parseEnvFileContent,
   parseDotnetUserSecrets,
   resolveBackendHealthUrl,
+  selectPathCommandCandidate,
   serializeEnvFile,
   shouldRunNpmCi
 } from "./dev.mjs";
@@ -172,6 +173,23 @@ test("buildLocalDatabaseConfig selects SQLite without external input", () => {
 
   assert.equal(config.Database__Provider, "Sqlite");
   assert.equal(isSqliteConnectionString(config.ConnectionStrings__DefaultConnection), true);
+});
+
+test("selectPathCommandCandidate prefers executable Windows npm shim", () => {
+  assert.equal(
+    selectPathCommandCandidate("npm", [
+      "C:\\Program Files\\nodejs\\npm",
+      "C:\\Program Files\\nodejs\\npm.cmd"
+    ], "win32"),
+    "C:\\Program Files\\nodejs\\npm.cmd"
+  );
+
+  assert.equal(
+    selectPathCommandCandidate("npm", [
+      "C:\\Program Files\\nodejs\\npm"
+    ], "win32", (candidate) => candidate === "C:\\Program Files\\nodejs\\npm.cmd"),
+    "C:\\Program Files\\nodejs\\npm.cmd"
+  );
 });
 
 test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {
