@@ -2,7 +2,7 @@
 
 ## Publish configuration
 
-When publishing the backend, do not put the seed administrator credentials in `appsettings.json`. The production `appsettings.json` intentionally omits the `SeedAdmin` section, so the published application must receive these values from environment variables.
+Do not put database credentials or the seed administrator credentials in tracked `appsettings*.json` files. The backend must receive these values from environment variables, user secrets, or the hosting secret manager before it starts.
 
 ## Seed administrator
 
@@ -11,25 +11,37 @@ The backend seeds or repairs the seed administrator from environment variables d
 Required variables:
 
 ```bash
-SeedAdmin__Email=admin@example.com
-SeedAdmin__Password=change-this-password
+SeedAdmin__Email=<real-admin-email>
+SeedAdmin__Password=<real-initial-admin-password>
 ```
 
 These values are read through ASP.NET Core configuration from the `SeedAdmin` section. In shell and container environments, use double underscores (`__`) to represent nested configuration keys.
 
-If either value is missing in a published environment, the seed step fails validation and the administrator account is not created. Set these variables before starting the backend for the first time against an empty database.
-
-Local debug runs use `appsettings.Development.json`, which keeps demo values for convenience:
-
-```text
-admin@example.com / password
-```
-
-The demo student account remains seeded as:
-
-```text
-student@example.com / password
-```
+If either value is missing, the seed step fails validation and backend startup fails. Set these variables before starting the backend for the first time against an empty database.
 
 ## Database
-The backend uses PostgreSQL as the database. Debug uses port `5433` from `appsettings.Development.json`. Production publish uses port `5432` from `appsettings.json` unless overridden by environment variables or deployment-specific configuration.
+The backend uses PostgreSQL as the database. Every environment must set:
+
+```bash
+ConnectionStrings__DefaultConnection=Host=...;Database=...;Username=...;Password=...
+```
+
+If the connection string is missing or database initialization fails, startup fails instead of serving a partial deployment.
+
+## Frontend API target
+
+Production frontend deployments must set:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://your-backend.example.com/api/v1
+```
+
+The frontend uses localhost fallback URLs only for local development.
+
+## AI provider
+
+AI assistance and LLM draft generation require a configured provider that returns content and token usage. Missing or failing providers return structured API errors such as `AI_PROVIDER_UNAVAILABLE`; the backend does not return mock guidance or template drafts as generated output.
+
+## Seed data
+
+Backend startup seeds or repairs only the configured administrator account. It does not create demo users, demo assessments, or demo prototype content in any environment.

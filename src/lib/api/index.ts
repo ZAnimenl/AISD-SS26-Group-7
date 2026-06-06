@@ -32,10 +32,13 @@ const LOCAL_FALLBACK_API_BASE_URLS = [
   "http://localhost:5040/api/v1",
   "http://localhost:5041/api/v1"
 ];
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
-const API_BASE_URLS = API_BASE_URL === DEFAULT_API_BASE_URL
-  ? [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS]
-  : [API_BASE_URL];
+const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
+const API_BASE_URLS = CONFIGURED_API_BASE_URL
+  ? [CONFIGURED_API_BASE_URL]
+  : IS_PRODUCTION_BUILD
+    ? []
+    : [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS];
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
 const API_BASE_KEY = "ojsharp.api.base_url";
@@ -157,6 +160,10 @@ async function fetchApi(path: string, init: RequestInit, headers: Headers) {
 }
 
 function getApiBaseUrlOrder() {
+  if (API_BASE_URLS.length === 0) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL must be configured for production frontend deployments.");
+  }
+
   if (typeof window === "undefined") {
     return API_BASE_URLS;
   }

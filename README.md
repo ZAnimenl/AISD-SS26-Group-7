@@ -7,7 +7,7 @@ AI-assisted online coding assessment platform for browser-based coding assessmen
 This repository contains a Next.js frontend and an ASP.NET backend:
 
 - `src/` - Next.js App Router frontend, student/admin pages, browser IDE workspace, frontend API client, shared frontend types.
-- `Backend/Backend/` - ASP.NET backend API, auth, assessments, backend-owned attempts, workspace persistence, submissions, reports, AI endpoint stubs, and execution endpoints.
+- `Backend/Backend/` - ASP.NET backend API, auth, assessments, backend-owned attempts, workspace persistence, submissions, reports, provider-backed AI endpoints, and execution endpoints.
 - `Backend/OjSharp.Tests/` - backend contract and service tests.
 - `.agents/skills/` - local agent skills for planning, implementation, integration, review, and handoff.
 - `.agents/mcp-usage.md` - MCP server usage guidance for coding-agent workflows.
@@ -52,13 +52,7 @@ Security rules:
 - Node.js 20+
 - npm
 - .NET SDK compatible with `Backend/Backend.sln`
-- PostgreSQL for backend local development
-
-Local backend development expects PostgreSQL at:
-
-```text
-Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password
-```
+- PostgreSQL for backend local development or deployment
 
 The backend default local URL is:
 
@@ -66,19 +60,19 @@ The backend default local URL is:
 http://localhost:5140
 ```
 
-The frontend API client defaults to:
+In local development, the frontend API client defaults to:
 
 ```text
 http://localhost:5140/api/v1
 ```
 
-and falls back to:
+and falls back to other local debug ports such as:
 
 ```text
 http://localhost:5141/api/v1
 ```
 
-Override with `NEXT_PUBLIC_API_BASE_URL` if needed.
+Production frontend deployments must set `NEXT_PUBLIC_API_BASE_URL`; localhost fallback is Development-only.
 
 ## Environment Files
 
@@ -86,19 +80,19 @@ An example environment file is provided for handoff clarity:
 
 - `.env.example` - frontend and backend configuration examples.
 
-For local development, most backend values already come from `Backend/Backend/appsettings.Development.json`. ASP.NET Core also reads environment variables automatically, but it does not load `.env` files by itself unless your shell, container, or tooling loads them.
+`Backend/Backend/appsettings.Development.json` does not contain database credentials or seed administrator credentials. ASP.NET Core reads environment variables automatically, but it does not load `.env` files by itself unless your shell, container, or tooling loads them.
 
 Things users may configure:
 
-- `NEXT_PUBLIC_API_BASE_URL` - frontend API base URL. Optional for normal local development.
+- `NEXT_PUBLIC_API_BASE_URL` - frontend API base URL. Optional for normal local development and required for production frontend deployments.
 - `ASPNETCORE_ENVIRONMENT` - backend environment, usually `Development` locally.
 - `BackendUrls` - backend listen URL, defaulting to `http://localhost:5140`.
-- `ConnectionStrings__DefaultConnection` - PostgreSQL connection string.
-- `SeedAdmin__Email` and `SeedAdmin__Password` - required for published/production environments because production `appsettings.json` intentionally omits seed admin credentials.
+- `ConnectionStrings__DefaultConnection` - real PostgreSQL connection string for the target environment. Required outside Development; Development falls back to the local PostgreSQL default if omitted.
+- `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run.
 
 AI provider keys:
 
-- The backend AI endpoint falls back to mock guidance when no provider key is configured.
+- The backend AI endpoint returns `AI_PROVIDER_UNAVAILABLE` when no configured provider returns usable content and token usage.
 - For local DeepSeek responses, store `Deepseek:ApiKey` with .NET user-secrets for `Backend/Backend/Backend.csproj`, or place it in `Backend/Backend/appsettings.Local.json` during local development only.
 - DeepSeek V4 thinking mode is disabled by default so the student UI receives final assistant content without chain-of-thought output.
 - For deployment, provide `Deepseek__ApiKey` through the hosting secret manager or environment variables.
@@ -160,11 +154,7 @@ Run the backend API:
 dotnet run --project Backend\Backend\Backend.csproj
 ```
 
-Local demo users are seeded from development configuration:
-
-- Admin: `admin@example.com`
-- Student: `student@example.com`
-- Password: `password`
+Backend startup seeds or repairs only the configured seed administrator. It does not create demo students, demo assessments, or demo prototype content.
 
 ## API Notes
 
@@ -237,13 +227,14 @@ dotnet test Backend\Backend.sln -v:minimal
 Safety scans:
 
 ```powershell
-rg "mock-api|@/mocks|ojsharp.assessment.session" src
+rg "mock-api|@/mocks|ojsharp.assessment.session|Sample preview" src
 rg "eval\(|child_process|docker|openai|anthropic|gemini" src Backend
 ```
 
 Expected safety posture:
 
 - No runtime mock API imports.
+- No mock AI guidance, template LLM draft fallback, static execution fallback, or sample browser preview.
 - No frontend-managed or frontend-sent assessment session ID.
 - No local execution of student submissions.
 - No direct external AI provider calls from frontend.

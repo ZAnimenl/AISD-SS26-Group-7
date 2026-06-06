@@ -5,17 +5,16 @@ import { ParticleBackground } from "@/components/layout/ParticleBackground";
 import { TopBar } from "@/components/layout/TopBar";
 import { getStoredUser, hasStoredAuth } from "@/lib/api";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export default function StudentLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const user = getStoredUser();
+  const isAuthorized = hasStoredAuth() && user?.role === "student";
   const isWorkspace = pathname.includes("/workspace");
 
   useEffect(() => {
-    const user = getStoredUser();
-
     if (!hasStoredAuth()) {
       router.replace("/login");
       return;
@@ -23,11 +22,8 @@ export default function StudentLayout({ children }: Readonly<{ children: React.R
 
     if (user?.role !== "student") {
       router.replace("/admin/dashboard");
-      return;
     }
-
-    setIsAuthorized(true);
-  }, [router]);
+  }, [router, user?.role]);
 
   if (!isAuthorized) {
     return null;

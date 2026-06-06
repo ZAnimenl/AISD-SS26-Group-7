@@ -83,8 +83,8 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
             </div>
             <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} placeholder="todo-app" /></label>
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} placeholder="seed-v1" /></label>
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} /></label>
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} /></label>
             </div>
             <button className="btn-primary w-fit">Save changes</button>
             {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}

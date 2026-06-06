@@ -151,7 +151,7 @@ export function TopBar({ label, role }: { label: string; role: TopBarRole }) {
         <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-cyanGlow [animation-delay:0.75s]" />
       </div>
       <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 pl-2 transition hover:border-cyanGlow/30 hover:bg-white/10">
-        <span className="text-xs text-white/55">Demo</span>
+        <span className="text-xs text-white/55">{role === "administrator" ? "Admin" : "Student"}</span>
         <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-cyanGlow to-purpleGlow text-xs font-bold text-slate-950">AI</span>
       </div>
     </header>
