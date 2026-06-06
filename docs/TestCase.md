@@ -109,6 +109,11 @@ the active requirements. It does not replace automated test files.
 - If `.env.local` contains stale `LocalLlm__*` values, `npm run dev` removes
   those provider settings and writes `LocalLlm__Enabled=false` so local startup
   uses only the supported DeepSeek configuration path.
+- On Windows, npm command discovery prefers `npm.cmd` or another executable npm
+  shim over the extensionless `npm` shim so frontend startup does not fail with
+  `spawn ... npm ENOENT`.
+- When frontend startup begins, the CLI prints `http://localhost:3000` as the
+  app URL.
 - Backend startup failures explain likely repair steps for missing database,
   wrong credentials, insufficient PostgreSQL privileges, Docker permission
   issues, and missing system runtimes.

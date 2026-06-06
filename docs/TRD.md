@@ -50,6 +50,8 @@
 - Local startup normalizes accidental repeated DeepSeek key pastes and disables
   stale `LocalLlm__*` overrides so old local files do not activate a second AI
   provider path.
+- Local startup resolves Windows npm shims to executable commands and prints
+  the frontend URL before handing over to Next.js.
 - Local doctor mode reports prerequisite and configuration readiness without
   starting services, restoring dependencies, or writing secrets.
 - Root npm dependency restoration is lockfile-hash gated so repeated local

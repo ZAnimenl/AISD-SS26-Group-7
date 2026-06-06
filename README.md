@@ -140,6 +140,8 @@ This command:
 - writes prompted local secrets only to `.env.local`; secrets already available
   from shell environment or .NET user-secrets are reused without being copied
 - starts the backend, waits for `/api/v1/health`, then starts Next.js
+- prints the frontend URL as `http://localhost:3000` when the frontend startup
+  step begins
 
 The default local database is:
 
@@ -193,6 +195,10 @@ Open the app after startup:
 ```text
 http://localhost:3000
 ```
+
+On Windows, the startup script resolves the executable `npm.cmd` shim instead
+of the non-executable `npm` shim, so `spawn ... npm ENOENT` should not appear
+after pulling the latest version.
 
 The script does not bypass OS permissions or store secrets in tracked files.
 

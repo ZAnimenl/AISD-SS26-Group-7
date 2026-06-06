@@ -36,6 +36,7 @@
 - `npm run dev` writes `Database__Provider=Sqlite`, a SQLite `ConnectionStrings__DefaultConnection`, and local seed administrator defaults to `.env.local` when needed.
 - `npm run dev` prompts only for missing DeepSeek local configuration, writes prompted secrets only to `.env.local`, and starts the frontend only after backend health succeeds.
 - `npm run dev` normalizes accidental repeated DeepSeek API key pastes and disables stale `LocalLlm__*` local overrides so local AI setup does not require provider-level troubleshooting.
+- `npm run dev` resolves Windows npm shims to an executable command and prints the frontend URL when the frontend startup step begins.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness without starting servers or writing secrets.
 - Backend startup supports SQLite for local development and PostgreSQL for explicit external database deployment.
 - Backend startup failures produce CLI repair guidance for local SQLite regeneration, external database configuration, Docker sandbox permission, and missing-runtime failures.
