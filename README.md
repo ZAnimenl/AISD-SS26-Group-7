@@ -134,6 +134,9 @@ This command:
 - creates `.local-data/ojsharp-dev.sqlite` as the local real database file
 - uses local seed administrator defaults when seed admin values are missing
 - prompts for the DeepSeek API key when it is missing; blank disables local AI
+- normalizes accidental repeated DeepSeek API key pastes and disables stale
+  `LocalLlm__*` local overrides so only one AI provider path is active by
+  default
 - writes prompted local secrets only to `.env.local`; secrets already available
   from shell environment or .NET user-secrets are reused without being copied
 - starts the backend, waits for `/api/v1/health`, then starts Next.js
@@ -179,6 +182,11 @@ same command.
 
 When asked for the DeepSeek API key, paste the real key if you have one. Press
 Enter on a blank line to start without local AI assistance.
+
+If `.env.local` already contains old `LocalLlm__*` values or an accidentally
+repeated DeepSeek key, rerun `npm run dev`. The script rewrites the local file
+into the supported one-command startup shape without asking for database or
+Docker details.
 
 Open the app after startup:
 

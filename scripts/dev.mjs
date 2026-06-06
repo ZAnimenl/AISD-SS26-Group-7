@@ -75,6 +75,7 @@ const managedConfigKeys = [
 ];
 
 const requiredLocalConfig = [];
+const legacyLocalLlmPrefix = "LocalLlm__";
 
 function parseArgs(argv) {
   const args = new Set(argv);
@@ -225,6 +226,7 @@ export function mergeEffectiveConfig(fileConfig, processConfig = process.env) {
     merged.Database__Provider = "PostgreSql";
   }
 
+  normalizeEffectiveAiConfig(merged, fileConfig, processConfig);
   return merged;
 }
 
@@ -232,6 +234,78 @@ function looksLikePostgresConnectionString(value) {
   const trimmed = String(value ?? "").trim();
   return /^postgres(ql)?:\/\//i.test(trimmed)
     || /(?:^|;)\s*Host\s*=/i.test(trimmed);
+}
+
+export function normalizeDeepseekApiKey(value) {
+  const compact = String(value ?? "").trim().replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+
+  const markerPositions = [...compact.matchAll(/sk-/gi)].map((match) => match.index ?? -1);
+  if (markerPositions.length <= 1) {
+    return compact;
+  }
+
+  const fragments = markerPositions
+    .map((position, index) => compact.slice(position, markerPositions[index + 1] ?? compact.length))
+    .filter(Boolean);
+  const firstFragment = fragments[0] ?? "";
+
+  return fragments.length > 1 && fragments.every((fragment) => fragment === firstFragment)
+    ? firstFragment
+    : compact;
+}
+
+export function isAcceptableDeepseekApiKey(value) {
+  const normalized = normalizeDeepseekApiKey(value);
+  return /^sk-[A-Za-z0-9_-]{16,160}$/.test(normalized)
+    && (normalized.match(/sk-/gi)?.length ?? 0) === 1;
+}
+
+export function cleanLocalAiConfig(config) {
+  disableLegacyLocalLlm(config);
+
+  if (Object.prototype.hasOwnProperty.call(config, "Deepseek__ApiKey")) {
+    const normalizedKey = normalizeDeepseekApiKey(config.Deepseek__ApiKey);
+    if (isAcceptableDeepseekApiKey(normalizedKey)) {
+      config.Deepseek__ApiKey = normalizedKey;
+    } else {
+      delete config.Deepseek__ApiKey;
+    }
+  }
+
+  return config;
+}
+
+function normalizeEffectiveAiConfig(merged, fileConfig, processConfig) {
+  disableLegacyLocalLlm(merged);
+
+  const normalizedKey = [
+    processConfig.Deepseek__ApiKey,
+    fileConfig.Deepseek__ApiKey
+  ]
+    .map(normalizeDeepseekApiKey)
+    .find(isAcceptableDeepseekApiKey);
+
+  if (normalizedKey) {
+    merged.Deepseek__ApiKey = normalizedKey;
+  } else {
+    delete merged.Deepseek__ApiKey;
+  }
+
+  return merged;
+}
+
+function disableLegacyLocalLlm(config) {
+  for (const key of Object.keys(config)) {
+    if (key.startsWith(legacyLocalLlmPrefix)) {
+      delete config[key];
+    }
+  }
+
+  config.LocalLlm__Enabled = "false";
+  return config;
 }
 
 export function resolveBackendHealthUrl(backendUrls) {
@@ -407,12 +481,19 @@ function describeAiConfig(config) {
     return "disabled locally";
   }
 
-  return describeConfigPresence(config.Deepseek__ApiKey);
+  if (!isUsableConfigValue(String(config.Deepseek__ApiKey ?? ""))) {
+    return "missing";
+  }
+
+  return isAcceptableDeepseekApiKey(config.Deepseek__ApiKey)
+    ? "configured"
+    : "invalid; rerun npm run dev to repair";
 }
 
 async function ensureLocalConfig(fileConfig, options) {
   const discoveredConfig = await discoverLocalConfig(fileConfig);
   const writableConfig = { ...defaultConfig, ...fileConfig };
+  cleanLocalAiConfig(writableConfig);
   const localDatabaseConfig = await ensureLocalDatabaseConfig(repoRoot);
   writableConfig.Database__Provider = localDatabaseConfig.Database__Provider;
   writableConfig[connectionStringKey] = localDatabaseConfig[connectionStringKey];
@@ -438,14 +519,15 @@ async function ensureLocalConfig(fileConfig, options) {
   const aiDisabledExplicitly = isExplicitlyDisabled(fileConfig.Deepseek__Enabled)
     || isExplicitlyDisabled(process.env.Deepseek__Enabled);
   if (!aiDisabledExplicitly
-      && !isUsableConfigValue(String(effectiveConfig.Deepseek__ApiKey ?? ""))) {
+      && !isAcceptableDeepseekApiKey(effectiveConfig.Deepseek__ApiKey)) {
     prompts.push({
       key: "Deepseek__ApiKey",
       label: "DeepSeek API key (blank disables local AI assistance)",
       secret: true,
       optional: true,
-      validate: () => true,
-      error: ""
+      normalize: normalizeDeepseekApiKey,
+      validate: (value) => value.trim() === "" || isAcceptableDeepseekApiKey(value),
+      error: "DeepSeek API key must start with sk- and contain one key value. If you pasted it multiple times, paste it once or leave blank to disable local AI."
     });
   }
 
@@ -469,8 +551,9 @@ async function ensureLocalConfig(fileConfig, options) {
     await promptForConfig(prompts, writableConfig);
   }
 
+  cleanLocalAiConfig(writableConfig);
   const effectiveApiKey = process.env.Deepseek__ApiKey ?? discoveredConfig.Deepseek__ApiKey ?? writableConfig.Deepseek__ApiKey;
-  const shouldEnableAi = !aiDisabledExplicitly && isUsableConfigValue(String(effectiveApiKey ?? ""));
+  const shouldEnableAi = !aiDisabledExplicitly && isAcceptableDeepseekApiKey(effectiveApiKey);
   writableConfig.Deepseek__Enabled = shouldEnableAi
     ? "true"
     : String(writableConfig.Deepseek__Enabled ?? "false");
@@ -527,9 +610,21 @@ function applyDiscoveredValue(target, fileConfig, key, value) {
     return;
   }
 
-  target[key] = key === connectionStringKey
-    ? normalizePostgresConnectionString(value)
-    : String(value).trim();
+  if (key === connectionStringKey) {
+    target[key] = normalizePostgresConnectionString(value);
+    return;
+  }
+
+  if (key === "Deepseek__ApiKey") {
+    const normalizedKey = normalizeDeepseekApiKey(value);
+    if (isAcceptableDeepseekApiKey(normalizedKey)) {
+      target[key] = normalizedKey;
+    }
+
+    return;
+  }
+
+  target[key] = String(value).trim();
 }
 
 async function readDotnetUserSecrets() {

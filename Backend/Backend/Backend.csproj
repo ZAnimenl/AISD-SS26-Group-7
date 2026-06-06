@@ -7,6 +7,10 @@
         <UserSecretsId>ojsharp-backend-deepseek-local-secrets</UserSecretsId>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+        <UseAppHost>false</UseAppHost>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="Docker.DotNet" Version="3.125.15" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">

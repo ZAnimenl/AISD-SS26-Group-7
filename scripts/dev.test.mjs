@@ -8,11 +8,14 @@ import test from "node:test";
 import {
   buildLocalDatabaseConfig,
   buildLocalSqliteConnectionString,
+  cleanLocalAiConfig,
   convertPostgresUrlToNpgsql,
   diagnoseBackendFailure,
+  isAcceptableDeepseekApiKey,
   isSqliteConnectionString,
   isUsableConfigValue,
   mergeEffectiveConfig,
+  normalizeDeepseekApiKey,
   parseEnvFileContent,
   parseDotnetUserSecrets,
   resolveBackendHealthUrl,
@@ -54,14 +57,59 @@ test("isUsableConfigValue rejects empty placeholders", () => {
 });
 
 test("mergeEffectiveConfig lets explicit process config override local file config", () => {
+  const key = "sk-1234567890abcdef1234567890abcdef";
   const merged = mergeEffectiveConfig(
-    { BackendUrls: "http://localhost:5140", Deepseek__ApiKey: "local-key" },
+    { BackendUrls: "http://localhost:5140", Deepseek__ApiKey: key },
     { BackendUrls: "http://127.0.0.1:6000" }
   );
 
   assert.equal(merged.BackendUrls, "http://127.0.0.1:6000");
-  assert.equal(merged.Deepseek__ApiKey, "local-key");
+  assert.equal(merged.Deepseek__ApiKey, key);
   assert.equal(merged.NEXT_PUBLIC_API_BASE_URL, "http://localhost:5140/api/v1");
+});
+
+test("normalizeDeepseekApiKey collapses accidental repeated pastes", () => {
+  const key = "sk-1234567890abcdef1234567890abcdef";
+
+  assert.equal(normalizeDeepseekApiKey(`${key}${key}${key}`), key);
+  assert.equal(normalizeDeepseekApiKey(` ${key}\n`), key);
+  assert.equal(isAcceptableDeepseekApiKey(key), true);
+  assert.equal(isAcceptableDeepseekApiKey(`${key}sk-different1234567890abcdef`), false);
+});
+
+test("cleanLocalAiConfig removes stale LocalLlm provider settings", () => {
+  const key = "sk-1234567890abcdef1234567890abcdef";
+  const config = cleanLocalAiConfig({
+    Deepseek__ApiKey: `${key}${key}`,
+    LocalLlm__Enabled: "true",
+    LocalLlm__ApiKey: key,
+    LocalLlm__BaseUrl: "https://api.deepseek.com",
+    LocalLlm__Model: "deepseek-chat"
+  });
+
+  assert.equal(config.Deepseek__ApiKey, key);
+  assert.equal(config.LocalLlm__Enabled, "false");
+  assert.equal(config.LocalLlm__ApiKey, undefined);
+  assert.equal(config.LocalLlm__BaseUrl, undefined);
+  assert.equal(config.LocalLlm__Model, undefined);
+});
+
+test("mergeEffectiveConfig ignores invalid process AI key and disables LocalLlm", () => {
+  const key = "sk-1234567890abcdef1234567890abcdef";
+  const merged = mergeEffectiveConfig(
+    {
+      Deepseek__ApiKey: key,
+      LocalLlm__Enabled: "true",
+      LocalLlm__ApiKey: key
+    },
+    {
+      Deepseek__ApiKey: `${key}sk-different1234567890abcdef`
+    }
+  );
+
+  assert.equal(merged.Deepseek__ApiKey, key);
+  assert.equal(merged.LocalLlm__Enabled, "false");
+  assert.equal(merged.LocalLlm__ApiKey, undefined);
 });
 
 test("convertPostgresUrlToNpgsql accepts common PostgreSQL URLs", () => {
