@@ -38,7 +38,7 @@ export default function StudentResultsPage() {
                   <td className="py-4 text-white">{result.title}</td>
                   <td className="py-4"><StatusBadge status="submitted" /></td>
                   <td className="py-4 text-cyanGlow">{result.score}%</td>
-                  <td className="py-4 text-white/55">{result.ai_enabled ? "3 interactions used" : "AI disabled"}</td>
+                  <td className="py-4 text-white/55">{result.ai_enabled ? "AI enabled" : "AI disabled"}</td>
                   <td className="py-4">
                     <Link
                       href={`/student/assessments/${result.assessment_id}/review?submissionId=${result.submission_id}`}

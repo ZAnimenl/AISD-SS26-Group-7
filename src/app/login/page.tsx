@@ -8,8 +8,9 @@ import { clearStoredAuth, login, registerStudent } from "@/lib/api";
 type AuthAction = "login" | "register";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("student@example.com");
-  const [password, setPassword] = useState("password");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
@@ -38,9 +39,14 @@ export default function LoginPage() {
     setError(null);
     setNotice(null);
     setSubmittingAction("register");
+    if (!fullName.trim()) {
+      setError("Full name is required to register a student account.");
+      setSubmittingAction(null);
+      return;
+    }
+
     try {
-      const fallbackName = email.split("@")[0]?.trim() || "Student";
-      await registerStudent({ full_name: fallbackName, email, password });
+      await registerStudent({ full_name: fullName.trim(), email, password });
       setNotice("Student account registered. You can sign in now.");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Registration failed.");
@@ -68,12 +74,16 @@ export default function LoginPage() {
           </p>
           <form className="mt-10 grid max-w-xl gap-4" onSubmit={handleSignIn}>
             <label className="grid gap-2 text-sm text-white/60">
+              Full name
+              <input className="field" type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" />
+            </label>
+            <label className="grid gap-2 text-sm text-white/60">
               Email
-              <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
             </label>
             <label className="grid gap-2 text-sm text-white/60">
               Password
-              <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
+              <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" />
             </label>
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="btn-primary" type="submit" disabled={submittingAction !== null}>
@@ -97,21 +107,17 @@ export default function LoginPage() {
               <span className="h-3 w-3 rounded-full bg-cyanGlow" />
             </div>
             <pre className="whitespace-pre-wrap leading-7">
-{`POST http://localhost:5140/api/v1/auth/login
-POST http://localhost:5140/api/v1/auth/register
-GET  http://localhost:5140/api/v1/auth/me
-POST http://localhost:5140/api/v1/auth/logout
-
-seed_admin = "admin@example.com";
-demo_student = "student@example.com";
-password = "password";
+{`POST /api/v1/auth/login
+POST /api/v1/auth/register
+GET  /api/v1/auth/me
+POST /api/v1/auth/logout
 
 admin_users = "/api/v1/admin/users";`}
             </pre>
           </div>
           <div className="mt-6 grid gap-3 text-sm text-white/55">
             <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Self registration always creates a student account.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Use the seed admin to create additional administrator accounts.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Administrator accounts are created from configured backend credentials or by existing administrators.</p>
           </div>
         </div>
       </section>

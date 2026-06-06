@@ -5,7 +5,7 @@ namespace Backend;
 public static class StartupDiagnostics
 {
     private const string DatabaseInitializationFailureMessage =
-        "Database initialization failed. Verify PostgreSQL is running on localhost:5433.";
+        "Database initialization failed. Verify the configured PostgreSQL connection and seed administrator settings.";
 
     public static void LogDatabaseInitializationFailure(ILogger logger, Exception exception)
     {

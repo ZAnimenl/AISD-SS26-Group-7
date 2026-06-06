@@ -67,4 +67,18 @@ public sealed record AssessmentAiChatRequest(
     string InteractionType,
     string Message,
     string SelectedLanguage,
-    string ActiveFileContent);
+    string ActiveFileContent,
+    string? ActiveFileName = null,
+    Dictionary<string, string>? VisibleFiles = null,
+    AiRunContextRequest? LastRunResult = null);
+
+public sealed record AiRunContextRequest(
+    string Status,
+    string? Stdout = null,
+    string? Stderr = null,
+    AiRunTestResultRequest[]? TestResults = null);
+
+public sealed record AiRunTestResultRequest(
+    string Name,
+    bool Passed,
+    string? Output = null);

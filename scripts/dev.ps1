@@ -54,7 +54,7 @@ try {
                 Get-Content $backendErr -Tail 40
             }
 
-            throw "Backend did not start. Check PostgreSQL on localhost:5433 and $backendErr."
+            throw "Backend did not start. Check the configured PostgreSQL connection, seed administrator settings, and $backendErr."
         }
     }
 

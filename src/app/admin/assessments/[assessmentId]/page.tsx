@@ -1,22 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
-export default function EditAssessmentPage({ params }: { params: { assessmentId: string } }) {
+export default function EditAssessmentPage() {
   const router = useRouter();
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    getAdminAssessment(params.assessmentId)
-      .then(setAssessment)
+    getAdminAssessment(assessmentId)
+      .then((nextAssessment) => {
+        setAssessment(nextAssessment);
+        setError(null);
+      })
       .catch((exception) => {
         if (isAuthenticationError(exception)) {
           router.replace("/login");
@@ -24,8 +32,9 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
         }
 
         setError(exception instanceof Error ? exception.message : "Unable to load assessment.");
-      });
-  }, [params.assessmentId, router]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [assessmentId, router]);
 
   async function saveAssessment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +59,8 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
       }
     };
     setError(null);
+    setSaved(false);
+    setIsSaving(true);
     try {
       await updateAssessment(nextAssessment);
       setAssessment(nextAssessment);
@@ -61,11 +72,17 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
       }
 
       setError(exception instanceof Error ? exception.message : "Unable to save assessment.");
+    } finally {
+      setIsSaving(false);
     }
   }
 
-  if (!assessment) {
+  if (isLoading) {
     return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
+  }
+
+  if (!assessment) {
+    return <SectionHeader eyebrow="Administrator" title={error ?? "Assessment was not found."} />;
   }
 
   return (
@@ -83,10 +100,14 @@ export default function EditAssessmentPage({ params }: { params: { assessmentId:
             </div>
             <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} placeholder="todo-app" /></label>
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} placeholder="seed-v1" /></label>
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} /></label>
+              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} /></label>
             </div>
-            <button className="btn-primary w-fit">Save changes</button>
+            <button className="btn-primary w-fit" disabled={isSaving}>
+              {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
+              {isSaving ? "Saving in backend..." : "Save changes"}
+            </button>
+            {isSaving ? <p className="text-sm text-white/55" aria-live="polite">Waiting for backend confirmation before marking this assessment saved.</p> : null}
             {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}
             {error ? <p className="text-sm text-pinkGlow">{error}</p> : null}
           </form>

@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
+import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass } from "@/components/workspace/ConsolePanel";
+import { renderMarkdown } from "@/components/workspace/workspaceMarkdown";
+import { useWorkspaceIdeLayout } from "@/components/workspace/useWorkspaceIdeLayout";
 import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
 import type { AiInteractionType, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
@@ -16,11 +20,14 @@ interface WorkspaceClientProps {
 type SaveState = "saved" | "unsaved" | "saving";
 
 type AiChatMessage = {
+  clientId?: string;
   role: "assistant" | "student";
   text: string;
+  status?: "pending" | "failed";
   suggestedCode?: string;
   suggestedLanguage?: Language;
   targetFile?: string;
+  applyLabel?: string;
   tokenUsage?: {
     input_tokens: number;
     output_tokens: number;
@@ -117,20 +124,6 @@ function mergeQuestionStates(current: WorkspaceState["questions"], saved: Worksp
   }), current);
 }
 
-function parseInlineCode(text: string) {
-  const parts = text.split("`");
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      return (
-        <code key={index} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
-          {part}
-        </code>
-      );
-    }
-    return part;
-  });
-}
-
 function formatTaskType(taskType?: TaskType) {
   return taskType ? TASK_LABELS[taskType] : "Practical task";
 }
@@ -178,248 +171,6 @@ function getVisibleLanguages(question: Question | undefined) {
   return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
 }
 
-function renderMarkdown(text: string) {
-  if (!text) return null;
-
-  const elements: React.ReactNode[] = [];
-  const lines = text.split("\n");
-  let inCodeBlock = false;
-  let codeBlockLines: string[] = [];
-  let codeBlockLang = "";
-
-  const parseBoldAndInlineCode = (str: string): React.ReactNode => {
-    const boldParts = str.split("**");
-    return boldParts.map((boldPart, bIdx) => {
-      const isBold = bIdx % 2 === 1;
-      const codeParts = boldPart.split("`");
-      const renderedCodeParts = codeParts.map((codePart, cIdx) => {
-        if (cIdx % 2 === 1) {
-          return (
-            <code key={`code-${bIdx}-${cIdx}`} className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-cyanGlow">
-              {codePart}
-            </code>
-          );
-        }
-        return codePart;
-      });
-
-      if (isBold) {
-        return <strong key={`bold-${bIdx}`} className="font-semibold text-white">{renderedCodeParts}</strong>;
-      }
-      return <span key={`text-${bIdx}`}>{renderedCodeParts}</span>;
-    });
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("```")) {
-      if (inCodeBlock) {
-        const codeContent = codeBlockLines.join("\n");
-        elements.push(
-          <div key={`code-${i}`} className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
-            {codeBlockLang && (
-              <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40">
-                <span>{codeBlockLang}</span>
-              </div>
-            )}
-            <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
-              {codeContent}
-            </pre>
-          </div>
-        );
-        inCodeBlock = false;
-        codeBlockLines = [];
-        codeBlockLang = "";
-      } else {
-        inCodeBlock = true;
-        codeBlockLang = trimmed.slice(3).trim();
-      }
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeBlockLines.push(line);
-      continue;
-    }
-
-    if (trimmed.startsWith("### ")) {
-      elements.push(
-        <h4 key={i} className="mt-4 text-xs font-semibold uppercase tracking-wider text-cyanGlow/90">
-          {parseBoldAndInlineCode(trimmed.slice(4))}
-        </h4>
-      );
-    } else if (trimmed.startsWith("## ")) {
-      elements.push(
-        <h3 key={i} className="mt-5 text-sm font-bold uppercase tracking-wider text-white">
-          {parseBoldAndInlineCode(trimmed.slice(3))}
-        </h3>
-      );
-    } else if (trimmed.startsWith("# ")) {
-      elements.push(
-        <h2 key={i} className="mt-6 text-base font-extrabold text-white">
-          {parseBoldAndInlineCode(trimmed.slice(2))}
-        </h2>
-      );
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      elements.push(
-        <div key={i} className="ml-2 mt-1 flex items-start gap-2 text-sm text-white/70">
-          <span className="text-cyanGlow select-none mt-0.5">-</span>
-          <span>{parseBoldAndInlineCode(trimmed.slice(2))}</span>
-        </div>
-      );
-    } else if (trimmed.startsWith("> ")) {
-      elements.push(
-        <blockquote key={i} className="my-2 border-l-2 border-cyanGlow/40 bg-cyanGlow/5 py-1.5 pl-3 pr-2 text-xs italic leading-5 text-white/60 rounded-r-lg">
-          {parseBoldAndInlineCode(trimmed.slice(2))}
-        </blockquote>
-      );
-    } else if (trimmed === "") {
-      elements.push(<div key={i} className="h-2" />);
-    } else if (trimmed.startsWith("| ")) {
-      const tableLines: string[] = [trimmed];
-      let j = i + 1;
-      while (j < lines.length && lines[j].trim().startsWith("|")) {
-        tableLines.push(lines[j].trim());
-        j++;
-      }
-      const headerCells = tableLines[0].split("|").filter(Boolean).map(c => c.trim());
-      const dataRows = tableLines.slice(2);
-      elements.push(
-        <div key={i} className="my-3 overflow-x-auto rounded-lg border border-white/10">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-white/10 bg-white/5">
-                {headerCells.map((cell, ci) => (
-                  <th key={ci} className="px-3 py-1.5 text-left font-semibold text-white/70">{cell}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dataRows.map((row, ri) => {
-                const cells = row.split("|").filter(Boolean).map(c => c.trim());
-                return (
-                  <tr key={ri} className="border-b border-white/5">
-                    {cells.map((cell, ci) => (
-                      <td key={ci} className="px-3 py-1.5 text-white/55">{parseBoldAndInlineCode(cell)}</td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      );
-      i = j - 1;
-    } else {
-      elements.push(
-        <p key={i} className="mt-1 text-sm leading-6 text-white/65">
-          {parseBoldAndInlineCode(line)}
-        </p>
-      );
-    }
-  }
-
-  if (inCodeBlock && codeBlockLines.length > 0) {
-    elements.push(
-      <div key="code-unclosed" className="my-3 overflow-hidden rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
-        <pre className="scrollbar-soft overflow-x-auto p-3 text-cyanGlow/90 whitespace-pre">
-          {codeBlockLines.join("\n")}
-        </pre>
-      </div>
-    );
-  }
-
-  return elements;
-}
-
-function extractSuggestedCode(markdown: string, language: Language) {
-  const codeBlocks = Array.from(markdown.matchAll(/```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g));
-  if (!codeBlocks.length) {
-    return null;
-  }
-
-  const preferredLanguages = language === "python" ? ["python", "py"] : ["javascript", "js"];
-  const matchingBlock = codeBlocks.find((block) => preferredLanguages.includes((block[1] ?? "").toLowerCase())) ?? codeBlocks[0];
-  const code = matchingBlock[2]?.trim();
-  return code ? code : null;
-}
-
-function isTodoSummaryQuestion(question: Question | undefined) {
-  const title = question?.title.toLowerCase() ?? "";
-  return title.includes("todo summary") || title.includes("summary panel");
-}
-
-function buildTodoSummarySuggestedCode(language: Language) {
-  if (language === "javascript") {
-    return [
-      "function buildSummary(todos) {",
-      "  const total = todos.length;",
-      "  const completed = todos.filter((todo) => todo.completed === true).length;",
-      "  const pending = total - completed;",
-      "  const message = total > 0 && completed === total ? 'All tasks complete' : '';",
-      "",
-      "  return { total, completed, pending, message };",
-      "}",
-      "",
-      "function renderSummaryPanel(todos) {",
-      "  const summary = buildSummary(todos);",
-      "  return [",
-      "    '<section data-testid=\"todo-summary\">',",
-      "    '<h2>Todo Summary</h2>',",
-      "    `<p>Total: ${summary.total}</p>`,",
-      "    `<p>Completed: ${summary.completed}</p>`,",
-      "    `<p>Pending: ${summary.pending}</p>`,",
-      "    `<p>${summary.message}</p>`,",
-      "    '</section>',",
-      "  ].join('');",
-      "}",
-      "",
-      "module.exports = { buildSummary, renderSummaryPanel };"
-    ].join("\n");
-  }
-
-  return [
-    "def build_summary(todos):",
-    "    total = len(todos)",
-    "    completed = sum(1 for todo in todos if todo.get(\"completed\") is True)",
-    "    pending = total - completed",
-    "    message = \"All tasks complete\" if total > 0 and completed == total else \"\"",
-    "",
-    "    return {",
-    "        \"total\": total,",
-    "        \"completed\": completed,",
-    "        \"pending\": pending,",
-    "        \"message\": message",
-    "    }",
-    "",
-    "def render_summary_panel(todos):",
-    "    summary = build_summary(todos)",
-    "    return (",
-    "        '<section data-testid=\"todo-summary\">'",
-    "        '<h2>Todo Summary</h2>'",
-    "        f'<p>Total: {summary[\"total\"]}</p>'",
-    "        f'<p>Completed: {summary[\"completed\"]}</p>'",
-    "        f'<p>Pending: {summary[\"pending\"]}</p>'",
-    "        f'<p>{summary[\"message\"]}</p>'",
-    "        '</section>'",
-    "    )"
-  ].join("\n");
-}
-
-function getTodoSummaryFileName(_question: Question | undefined, language: Language) {
-  return language === "javascript" ? "TodoSummaryPanel.js" : "TodoSummaryPanel.py";
-}
-
-function normalizeSuggestedCode(question: Question | undefined, language: Language, _code: string | null) {
-  if (!isTodoSummaryQuestion(question)) {
-    return _code;
-  }
-
-  return buildTodoSummarySuggestedCode(language);
-}
-
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   if (!firstQuestion) {
@@ -449,155 +200,6 @@ function EmptyTaskWorkspace() {
   );
 }
 
-function formatExecutionStatus(status: RunResult["status"]) {
-  return status.replaceAll("_", " ");
-}
-
-function hasRuntimeErrorMarker(stderr: string | null) {
-  if (!stderr) {
-    return false;
-  }
-
-  const markers = [
-    "Traceback (most recent call last)",
-    "SyntaxError",
-    "TypeError",
-    "NameError",
-    "ModuleNotFoundError",
-    "ImportError",
-    "IndentationError",
-    "ReferenceError",
-    "Cannot find module"
-  ];
-
-  return markers.some((marker) => stderr.toLowerCase().includes(marker.toLowerCase()));
-}
-
-function isRunEnvironmentUnavailable(stderr: string | null) {
-  return Boolean(stderr?.includes("Run environment unavailable") || stderr?.includes("Grader container unavailable"));
-}
-
-function getDisplayStatus(runResult: RunResult) {
-  if (isRunEnvironmentUnavailable(runResult.stderr)) {
-    return "internal_error" as RunResult["status"];
-  }
-
-  if (
-    runResult.status === "runtime_error"
-    && runResult.test_results.length > 0
-    && runResult.stdout.toLowerCase().includes("tests passed")
-    && !hasRuntimeErrorMarker(runResult.stderr)
-  ) {
-    return "failed" as RunResult["status"];
-  }
-
-  return runResult.status;
-}
-
-function getStatusClass(status: RunResult["status"]) {
-  switch (status) {
-    case "passed":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-    case "failed":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-    case "time_limit_exceeded":
-    case "memory_limit_exceeded":
-    case "runtime_error":
-    case "internal_error":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
-    default:
-      return "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow";
-  }
-}
-
-function ConsolePanel({ isRunning, runResult, taskError }: {
-  isRunning: boolean;
-  runResult: RunResult | null;
-  taskError: string | null;
-}) {
-  if (isRunning) {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-cyanGlow/20 bg-black/35 p-4 text-sm text-cyanGlow">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyanGlow" />
-          Running public checks...
-        </div>
-      </div>
-    );
-  }
-
-  if (taskError) {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-rose-500/20 bg-black/40 text-sm text-rose-200">
-        <div className="shrink-0 border-b border-rose-500/10 bg-rose-500/5 px-4 py-3">
-          <p className="font-semibold">Run request failed</p>
-        </div>
-        <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto p-4">
-          <p className="whitespace-pre-wrap text-rose-200/75">{taskError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!runResult) {
-    return (
-      <div className="grid h-full min-h-0 place-items-center rounded-xl border border-dashed border-white/10 bg-black/30 p-4 text-center text-sm text-white/35">
-        Run this task to see public test status, safe output, and resource metrics. Hidden tests stay private.
-      </div>
-    );
-  }
-
-  const isEnvironmentUnavailable = isRunEnvironmentUnavailable(runResult.stderr);
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 text-sm text-white/70">
-      <div className="scrollbar-soft min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pr-2">
-        <div className="grid gap-2 pb-3">
-          {isEnvironmentUnavailable ? (
-            <section className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08]">
-              <div className="border-b border-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200/90">Run environment unavailable</div>
-              <p className="p-3 text-xs leading-5 text-amber-100/75">
-                The sandbox grader is not reachable right now. This is an environment issue, not a code stderr output.
-              </p>
-            </section>
-          ) : null}
-
-          {runResult.test_results.map((test) => (
-            <div key={test.name} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <SemanticIcon name={test.passed ? "check" : "fail"} size={14} className={test.passed ? "text-emerald-300" : "text-rose-300"} />
-                <span className="min-w-0 flex-1 truncate font-medium text-white/80">{test.name}</span>
-                <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${test.passed ? "border-emerald-500/20 text-emerald-300" : "border-rose-500/20 text-rose-300"}`}>
-                  {test.passed ? "PASS" : "FAIL"}
-                </span>
-              </div>
-              {test.output ? (
-                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-black/35 p-2 font-mono text-xs text-white/45">
-                  {test.output}
-                </pre>
-              ) : null}
-            </div>
-          ))}
-
-          {runResult.stdout ? (
-            <section className="rounded-lg border border-white/10 bg-black/25">
-              <div className="border-b border-white/10 px-3 py-2 text-xs font-medium text-white/55">stdout</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-white/45">{runResult.stdout}</pre>
-            </section>
-          ) : null}
-
-          {runResult.stderr && !isEnvironmentUnavailable ? (
-            <section className="rounded-lg border border-rose-500/20 bg-rose-500/5">
-              <div className="border-b border-rose-500/10 px-3 py-2 text-xs font-medium text-rose-200/80">stderr</div>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-rose-200/80">{runResult.stderr}</pre>
-            </section>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceClientProps & { firstQuestion: Question }) {
   const router = useRouter();
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "");
@@ -617,12 +219,13 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   const [runResults, setRunResults] = useState<Record<string, RunResult | null>>({});
   const [taskErrors, setTaskErrors] = useState<Record<string, string | null>>({});
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [submitState, setSubmitState] = useState<"idle" | "saving" | "submitting">("idle");
   const [error, setError] = useState<string | null>(null);
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
-  const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
   const [aiMessage, setAiMessage] = useState("");
   const [aiState, setAiState] = useState<"idle" | "running">("idle");
   const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  const aiRequestCounterRef = useRef(0);
   const [messages, setMessages] = useState<AiChatMessage[]>([
     { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
   ]);
@@ -645,6 +248,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   const displayRunStatus = runResult ? getDisplayStatus(runResult) : null;
   const runPassedCount = runResult?.test_results.filter((test) => test.passed).length ?? 0;
   const runTotalCount = runResult?.test_results.length ?? 0;
+  const isSubmitPending = submitState !== "idle";
+  const ideLayout = useWorkspaceIdeLayout();
 
   useEffect(() => {
     questionStatesRef.current = questionStates;
@@ -673,7 +278,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }, [activeFile, activeQuestion, activeQuestionId, code, language]);
 
   useEffect(() => {
-    setSaveState("unsaved");
     const saving = window.setTimeout(() => setSaveState("saving"), 450);
     const saved = window.setTimeout(async () => {
       try {
@@ -696,6 +300,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }, [activeQuestionId, assessment.assessment_id, persistCurrentCode]);
 
   function updateCode(nextCode: string) {
+    setSaveState("unsaved");
     setCode(nextCode);
     setQuestionStates((current) => {
       const currentQuestionState = current[activeQuestionId] ?? createQuestionState(activeQuestion, language);
@@ -827,8 +432,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
     setError(null);
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     const requestLanguage = language;
-    const requestFile = isTodoSummaryQuestion(activeQuestion) ? getTodoSummaryFileName(activeQuestion, requestLanguage) : activeFile;
+    aiRequestCounterRef.current += 1;
+    const pendingAssistantId = `pending-ai-${aiRequestCounterRef.current}`;
     setAiState("running");
+    setMessages((current) => [
+      ...current,
+      { role: "student", text: message },
+      {
+        clientId: pendingAssistantId,
+        role: "assistant",
+        status: "pending",
+        text: "Waiting for the backend to get a real AI provider response..."
+      }
+    ]);
+    setAiMessage("");
     try {
       const response = await getAiResponse({
         assessment_id: assessment.assessment_id,
@@ -836,24 +453,39 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         interaction_type: type,
         message,
         selected_language: requestLanguage,
-        active_file_content: code
+        active_file_content: code,
+        active_file_name: activeFile,
+        visible_files: getAllFiles(),
+        last_run_result: runResults[activeQuestionId] ?? null
       });
-      const suggestedCode = normalizeSuggestedCode(activeQuestion, requestLanguage, extractSuggestedCode(response.response_markdown, requestLanguage));
-      setMessages((current) => [
-        ...current,
-        { role: "student", text: message },
-        {
-          role: "assistant",
-          text: response.response_markdown,
-          suggestedCode: suggestedCode ?? undefined,
-          suggestedLanguage: suggestedCode ? requestLanguage : undefined,
-          targetFile: suggestedCode ? requestFile : undefined,
-          tokenUsage: response.token_usage
-        }
-      ]);
-      setAiMessage("");
+      const suggestion = response.suggestion;
+      setMessages((current) => current.map((item) =>
+        item.clientId === pendingAssistantId
+          ? {
+            clientId: pendingAssistantId,
+            role: "assistant",
+            text: response.response_markdown,
+            suggestedCode: suggestion?.replacement_code ?? undefined,
+            suggestedLanguage: suggestion ? suggestion.language : undefined,
+            targetFile: suggestion?.target_file ?? undefined,
+            applyLabel: suggestion?.apply_label ?? undefined,
+            tokenUsage: response.token_usage
+          }
+          : item
+      ));
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "AI request failed.");
+      const message = exception instanceof Error ? exception.message : "AI request failed.";
+      setMessages((current) => current.map((item) =>
+        item.clientId === pendingAssistantId
+          ? {
+            clientId: pendingAssistantId,
+            role: "assistant",
+            status: "failed",
+            text: `AI request failed: ${message}`
+          }
+          : item
+      ));
+      setError(message);
     } finally {
       setAiState("idle");
     }
@@ -893,30 +525,71 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }
 
   async function submitFinal() {
+    if (isSubmitPending) {
+      return;
+    }
+
     setConfirmSubmit(false);
     setError(null);
     setSaveState("saving");
+    setSubmitState("saving");
     try {
       const nextQuestionStates = persistCurrentCode();
       setQuestionStates(nextQuestionStates);
       const savedWorkspace = await saveWorkspace(assessment.assessment_id, nextQuestionStates);
       setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
       setSaveState("saved");
+      setSubmitState("submitting");
       await finalizeSubmission(assessment.assessment_id);
       router.push(`/student/assessments/${assessment.assessment_id}/review`);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");
       setSaveState("unsaved");
+      setSubmitState("idle");
     }
   }
 
   return (
-    <div className="relative grid h-[calc(100vh-24px)] min-h-0 min-w-0 gap-2 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(220px,260px)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(240px,280px)] 2xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(260px,300px)]">
-      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-[20px] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.08)] lg:col-start-1 lg:row-start-1">
+    <div
+      className="relative grid h-[calc(100vh-24px)] min-h-0 min-w-0 overflow-hidden rounded-[18px]"
+      style={ideLayout.gridStyle}
+    >
+      <aside
+        className={`panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-[18px] shadow-[0_18px_44px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.08)] ${ideLayout.isTasksCollapsed ? "items-center p-2" : "p-3"}`}
+        style={{ gridColumn: "1", gridRow: "1" }}
+      >
+        {ideLayout.isTasksCollapsed ? (
+          <>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/25 bg-[#0e1726] text-cyanGlow transition hover:border-cyanGlow/60"
+              title="Expand tasks panel"
+              aria-label="Expand tasks panel"
+              onClick={ideLayout.toggleTasksCollapsed}
+            >
+              <SemanticIcon name="assessments" size={17} />
+            </button>
+            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/45 [writing-mode:vertical-rl]">
+              Tasks
+            </span>
+          </>
+        ) : (
+          <>
         <div className="relative rounded-[16px] border border-white/10 bg-white/[0.035] p-3">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Assessment tasks</p>
-            <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Assessment tasks</p>
+              <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
+            </div>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-[#0e1726] text-white/50 transition hover:border-cyanGlow/35 hover:text-cyanGlow"
+              title="Collapse tasks panel"
+              aria-label="Collapse tasks panel"
+              onClick={ideLayout.toggleTasksCollapsed}
+            >
+              <SemanticIcon name="collapse" size={14} className="rotate-90" />
+            </button>
           </div>
           <span className="badge mt-3 hidden w-fit shrink-0 xl:inline-flex">Active attempt</span>
         </div>
@@ -978,9 +651,24 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
             <p className="mt-2 text-sm text-white/40">No public examples are listed for this question.</p>
           )}
         </div>
+          </>
+        )}
       </aside>
 
-      <section className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl lg:col-start-2 lg:row-start-1">
+      <button
+        type="button"
+        className="workspace-resizer workspace-resizer-vertical"
+        aria-label="Resize tasks panel"
+        title="Drag to resize tasks panel"
+        disabled={ideLayout.isTasksCollapsed}
+        onPointerDown={ideLayout.startResize("tasks")}
+        style={{ gridColumn: "2", gridRow: "1" }}
+      />
+
+      <section
+        className="liquid-glass-neon flex min-h-0 min-w-0 flex-col rounded-xl"
+        style={{ gridColumn: "3", gridRow: "1" }}
+      >
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
@@ -989,9 +677,19 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           </div>
           <span className="badge hidden xl:inline-flex"><SemanticIcon name="clock" size={14} /> {remainingTime}</span>
           <span className="badge">{saveState}</span>
-          <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)}>Submit</button>
+          <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)} disabled={isSubmitPending}>
+            {isSubmitPending ? <Loader2 className="animate-spin" size={16} /> : null}
+            {submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit"}
+          </button>
         </div>
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
+        {isSubmitPending ? (
+          <p className="relative border-b border-white/10 px-4 py-2 text-sm text-white/55" aria-live="polite">
+            {submitState === "saving"
+              ? "Saving current workspace before final submission..."
+              : "Submitting to backend for hidden-test evaluation. This page will move to review only after the backend confirms."}
+          </p>
+        ) : null}
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
           <span className="flex items-center gap-1.5 pr-1 text-xs text-white/35"><SemanticIcon name="folder" size={14} /> Files</span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -1034,15 +732,54 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         </div>
       </section>
 
-      <aside className="panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl p-3 lg:col-start-3 lg:row-start-1">
+      <button
+        type="button"
+        className="workspace-resizer workspace-resizer-vertical"
+        aria-label="Resize AI panel"
+        title="Drag to resize AI panel"
+        disabled={ideLayout.isAgentCollapsed}
+        onPointerDown={ideLayout.startResize("agent")}
+        style={{ gridColumn: "4", gridRow: "1" }}
+      />
+
+      <aside
+        className={`panel dynamic-surface flex min-h-0 min-w-0 flex-col rounded-xl ${ideLayout.isAgentCollapsed ? "items-center p-2" : "p-3"}`}
+        style={{ gridColumn: "5", gridRow: "1" }}
+      >
+        {ideLayout.isAgentCollapsed ? (
+          <>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/25 bg-[#0e1726] text-cyanGlow transition hover:border-cyanGlow/60"
+              title="Expand AI panel"
+              aria-label="Expand AI panel"
+              onClick={ideLayout.toggleAgentCollapsed}
+            >
+              <SemanticIcon name="ai" size={18} />
+            </button>
+            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/45 [writing-mode:vertical-rl]">
+              AI Agent
+            </span>
+          </>
+        ) : (
+          <>
         <div className="relative flex items-center gap-3">
           <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/20 bg-[linear-gradient(145deg,rgba(0,229,255,0.14),rgba(168,85,247,0.16))] text-cyanGlow">
             <SemanticIcon name="ai" size={22} />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="font-semibold">AI Agent</h2>
             <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
           </div>
+          <button
+            type="button"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-[#0e1726] text-white/50 transition hover:border-cyanGlow/35 hover:text-cyanGlow"
+            title="Collapse AI panel"
+            aria-label="Collapse AI panel"
+            onClick={ideLayout.toggleAgentCollapsed}
+          >
+            <SemanticIcon name="collapse" size={14} className="-rotate-90" />
+          </button>
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["code_suggestion", "explanation", "debugging"] as AiInteractionType[]).map((type) => (
@@ -1061,7 +798,18 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         </div>
         <div className="scrollbar-soft relative mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
           {messages.map((message, index) => (
-            <div key={`${message.role}-${index}`} className={`reveal-up rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
+            <div key={message.clientId ?? `${message.role}-${index}`} className={`reveal-up rounded-2xl p-3 text-sm leading-6 ${message.role === "assistant" ? "bg-white/5 text-white/70" : "bg-cyanGlow/10 text-cyanGlow"}`}>
+              {message.status === "pending" ? (
+                <span className="mb-2 inline-flex items-center gap-2 text-xs text-white/45">
+                  <Loader2 className="animate-spin" size={13} />
+                  Provider request in progress
+                </span>
+              ) : null}
+              {message.status === "failed" ? (
+                <span className="mb-2 inline-flex items-center gap-2 text-xs text-pinkGlow">
+                  Backend/provider error
+                </span>
+              ) : null}
               {renderMarkdown(message.text)}
               {message.role === "assistant" && message.suggestedCode ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
@@ -1071,7 +819,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
                     onClick={() => applyAiSuggestion(message)}
                   >
                     <SemanticIcon name="file" size={13} />
-                    Apply to {message.targetFile ?? activeFile}
+                    {message.applyLabel ?? `Apply to ${message.targetFile ?? activeFile}`}
                   </button>
                   <span className="text-[11px] text-white/35">Review, then run public checks.</span>
                 </div>
@@ -1083,14 +831,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
               ) : null}
             </div>
           ))}
-          {aiState === "running" ? (
-            <div className="reveal-up rounded-2xl bg-white/5 p-3 text-sm leading-6 text-white/55">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-cyanGlow" />
-                Thinking through the visible task context...
-              </span>
-            </div>
-          ) : null}
           <div ref={aiMessagesEndRef} />
         </div>
         <div className="relative mt-4 flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
@@ -1116,10 +856,25 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
             <SemanticIcon name="send" size={16} />
           </button>
         </div>
+          </>
+        )}
       </aside>
 
-      <section className={`liquid-glass-neon absolute inset-x-0 bottom-0 z-30 flex min-h-0 min-w-0 flex-col rounded-[16px] shadow-[0_-18px_44px_rgba(0,0,0,0.34)] transition-[height] duration-200 ${isOutputCollapsed ? "h-11" : "h-[min(320px,38vh)]"}`}>
-        <div className="flex shrink-0 items-center border-b border-white/10 px-3">
+      <button
+        type="button"
+        className="workspace-resizer workspace-resizer-horizontal"
+        aria-label="Resize output panel"
+        title="Drag to resize output panel"
+        disabled={ideLayout.isOutputCollapsed}
+        onPointerDown={ideLayout.startResize("output")}
+        style={{ gridColumn: "1 / 6", gridRow: "2" }}
+      />
+
+      <section
+        className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-cyanGlow/45 bg-[#07111d] shadow-[0_-16px_38px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.08)]"
+        style={{ gridColumn: "1 / 6", gridRow: "3" }}
+      >
+        <div className="flex shrink-0 items-center border-b border-white/10 bg-[#0b1220] px-3">
           <button
             onClick={() => setOutputTab("preview")}
             className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
@@ -1151,11 +906,21 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           </button>
           <button
             className="ml-2 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
-            title={isOutputCollapsed ? "Expand output" : "Collapse output"}
+            title={ideLayout.isOutputCollapsed ? "Expand output" : "Collapse output"}
+            aria-label={ideLayout.isOutputCollapsed ? "Expand output panel" : "Collapse output panel"}
             type="button"
-            onClick={() => setIsOutputCollapsed((current) => !current)}
+            onClick={ideLayout.toggleOutputCollapsed}
           >
-            <SemanticIcon name={isOutputCollapsed ? "expand" : "collapse"} size={14} />
+            <SemanticIcon name={ideLayout.isOutputCollapsed ? "expand" : "collapse"} size={14} />
+          </button>
+          <button
+            className="ml-1 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
+            title="Reset IDE layout"
+            aria-label="Reset IDE layout"
+            type="button"
+            onClick={ideLayout.resetLayout}
+          >
+            <SemanticIcon name="settings" size={14} />
           </button>
           <div className="ml-auto flex min-w-0 items-center gap-2 text-[10px] text-white/30">
             {runResult && displayRunStatus ? (
@@ -1171,11 +936,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
                 </span>
               </>
             ) : null}
-            <span className="hidden sm:inline">Output overlays workspace panels</span>
+            <span className="hidden sm:inline">Docked output panel</span>
             <span className="shrink-0">Public/sample tests only</span>
           </div>
         </div>
-        <div className={`${isOutputCollapsed ? "hidden" : "min-h-0 flex-1 overflow-hidden p-2"}`}>
+        <div className={`${ideLayout.isOutputCollapsed ? "hidden" : "min-h-0 flex-1 overflow-hidden bg-[#07111d] p-2"}`}>
           {outputTab === "preview" ? (
             <TaskVerificationPreview
               question={activeQuestion}
@@ -1193,7 +958,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           <p className="text-white/60">This submits the current attempt. Hidden test input and expected output remain private.</p>
           <div className="mt-6 flex justify-end gap-3">
             <button className="btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button>
-            <button className="btn-primary" onClick={submitFinal}>Submit result</button>
+            <button className="btn-primary" onClick={submitFinal} disabled={isSubmitPending}>
+              {isSubmitPending ? <Loader2 className="animate-spin" size={16} /> : null}
+              {submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit result"}
+            </button>
           </div>
         </Modal>
       ) : null}
