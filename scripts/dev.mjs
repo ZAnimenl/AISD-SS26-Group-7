@@ -10,6 +10,20 @@ import process from "node:process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  derivePostgresConnectionFromEnvironment,
+  diagnoseBackendFailure,
+  isUsableConfigValue,
+  normalizePostgresConnectionString,
+  parseDotnetUserSecrets
+} from "./dev-support.mjs";
+
+export {
+  convertPostgresUrlToNpgsql,
+  diagnoseBackendFailure,
+  isUsableConfigValue,
+  parseDotnetUserSecrets
+} from "./dev-support.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -20,6 +34,7 @@ const backendOutPath = path.join(repoRoot, "backend-dev.log");
 const backendErrPath = path.join(repoRoot, "backend-dev.err.log");
 const npmInstallMarkerFileName = ".ojsharp-package-lock.sha256";
 const resolvedCommands = new Map();
+const connectionStringKey = "ConnectionStrings__DefaultConnection";
 
 const defaultConfig = {
   NEXT_PUBLIC_API_BASE_URL: "http://localhost:5140/api/v1",
@@ -47,11 +62,19 @@ const managedConfigKeys = [
 
 const requiredLocalConfig = [
   {
-    key: "ConnectionStrings__DefaultConnection",
-    label: "PostgreSQL connection string",
+    key: connectionStringKey,
+    label: "PostgreSQL connection string or URL",
     secret: true,
+    normalize: normalizePostgresConnectionString,
     validate: (value) => isUsableConfigValue(value),
-    error: "ConnectionStrings__DefaultConnection is required for every backend run."
+    help: [
+      "Paste either format:",
+      "  postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7",
+      "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD",
+      "If the database does not exist yet, create it in pgAdmin or run:",
+      "  createdb -U postgres aisd_ss26_group_7"
+    ],
+    error: "A real PostgreSQL connection string or URL is required for every backend run."
   },
   {
     key: "SeedAdmin__Email",
@@ -73,6 +96,7 @@ function parseArgs(argv) {
   const args = new Set(argv);
   return {
     backendOnly: args.has("--backend-only"),
+    doctor: args.has("--doctor"),
     help: args.has("--help") || args.has("-h"),
     noPrompt: args.has("--no-prompt"),
     setupOnly: args.has("--setup-only"),
@@ -86,15 +110,25 @@ function usage() {
     "  npm run dev                    restore deps, prompt for local config, start backend + frontend",
     "  npm run dev:setup              restore deps and write .env.local without starting servers",
     "  npm run dev:backend            restore deps, load .env.local, start backend only",
+    "  npm run dev:doctor             inspect local prerequisites without writing secrets",
     "",
     "Options:",
     "  --no-prompt                    fail instead of asking for missing local config",
     "  --skip-install                 skip npm ci and dotnet restore",
     "  --setup-only                   configure and restore dependencies only",
     "  --backend-only                 start only the backend",
+    "  --doctor                       print local prerequisite and config guidance only",
     "",
     "Environment:",
-    "  DOTNET_CLI                     optional absolute path to a dotnet executable"
+    "  DOTNET_CLI                     optional absolute path to a dotnet executable",
+    "  DATABASE_URL                   optional PostgreSQL URL; converted to backend format",
+    "  PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD",
+    "                                optional PostgreSQL variables; converted when complete",
+    "",
+    "Guided setup:",
+    "  The script reuses .env.local, shell env, DATABASE_URL/PG* values, and .NET user-secrets.",
+    "  Missing secrets are requested interactively and written only to gitignored .env.local.",
+    "  OS/admin prompts are not bypassed; approve them, fix permissions, then rerun npm run dev."
   ].join("\n");
 }
 
@@ -182,21 +216,8 @@ export function serializeEnvValue(value) {
   return value;
 }
 
-export function isUsableConfigValue(value) {
-  if (typeof value !== "string") {
-    return false;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0
-    && !trimmed.startsWith("<")
-    && !trimmed.endsWith(">")
-    && !/^change-?me$/i.test(trimmed)
-    && !/^todo$/i.test(trimmed);
-}
-
 export function mergeEffectiveConfig(fileConfig, processConfig = process.env) {
-  return {
+  const merged = {
     ...defaultConfig,
     ...fileConfig,
     ...Object.fromEntries(
@@ -205,6 +226,17 @@ export function mergeEffectiveConfig(fileConfig, processConfig = process.env) {
         .map((key) => [key, processConfig[key]])
     )
   };
+
+  if (isUsableConfigValue(merged[connectionStringKey])) {
+    merged[connectionStringKey] = normalizePostgresConnectionString(merged[connectionStringKey]);
+  } else {
+    const derivedConnectionString = derivePostgresConnectionFromEnvironment(processConfig);
+    if (isUsableConfigValue(derivedConnectionString)) {
+      merged[connectionStringKey] = derivedConnectionString;
+    }
+  }
+
+  return merged;
 }
 
 export function resolveBackendHealthUrl(backendUrls) {
@@ -254,6 +286,11 @@ async function main() {
   ensureNodeVersion();
   process.chdir(repoRoot);
 
+  if (options.doctor) {
+    await runDoctor();
+    return;
+  }
+
   if (!options.skipInstall) {
     ensureRestoreCommands();
   }
@@ -302,9 +339,86 @@ async function readLocalConfig() {
   }
 }
 
+async function runDoctor() {
+  const fileConfig = await readLocalConfig();
+  const discoveredConfig = await discoverLocalConfig(fileConfig);
+  const effectiveConfig = mergeEffectiveConfig({ ...discoveredConfig, ...fileConfig });
+  const npmCommand = resolveCommand("npm");
+  const dotnetCommand = resolveCommand("dotnet");
+  const dockerCommand = resolveCommand("docker");
+
+  console.log("Local startup doctor");
+  console.log("");
+  console.log(`Node.js: ${process.version} ${Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10) >= 20 ? "OK" : "needs Node.js 20+"}`);
+  console.log(`npm: ${npmCommand ? `OK (${npmCommand})` : "missing"}`);
+  console.log(`.NET SDK: ${dotnetCommand ? `OK (${dotnetCommand})` : "missing"}`);
+  console.log(`Root npm dependencies: ${shouldRunNpmCi(repoRoot) ? "need restore on next npm run dev" : "ready for current package-lock.json"}`);
+  console.log(`Docker CLI: ${dockerCommand ? `found (${dockerCommand})` : "missing or not in PATH"}`);
+  console.log(`Docker daemon: ${getDockerDaemonStatus(dockerCommand)}`);
+  console.log(`PostgreSQL config: ${describeConfigPresence(effectiveConfig[connectionStringKey])}`);
+  console.log(`Seed admin email: ${describeConfigPresence(effectiveConfig.SeedAdmin__Email)}`);
+  console.log(`Seed admin password: ${describeConfigPresence(effectiveConfig.SeedAdmin__Password)}`);
+  console.log(`DeepSeek API key: ${describeAiConfig(effectiveConfig)}`);
+  console.log("");
+  console.log("Next step:");
+
+  const missing = [];
+  if (!npmCommand) missing.push("install Node.js 20+ with npm");
+  if (!dotnetCommand) missing.push("install .NET 9 SDK or set DOTNET_CLI");
+  if (!isUsableConfigValue(effectiveConfig[connectionStringKey])) missing.push("enter or set PostgreSQL connection info");
+  if (!isUsableConfigValue(effectiveConfig.SeedAdmin__Email)) missing.push("enter SeedAdmin__Email");
+  if (!isUsableConfigValue(effectiveConfig.SeedAdmin__Password)) missing.push("enter SeedAdmin__Password");
+  if (!isExplicitlyDisabled(effectiveConfig.Deepseek__Enabled)
+      && !isUsableConfigValue(effectiveConfig.Deepseek__ApiKey)) {
+    missing.push("enter Deepseek__ApiKey or leave it blank to disable local AI");
+  }
+
+  if (missing.length === 0) {
+    console.log("  Run npm run dev.");
+  } else {
+    for (const item of missing) {
+      console.log(`  - ${item}`);
+    }
+
+    console.log("");
+    console.log("Run npm run dev in PowerShell or your terminal and follow the prompts.");
+  }
+}
+
+function describeConfigPresence(value) {
+  return isUsableConfigValue(String(value ?? "")) ? "configured" : "missing";
+}
+
+function describeAiConfig(config) {
+  if (isExplicitlyDisabled(config.Deepseek__Enabled)) {
+    return "disabled locally";
+  }
+
+  return describeConfigPresence(config.Deepseek__ApiKey);
+}
+
+function getDockerDaemonStatus(dockerCommand) {
+  if (!dockerCommand) {
+    return "cannot check until Docker CLI is installed";
+  }
+
+  const result = spawnSync(dockerCommand, ["version", "--format", "{{.Server.Version}}"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  if (result.status === 0 && result.stdout.trim()) {
+    return `running (${result.stdout.trim()})`;
+  }
+
+  return "not reachable; start Docker Desktop/Colima and approve any OS permission prompt";
+}
+
 async function ensureLocalConfig(fileConfig, options) {
+  const discoveredConfig = await discoverLocalConfig(fileConfig);
   const writableConfig = { ...defaultConfig, ...fileConfig };
-  const effectiveConfig = mergeEffectiveConfig(writableConfig);
+  const effectiveConfig = mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig });
   const prompts = [];
 
   for (const item of requiredLocalConfig) {
@@ -330,13 +444,27 @@ async function ensureLocalConfig(fileConfig, options) {
   if (prompts.length > 0) {
     if (options.noPrompt || !process.stdin.isTTY) {
       const missingKeys = prompts.map((item) => item.key).join(", ");
-      throw new Error(`Missing local startup configuration: ${missingKeys}. Run npm run dev in an interactive terminal or set these in .env.local.`);
+      throw new Error([
+        `Missing local startup configuration: ${missingKeys}.`,
+        "Run npm run dev in an interactive terminal, or set these values in .env.local.",
+        "",
+        "PowerShell guide:",
+        "  cd \"C:\\path\\to\\AISD-SS26-Group-7\"",
+        "  npm run dev",
+        "",
+        "The PostgreSQL prompt accepts either:",
+        "  postgresql://postgres:YOUR_PASSWORD@localhost:5432/aisd_ss26_group_7",
+        "  Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=YOUR_PASSWORD",
+        "",
+        "If a system or permission prompt appears for Node, .NET, PostgreSQL, Docker Desktop, or Colima, approve it and rerun npm run dev.",
+        "If PostgreSQL says the database is missing, create aisd_ss26_group_7 in pgAdmin or run: createdb -U postgres aisd_ss26_group_7"
+      ].join("\n"));
     }
 
     await promptForConfig(prompts, writableConfig);
   }
 
-  const effectiveApiKey = process.env.Deepseek__ApiKey ?? writableConfig.Deepseek__ApiKey;
+  const effectiveApiKey = process.env.Deepseek__ApiKey ?? discoveredConfig.Deepseek__ApiKey ?? writableConfig.Deepseek__ApiKey;
   const shouldEnableAi = !aiDisabledExplicitly && isUsableConfigValue(String(effectiveApiKey ?? ""));
   writableConfig.Deepseek__Enabled = shouldEnableAi
     ? "true"
@@ -347,8 +475,75 @@ async function ensureLocalConfig(fileConfig, options) {
     writableConfig.DOCKER_HOST = dockerHost;
   }
 
+  if (isUsableConfigValue(writableConfig[connectionStringKey])) {
+    writableConfig[connectionStringKey] = normalizePostgresConnectionString(
+      writableConfig[connectionStringKey]
+    );
+  }
+
   await fsp.writeFile(localEnvPath, serializeEnvFile(writableConfig), { mode: 0o600 });
-  return mergeEffectiveConfig(writableConfig);
+  return mergeEffectiveConfig({ ...discoveredConfig, ...writableConfig });
+}
+
+async function discoverLocalConfig(fileConfig) {
+  const discovered = {};
+  const userSecrets = await readDotnetUserSecrets();
+
+  applyDiscoveredValue(discovered, fileConfig, connectionStringKey, process.env[connectionStringKey]);
+  applyDiscoveredValue(discovered, fileConfig, connectionStringKey, derivePostgresConnectionFromEnvironment());
+  applyDiscoveredValue(discovered, fileConfig, connectionStringKey, userSecrets["ConnectionStrings:DefaultConnection"]);
+  applyDiscoveredValue(discovered, fileConfig, connectionStringKey, userSecrets[connectionStringKey]);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Email", process.env.SeedAdmin__Email);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Email", userSecrets["SeedAdmin:Email"]);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Email", userSecrets.SeedAdmin__Email);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", process.env.SeedAdmin__Password);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", userSecrets["SeedAdmin:Password"]);
+  applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", userSecrets.SeedAdmin__Password);
+  applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", process.env.Deepseek__ApiKey);
+  applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", userSecrets["Deepseek:ApiKey"]);
+  applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", userSecrets.Deepseek__ApiKey);
+
+  if (isUsableConfigValue(discovered[connectionStringKey])) {
+    discovered[connectionStringKey] = normalizePostgresConnectionString(discovered[connectionStringKey]);
+  }
+
+  if (isUsableConfigValue(discovered.Deepseek__ApiKey)
+      && !Object.prototype.hasOwnProperty.call(fileConfig, "Deepseek__Enabled")) {
+    discovered.Deepseek__Enabled = "true";
+  }
+
+  return discovered;
+}
+
+function applyDiscoveredValue(target, fileConfig, key, value) {
+  if (Object.prototype.hasOwnProperty.call(fileConfig, key)
+      || Object.prototype.hasOwnProperty.call(target, key)
+      || !isUsableConfigValue(value)) {
+    return;
+  }
+
+  target[key] = key === connectionStringKey
+    ? normalizePostgresConnectionString(value)
+    : String(value).trim();
+}
+
+async function readDotnetUserSecrets() {
+  const dotnet = resolveCommand("dotnet");
+  if (!dotnet) {
+    return {};
+  }
+
+  const result = spawnSync(dotnet, ["user-secrets", "list", "--project", backendProjectPath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: buildChildEnv()
+  });
+
+  if (result.status !== 0) {
+    return {};
+  }
+
+  return parseDotnetUserSecrets(result.stdout);
 }
 
 function isExplicitlyDisabled(value) {
@@ -358,11 +553,19 @@ function isExplicitlyDisabled(value) {
 async function promptForConfig(prompts, writableConfig) {
   console.log("Missing local startup configuration. Values will be stored in .env.local, which is gitignored.");
   for (const item of prompts) {
+    if (item.help) {
+      console.log("");
+      console.log(item.help.join("\n"));
+    }
+
     let accepted = false;
     while (!accepted) {
-      const value = item.secret
+      const rawValue = item.secret
         ? await readSecret(`${item.label}: `)
         : await readLine(`${item.label}: `);
+      const value = typeof item.normalize === "function"
+        ? item.normalize(rawValue)
+        : rawValue.trim();
 
       if (item.optional && value.trim() === "") {
         writableConfig.Deepseek__Enabled = "false";
@@ -464,15 +667,23 @@ function readTextFile(filePath) {
 }
 
 function ensureRestoreCommands() {
-  ensureCommand("npm", "Install Node.js 20+ and npm, then rerun npm run dev.");
-  ensureCommand("dotnet", "Install the .NET SDK that supports net9.0 or set DOTNET_CLI to its executable path, then rerun npm run dev.");
+  ensureCommand("npm", [
+    "Install Node.js 20 LTS or newer, reopen the terminal, then rerun npm run dev.",
+    "Windows: install from https://nodejs.org/ and choose the npm option.",
+    "macOS: brew install node or use the official installer."
+  ].join("\n"));
+  ensureCommand("dotnet", [
+    "Install the .NET SDK that supports net9.0, reopen the terminal, then rerun npm run dev.",
+    "Windows: install .NET 9 SDK from https://dotnet.microsoft.com/download.",
+    "macOS Homebrew: brew install dotnet@9, or set DOTNET_CLI to the dotnet executable path."
+  ].join("\n"));
 }
 
 function ensureCommand(command, guidance) {
   const resolved = resolveCommand(command);
 
   if (!resolved) {
-    throw new Error(`${command} is required but was not found. ${guidance}`);
+    throw new Error(`${command} is required but was not found.\n${guidance}`);
   }
 }
 
@@ -571,7 +782,9 @@ async function ensureBackend(config) {
       "Backend did not become healthy.",
       `Health URL: ${healthUrl}`,
       "Last backend error log lines:",
-      errorTail || "(no backend error log output)"
+      errorTail || "(no backend error log output)",
+      "",
+      ...diagnoseBackendFailure(errorTail, config)
     ].join("\n"));
   }
 

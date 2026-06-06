@@ -41,6 +41,11 @@
 - Local one-command startup restores project dependencies, prompts for missing
   local secrets, writes them only to `.env.local`, and waits for backend health
   before starting the frontend.
+- Local startup normalizes PostgreSQL URLs, reuses safe existing environment or
+  user-secret configuration, and reports concrete repair steps for missing
+  database, credential, privilege, Docker, or system-runtime failures.
+- Local doctor mode reports prerequisite and configuration readiness without
+  starting services, restoring dependencies, or writing secrets.
 - Root npm dependency restoration is lockfile-hash gated so repeated local
   starts do not reinstall duplicate dependency trees for the same
   `package-lock.json`.

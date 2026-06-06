@@ -90,10 +90,20 @@ the active requirements. It does not replace automated test files.
   `dotnet restore Backend/Backend.sln` before backend startup.
 - Repeated `npm run dev` starts skip root npm installation when the ignored
   local install marker already matches the current `package-lock.json` hash.
+- `npm run dev` reuses existing `.env.local`, shell environment, `DATABASE_URL`,
+  PG* variables, and .NET user-secrets before prompting for missing values.
+- `npm run dev:doctor` reports local prerequisite and configuration readiness
+  without starting servers or writing secrets.
+- PostgreSQL URLs such as
+  `postgresql://postgres:password@localhost:5432/aisd_ss26_group_7` are
+  accepted and normalized into backend-compatible Npgsql connection strings.
 - When local configuration is missing in an interactive terminal, `npm run dev`
   prompts for `ConnectionStrings__DefaultConnection`, `SeedAdmin__Email`,
   `SeedAdmin__Password`, and `Deepseek__ApiKey` unless AI is explicitly
   disabled.
+- Backend startup failures explain likely repair steps for missing database,
+  wrong credentials, insufficient PostgreSQL privileges, Docker permission
+  issues, and missing system runtimes.
 - Local startup writes entered secrets only to `.env.local`, which remains
   untracked.
 - The frontend starts only after the backend health endpoint returns a

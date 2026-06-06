@@ -6,9 +6,12 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  convertPostgresUrlToNpgsql,
+  diagnoseBackendFailure,
   isUsableConfigValue,
   mergeEffectiveConfig,
   parseEnvFileContent,
+  parseDotnetUserSecrets,
   resolveBackendHealthUrl,
   serializeEnvFile,
   shouldRunNpmCi
@@ -56,6 +59,43 @@ test("mergeEffectiveConfig lets explicit process config override local file conf
   assert.equal(merged.BackendUrls, "http://127.0.0.1:6000");
   assert.equal(merged.Deepseek__ApiKey, "local-key");
   assert.equal(merged.NEXT_PUBLIC_API_BASE_URL, "http://localhost:5140/api/v1");
+});
+
+test("convertPostgresUrlToNpgsql accepts common PostgreSQL URLs", () => {
+  assert.equal(
+    convertPostgresUrlToNpgsql("postgresql://postgres:p%40ss@localhost:5432/aisd_ss26_group_7?sslmode=require"),
+    "Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=p@ss;SSL Mode=require"
+  );
+});
+
+test("mergeEffectiveConfig derives database config from DATABASE_URL", () => {
+  const merged = mergeEffectiveConfig({}, {
+    DATABASE_URL: "postgres://postgres:secret@localhost:5432/aisd_ss26_group_7"
+  });
+
+  assert.equal(
+    merged.ConnectionStrings__DefaultConnection,
+    "Host=localhost;Port=5432;Database=aisd_ss26_group_7;Username=postgres;Password=secret"
+  );
+});
+
+test("parseDotnetUserSecrets reads colon-delimited config keys", () => {
+  const parsed = parseDotnetUserSecrets([
+    "Deepseek:ApiKey = test-key",
+    "ConnectionStrings:DefaultConnection = Host=localhost;Database=app"
+  ].join("\n"));
+
+  assert.equal(parsed["Deepseek:ApiKey"], "test-key");
+  assert.equal(parsed["ConnectionStrings:DefaultConnection"], "Host=localhost;Database=app");
+});
+
+test("diagnoseBackendFailure gives database repair guidance", () => {
+  const guidance = diagnoseBackendFailure(
+    "Npgsql.PostgresException: 3D000: database \"aisd_ss26_group_7\" does not exist",
+    { ConnectionStrings__DefaultConnection: "Host=localhost;Database=aisd_ss26_group_7;Username=postgres" }
+  ).join("\n");
+
+  assert.match(guidance, /createdb -U postgres aisd_ss26_group_7/);
 });
 
 test("resolveBackendHealthUrl uses the first ASP.NET URL", () => {
