@@ -129,10 +129,21 @@ export interface AiCodeSuggestion {
   apply_label: string;
 }
 
+export type AiWorkspaceActionType = "replace_file" | "run_public_checks";
+
+export interface AiWorkspaceAction {
+  type: AiWorkspaceActionType;
+  label: string;
+  target_file?: string | null;
+  language?: Language | null;
+  replacement_code?: string | null;
+}
+
 export interface AiAssistantResponse {
   response_markdown: string;
   semantic_tags: string[];
   suggestion?: AiCodeSuggestion | null;
+  workspace_actions?: AiWorkspaceAction[];
   token_usage: {
     input_tokens: number;
     output_tokens: number;

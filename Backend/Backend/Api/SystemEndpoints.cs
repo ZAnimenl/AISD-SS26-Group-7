@@ -21,7 +21,7 @@ public static class SystemEndpoints
                 ai_chat_enabled = true,
                 ai_inline_completion_enabled = false,
                 token_tracking_enabled = true,
-                multi_file_workspace_enabled = false,
+                multi_file_workspace_enabled = true,
                 real_sandbox_enabled = true
             },
             supported_languages = new[] { "python", "javascript" },

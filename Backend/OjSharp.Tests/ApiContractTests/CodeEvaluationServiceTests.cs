@@ -1,4 +1,5 @@
 using System.Text;
+using Backend.Api;
 using Backend.Domain;
 using Backend.Services;
 using Backend.Services.Grading;
@@ -161,7 +162,9 @@ public sealed class CodeEvaluationServiceTests
         Assert.Contains("pytest", pythonCommand);
         Assert.Contains("no:cacheprovider", pythonCommand);
         Assert.Contains("jest", javascriptCommand);
+        Assert.Contains("--env=jsdom", javascriptCommand);
         Assert.Contains("tsc solution.ts", string.Join(" ", typeScriptCommand));
+        Assert.Contains("--env=jsdom", string.Join(" ", typeScriptCommand));
         Assert.Contains("jest", string.Join(" ", typeScriptCommand));
     }
 
@@ -247,8 +250,35 @@ public sealed class CodeEvaluationServiceTests
         Assert.Contains("Dockerfile", headerText);
         Assert.Contains("pytest", bodyText);
         Assert.Contains("jest", bodyText);
+        Assert.Contains("jest-environment-jsdom", bodyText);
         Assert.Contains("typescript", bodyText);
         Assert.Contains("PYTHONDONTWRITEBYTECODE", bodyText);
+    }
+
+    [Fact]
+    public void Browser_preview_for_javascript_html_starter_reads_html_entry()
+    {
+        var question = new Question
+        {
+            Id = Guid.NewGuid(),
+            VerificationMode = VerificationModes.BrowserUiPreview,
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+            {
+                ["javascript"] = new()
+                {
+                    ["index.html"] = "<!doctype html><html><body><button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script></body></html>",
+                    ["app.js"] = "document.getElementById('clearBtn');\n"
+                }
+            }),
+            VerificationMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>())
+        };
+
+        var testCase = InvokeBrowserPreviewTest(question, "javascript");
+        var testCode = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>())["javascript"];
+
+        Assert.Contains("index.html", testCode);
+        Assert.Contains("inlineLocalScripts", testCode);
+        Assert.DoesNotContain("TodoSummaryPanel", testCode);
     }
 
     private static TestCase TestCase(string name, string input, string expectedOutput)
@@ -288,6 +318,15 @@ public sealed class CodeEvaluationServiceTests
                 """
             })
         };
+    }
+
+    private static TestCase InvokeBrowserPreviewTest(Question question, string selectedLanguage)
+    {
+        var method = typeof(ExecutionEndpoints).GetMethod(
+            "CreateBrowserPreviewTest",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<TestCase>(method!.Invoke(null, [question, selectedLanguage]));
     }
 
     private static TestCaseEvaluationResult TestResult(bool passed)
