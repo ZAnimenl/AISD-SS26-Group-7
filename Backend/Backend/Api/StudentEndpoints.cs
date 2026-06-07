@@ -31,11 +31,13 @@ public static class StudentEndpoints
         }
 
         var activeAssessments = await dbContext.Assessments.CountAsync(assessment => assessment.Status == AssessmentStatuses.Active, cancellationToken);
-        var sessions = await dbContext.AssessmentSessions
-            .Where(session => session.UserId == user!.Id)
-            .Include(session => session.Assessment)
-            .OrderByDescending(session => session.StartedAt)
-            .ToListAsync(cancellationToken);
+        var sessions = await DateTimeOffsetOrdering.ToDescendingListAsync(
+            dbContext.AssessmentSessions
+                .Where(session => session.UserId == user!.Id)
+                .Include(session => session.Assessment),
+            dbContext,
+            session => session.StartedAt,
+            cancellationToken);
         var submissions = await dbContext.Submissions
             .Where(submission => submission.Session!.UserId == user!.Id)
             .ToListAsync(cancellationToken);
@@ -94,6 +96,9 @@ public static class StudentEndpoints
                 assessment.Status,
                 ai_enabled = assessment.AiEnabled,
                 question_count = assessment.Questions.Count,
+                questions = assessment.Questions
+                    .OrderBy(question => question.SortOrder)
+                    .Select(ToQuestionPreviewDto),
                 attempt_id = session?.Id,
                 attempt_status = session is null ? SessionStatuses.NotStarted : sessionClock.GetEffectiveStatus(session)
             };
@@ -163,6 +168,19 @@ public static class StudentEndpoints
         return submissions.Any(submission => submission.EvaluationStatus == ExecutionStatuses.RuntimeError)
             ? ExecutionStatuses.RuntimeError
             : ExecutionStatuses.Failed;
+    }
+
+    private static object ToQuestionPreviewDto(Question question)
+    {
+        return new
+        {
+            question_id = question.Id,
+            question.Title,
+            task_type = question.TaskType,
+            difficulty = question.Difficulty,
+            verification_mode = question.VerificationMode,
+            language_constraints = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>())
+        };
     }
 
     internal sealed record StudentResultSummary(

@@ -30,16 +30,17 @@ public static class SubmissionEndpoints
             return error;
         }
 
-        var session = await dbContext.AssessmentSessions
-            .Include(item => item.Assessment)
-            .ThenInclude(assessment => assessment!.Questions)
-            .Include(item => item.WorkspaceStates)
-            .FirstOrDefaultAsync(
-                item => item.AssessmentId == assessmentId
-                        && item.UserId == user!.Id
-                        && item.Status == SessionStatuses.Active
-                        && item.ExpiresAt > DateTimeOffset.UtcNow,
-                cancellationToken);
+        var session = await SessionQueries.FirstUnexpiredAsync(
+            dbContext.AssessmentSessions
+                .Include(item => item.Assessment)
+                .ThenInclude(assessment => assessment!.Questions)
+                .Include(item => item.WorkspaceStates)
+                .Where(item => item.AssessmentId == assessmentId
+                               && item.UserId == user!.Id
+                               && item.Status == SessionStatuses.Active),
+            dbContext,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
         if (session is null)
         {
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound);
@@ -249,9 +250,8 @@ public static class SubmissionEndpoints
             query = query.Where(submission => submission.QuestionId == questionId.Value);
         }
 
-        var submissions = await query
-            .OrderByDescending(submission => submission.SubmittedAt)
-            .Select(submission => new
+        var submissions = await DateTimeOffsetOrdering.ToDescendingListAsync(
+            query.Select(submission => new
             {
                 submission_id = submission.Id,
                 question_id = submission.QuestionId,
@@ -259,8 +259,10 @@ public static class SubmissionEndpoints
                 submission.Score,
                 max_score = submission.MaxScore,
                 submitted_at = submission.SubmittedAt
-            })
-            .ToListAsync(cancellationToken);
+            }),
+            dbContext,
+            submission => submission.submitted_at,
+            cancellationToken);
         return ApiResults.Success(submissions);
     }
 

@@ -46,10 +46,11 @@ public static class ReportEndpoints
             return error;
         }
 
-        var assessments = await dbContext.Assessments
-            .Include(assessment => assessment.Sessions)
-            .OrderByDescending(assessment => assessment.CreatedAt)
-            .ToListAsync(cancellationToken);
+        var assessments = await DateTimeOffsetOrdering.ToDescendingListAsync(
+            dbContext.Assessments.Include(assessment => assessment.Sessions),
+            dbContext,
+            assessment => assessment.CreatedAt,
+            cancellationToken);
         var assessmentIds = assessments.Select(assessment => assessment.Id).ToArray();
         var submissionSummaries = await dbContext.Submissions
             .Where(submission => assessmentIds.Contains(submission.Session!.AssessmentId))
@@ -219,24 +220,27 @@ public static class ReportEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        var submissions = await dbContext.Submissions
-            .Where(submission => submission.SessionId == session.Id)
-            .OrderByDescending(submission => submission.SubmittedAt)
-            .Select(submission => new
-            {
-                submission_id = submission.Id,
-                question_id = submission.QuestionId,
-                evaluation_status = submission.EvaluationStatus,
-                submission.Score,
-                max_score = submission.MaxScore,
-                submitted_at = submission.SubmittedAt
-            })
-            .ToListAsync(cancellationToken);
+        var submissions = await DateTimeOffsetOrdering.ToDescendingListAsync(
+            dbContext.Submissions
+                .Where(submission => submission.SessionId == session.Id)
+                .Select(submission => new
+                {
+                    submission_id = submission.Id,
+                    question_id = submission.QuestionId,
+                    evaluation_status = submission.EvaluationStatus,
+                    submission.Score,
+                    max_score = submission.MaxScore,
+                    submitted_at = submission.SubmittedAt
+                }),
+            dbContext,
+            submission => submission.submitted_at,
+            cancellationToken);
 
-        var aiInteractions = await dbContext.AiInteractions
-            .Where(interaction => interaction.SessionId == session.Id)
-            .OrderBy(interaction => interaction.CreatedAt)
-            .ToListAsync(cancellationToken);
+        var aiInteractions = await DateTimeOffsetOrdering.ToAscendingListAsync(
+            dbContext.AiInteractions.Where(interaction => interaction.SessionId == session.Id),
+            dbContext,
+            interaction => interaction.CreatedAt,
+            cancellationToken);
         var interactions = aiInteractions
             .Select(interaction => new
             {
