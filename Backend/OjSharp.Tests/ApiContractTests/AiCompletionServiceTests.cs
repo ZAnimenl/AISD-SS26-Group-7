@@ -63,6 +63,40 @@ public sealed class AiCompletionServiceTests
         Assert.Equal("json_object", responseFormat.GetProperty("type").GetString());
     }
 
+    [Fact]
+    public async Task Generate_async_preserves_finish_reason_and_overrides_max_tokens()
+    {
+        var handler = new CapturingHandler(
+            """
+            {
+              "choices": [
+                {
+                  "finish_reason": "length",
+                  "message": {
+                    "content": "{\"tasks\":"
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 7,
+                "completion_tokens": 9
+              }
+            }
+            """);
+        var service = CreateLocalLlmService(handler);
+
+        var result = await service.GenerateAsync(
+            "system prompt",
+            "student prompt",
+            AiResponseFormat.Json,
+            CancellationToken.None,
+            maxTokens: 4096);
+
+        using var document = JsonDocument.Parse(handler.CapturedBody);
+        Assert.Equal(4096, document.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal("length", result.FinishReason);
+    }
+
     private static AiCompletionService CreateLocalLlmService(CapturingHandler handler)
     {
         return new AiCompletionService(
@@ -102,6 +136,28 @@ public sealed class AiCompletionServiceTests
 
     private sealed class CapturingHandler : HttpMessageHandler
     {
+        private readonly string responseBody;
+
+        public CapturingHandler(string? responseBody = null)
+        {
+            this.responseBody = responseBody ??
+                """
+                {
+                  "choices": [
+                    {
+                      "message": {
+                        "content": "provider response"
+                      }
+                    }
+                  ],
+                  "usage": {
+                    "prompt_tokens": 3,
+                    "completion_tokens": 2
+                  }
+                }
+                """;
+        }
+
         public string CapturedBody { get; private set; } = "";
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -114,24 +170,7 @@ public sealed class AiCompletionServiceTests
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(
-                    """
-                    {
-                      "choices": [
-                        {
-                          "message": {
-                            "content": "provider response"
-                          }
-                        }
-                      ],
-                      "usage": {
-                        "prompt_tokens": 3,
-                        "completion_tokens": 2
-                      }
-                    }
-                    """,
-                    Encoding.UTF8,
-                    "application/json")
+                Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
             };
         }
     }

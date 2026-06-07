@@ -23,6 +23,7 @@
 
 - Student AI assistance does not return mock guidance when no real provider returns a usable response.
 - AI-generated assessment and question drafts do not fall back to template content labeled as LLM-generated output.
+- AI-generated assessment and question drafts request enough provider output tokens for structured JSON and report provider truncation as an actionable draft-generation error instead of exposing raw JSON parser failures.
 - Browser UI preview does not render sample content when sandbox output is unavailable.
 - Real dependency enforcement is documented in `docs/design/real-dependency-enforcement.md`.
 - Missing or failing AI providers return a structured API error instead of fabricated assistant content.
@@ -61,6 +62,7 @@
 - Loading pages show backend-loading or backend-error states instead of appearing empty while data is still pending.
 - Failed long-running actions preserve user-entered data and show the real backend/provider error.
 - Dynamic assessment routes resolve the URL `assessment_id` on production Next.js builds and do not treat existing backend assessments as missing.
+- The administrator create-assessment page does not expose shared prototype reference or shared prototype version inputs.
 - Student assessment start pages show backend-provided public question previews for active assessments without exposing hidden tests, administrator notes, or grading configuration.
 - Workspace task, AI, and output panels can be collapsed/expanded and resized without changing backend state.
 - Sandbox output surfaces use opaque readable backgrounds and do not visually merge with editor or sidebar text.
