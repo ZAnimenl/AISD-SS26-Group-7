@@ -189,19 +189,41 @@ public static class ExecutionEndpoints
         var metadata = JsonDocumentSerializer.Deserialize(question.VerificationMetadataJson, new Dictionary<string, string>());
         var normalizedLanguage = AssessmentPolicy.NormalizeLanguage(selectedLanguage);
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
+        var languageStarterFiles = starterCode.GetValueOrDefault(normalizedLanguage, new Dictionary<string, string>());
+        var configuredPreviewEntry = metadata.GetValueOrDefault("preview_entry");
+        var htmlPreviewEntry = normalizedLanguage == "javascript"
+            ? GetJavaScriptHtmlPreviewEntry(languageStarterFiles, configuredPreviewEntry)
+            : null;
         var defaultEntry = normalizedLanguage == "javascript"
             ? "TodoSummaryPanel.js"
             : "TodoSummaryPanel.py";
         var languageStarterEntry = starterCode
             .GetValueOrDefault(normalizedLanguage, new Dictionary<string, string>())
             .Keys
-            .FirstOrDefault();
-        var configuredPreviewEntry = metadata.GetValueOrDefault("preview_entry");
+            .FirstOrDefault(fileName => IsPreviewEntryForLanguage(fileName, normalizedLanguage));
         var previewEntry = IsPreviewEntryForLanguage(configuredPreviewEntry, normalizedLanguage)
             ? configuredPreviewEntry!
             : languageStarterEntry ?? defaultEntry;
         var pythonModule = GetSafePythonModuleName(previewEntry, "TodoSummaryPanel");
         var javascriptModule = GetSafeJavaScriptModulePath(previewEntry, "TodoSummaryPanel.js");
+        var javascriptTestCode = htmlPreviewEntry is not null
+            ? CreateHtmlPreviewTestCode(htmlPreviewEntry)
+            : $$"""
+            const fs = require('fs');
+            const { renderSummaryPanel } = require('./{{javascriptModule}}');
+
+            test('browser preview render', () => {
+              const todos = [
+                { title: 'Buy groceries', completed: false },
+                { title: 'Write tests', completed: true },
+                { title: 'Review PR', completed: false },
+              ];
+              const html = String(renderSummaryPanel(todos));
+              fs.writeFileSync('actual.txt', html, 'utf8');
+              expect(html).toContain('Todo Summary');
+              expect(html).toContain('<');
+            });
+            """;
 
         return new TestCase
         {
@@ -226,22 +248,7 @@ public static class ExecutionEndpoints
                     assert "Todo Summary" in html
                     assert "<" in html and ">" in html
                 """,
-                ["javascript"] = $$"""
-                const fs = require('fs');
-                const { renderSummaryPanel } = require('./{{javascriptModule}}');
-
-                test('browser preview render', () => {
-                  const todos = [
-                    { title: 'Buy groceries', completed: false },
-                    { title: 'Write tests', completed: true },
-                    { title: 'Review PR', completed: false },
-                  ];
-                  const html = String(renderSummaryPanel(todos));
-                  fs.writeFileSync('actual.txt', html, 'utf8');
-                  expect(html).toContain('Todo Summary');
-                  expect(html).toContain('<');
-                });
-                """
+                ["javascript"] = javascriptTestCode
             }),
             AuthoringSource = question.AuthoringSource,
             PublicMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
@@ -259,6 +266,50 @@ public static class ExecutionEndpoints
                 ["requirements"] = "REQ-18e,REQ-30c"
             })
         };
+    }
+
+    private static string? GetJavaScriptHtmlPreviewEntry(
+        IReadOnlyDictionary<string, string> languageStarterFiles,
+        string? configuredPreviewEntry)
+    {
+        var configuredFileName = IsSafeHtmlFile(configuredPreviewEntry)
+            ? Path.GetFileName(configuredPreviewEntry)
+            : null;
+        if (configuredFileName is not null && languageStarterFiles.ContainsKey(configuredFileName))
+        {
+            return configuredFileName;
+        }
+
+        return languageStarterFiles.Keys.FirstOrDefault(IsSafeHtmlFile);
+    }
+
+    private static string CreateHtmlPreviewTestCode(string htmlPreviewEntry)
+    {
+        return $$"""
+        const fs = require('fs');
+        const path = require('path');
+
+        function readLocalFile(fileName) {
+          const safeName = path.basename(fileName);
+          return fs.readFileSync(safeName, 'utf8');
+        }
+
+        function inlineLocalScripts(html) {
+          return html.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (_match, src) => {
+            const scriptName = path.basename(src);
+            if (!scriptName.endsWith('.js') || !fs.existsSync(scriptName)) {
+              return '';
+            }
+            return '<script>' + fs.readFileSync(scriptName, 'utf8') + '</script>';
+          });
+        }
+
+        test('browser preview render', () => {
+          const html = inlineLocalScripts(readLocalFile('{{htmlPreviewEntry}}'));
+          fs.writeFileSync('actual.txt', html, 'utf8');
+          expect(html).toMatch(/<\/?[a-z][\s\S]*>/i);
+        });
+        """;
     }
 
     private static bool IsPreviewEntryForLanguage(string? previewEntry, string selectedLanguage)
@@ -296,6 +347,14 @@ public static class ExecutionEndpoints
     {
         return !string.IsNullOrWhiteSpace(value)
             && value.EndsWith(".js", StringComparison.Ordinal)
+            && value.All(character => char.IsLetterOrDigit(character) || character is '_' or '-' or '.');
+    }
+
+    private static bool IsSafeHtmlFile(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            && Path.GetFileName(value).Equals(value, StringComparison.Ordinal)
             && value.All(character => char.IsLetterOrDigit(character) || character is '_' or '-' or '.');
     }
 }

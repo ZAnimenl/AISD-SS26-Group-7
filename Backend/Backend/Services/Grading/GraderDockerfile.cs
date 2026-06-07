@@ -8,7 +8,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip nodejs npm \
     && python3 -m pip install --break-system-packages pytest \
-    && npm install -g jest typescript \
+    && npm install -g jest jest-environment-jsdom typescript \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash sandbox \

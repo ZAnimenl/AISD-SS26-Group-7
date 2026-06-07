@@ -136,6 +136,7 @@ public static class AiEndpoints
             response_markdown = assistantResult.ResponseMarkdown,
             semantic_tags = assistantResult.SemanticTags,
             suggestion = assistantResult.Suggestion,
+            workspace_actions = assistantResult.WorkspaceActions,
             token_usage = new
             {
                 input_tokens = assistantResult.InputTokens,
@@ -295,6 +296,7 @@ public static class AiEndpoints
             ["assessment_safety", "direct_solution_request"],
             0,
             0,
-            null);
+            null,
+            []);
     }
 }

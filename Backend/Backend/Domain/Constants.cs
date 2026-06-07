@@ -54,6 +54,12 @@ public static class AiInteractionTypes
     public const string Debugging = "debugging";
 }
 
+public static class AiWorkspaceActionTypes
+{
+    public const string ReplaceFile = "replace_file";
+    public const string RunPublicChecks = "run_public_checks";
+}
+
 public static class TaskTypes
 {
     public const string FrontendUiExtension = "frontend_ui_extension";

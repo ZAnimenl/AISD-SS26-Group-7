@@ -10,7 +10,7 @@ import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass }
 import { renderMarkdown } from "@/components/workspace/workspaceMarkdown";
 import { useWorkspaceIdeLayout } from "@/components/workspace/useWorkspaceIdeLayout";
 import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
-import type { AiInteractionType, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
+import type { AiInteractionType, AiWorkspaceAction, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
   assessment: Assessment;
@@ -28,6 +28,7 @@ type AiChatMessage = {
   suggestedLanguage?: Language;
   targetFile?: string;
   applyLabel?: string;
+  workspaceActions?: AiWorkspaceAction[];
   tokenUsage?: {
     input_tokens: number;
     output_tokens: number;
@@ -67,6 +68,88 @@ const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "python", label: "Python" },
   { value: "javascript", label: "JavaScript" }
 ];
+
+function getMessageReplaceFileActions(message: AiChatMessage, fallbackFile: string, fallbackLanguage: Language): AiWorkspaceAction[] {
+  const actions = message.workspaceActions?.filter((item) => item.type === "replace_file" && item.replacement_code) ?? [];
+  if (actions.length > 0) {
+    return actions;
+  }
+
+  return message.suggestedCode
+    ? [{
+      type: "replace_file",
+      label: message.applyLabel ?? `Apply to ${message.targetFile ?? fallbackFile}`,
+      target_file: message.targetFile ?? fallbackFile,
+      language: message.suggestedLanguage ?? fallbackLanguage,
+      replacement_code: message.suggestedCode
+    }]
+    : [];
+}
+
+function messageHasRunPublicChecksAction(message: AiChatMessage) {
+  return message.workspaceActions?.some((action) => action.type === "run_public_checks") ?? false;
+}
+
+function AiMessageActionButtons({
+  message,
+  activeFile,
+  language,
+  isApplying,
+  isRunning,
+  onExecute
+}: {
+  message: AiChatMessage;
+  activeFile: string;
+  language: Language;
+  isApplying: boolean;
+  isRunning: boolean;
+  onExecute: (runAfterApply: boolean) => void;
+}) {
+  const replaceActions = getMessageReplaceFileActions(message, activeFile, language);
+  const hasReplaceActions = replaceActions.length > 0;
+  const canRunFromAgent = hasReplaceActions || messageHasRunPublicChecksAction(message);
+  if (!hasReplaceActions && !canRunFromAgent) {
+    return null;
+  }
+  const firstReplaceAction = replaceActions[0];
+  const applyLabel = replaceActions.length === 1
+    ? firstReplaceAction.label ?? `Apply to ${firstReplaceAction.target_file ?? activeFile}`
+    : `Apply ${replaceActions.length} edits`;
+  const targetLabel = replaceActions
+    .map((action) => action.target_file)
+    .filter((targetFile): targetFile is string => Boolean(targetFile))
+    .join(", ");
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+      {hasReplaceActions ? (
+        <button
+          type="button"
+          className="btn-primary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={isApplying}
+          onClick={() => onExecute(false)}
+        >
+          <SemanticIcon name="file" size={13} />
+          {applyLabel}
+        </button>
+      ) : null}
+      {canRunFromAgent ? (
+        <button
+          type="button"
+          className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={isApplying || isRunning}
+          onClick={() => onExecute(hasReplaceActions)}
+        >
+          <SemanticIcon name="play" size={13} />
+          {hasReplaceActions ? "Apply & run" : "Run public checks"}
+        </button>
+      ) : null}
+      {targetLabel ? (
+        <span className="font-mono text-[11px] text-white/35">{targetLabel}</span>
+      ) : null}
+    </div>
+  );
+}
 
 function getDefaultFileName(language: Language) {
   return language === "javascript" ? "main.js" : language === "typescript" ? "main.ts" : "main.py";
@@ -154,6 +237,22 @@ function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Q
   }
   const starterFiles = getStarterFiles(question, language);
   return starterFiles[targetFile] ?? "";
+}
+
+function getFilesFromQuestionState(question: Question | undefined, state: WorkspaceQuestionState): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [fileName, content] of Object.entries(getStarterFiles(question, state.selected_language))) {
+    result[fileName] = content;
+  }
+  for (const [fileName, fileData] of Object.entries(state.files)) {
+    if (fileData.language === state.selected_language) {
+      result[fileName] = fileData.content;
+    }
+  }
+  if (Object.keys(result).length === 0) {
+    result[state.active_file] = getCodeFromState(state, question, state.selected_language, state.active_file);
+  }
+  return result;
 }
 
 function mergeQuestionStates(current: WorkspaceState["questions"], saved: WorkspaceState["questions"]) {
@@ -269,6 +368,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
   const [aiMessage, setAiMessage] = useState("");
   const [aiState, setAiState] = useState<"idle" | "running">("idle");
+  const [agentActionState, setAgentActionState] = useState<"idle" | "applying">("idle");
   const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const aiRequestCounterRef = useRef(0);
   const [messages, setMessages] = useState<AiChatMessage[]>([
@@ -423,46 +523,39 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   function getAllFiles(): Record<string, string> {
     const currentState = persistCurrentCode();
     const qState = sanitizeQuestionState(activeQuestion, currentState[activeQuestionId], language);
-    if (!qState) return { [activeFile]: code };
-
-    const result: Record<string, string> = {};
-    for (const [fileName, content] of Object.entries(getStarterFiles(activeQuestion, qState.selected_language))) {
-      result[fileName] = content;
-    }
-    for (const [fileName, fileData] of Object.entries(qState.files)) {
-      if (fileData.language === qState.selected_language) {
-        result[fileName] = fileData.content;
-      }
-    }
-    if (Object.keys(result).length === 0) {
-      result[qState.active_file] = code;
-    }
-    return result;
+    return getFilesFromQuestionState(activeQuestion, qState);
   }
 
-  async function handleRun() {
+  async function runPublicChecksForState(state: WorkspaceQuestionState) {
     setRunState("running");
     setRunningQuestionId(activeQuestionId);
     setRunResults((current) => ({ ...current, [activeQuestionId]: null }));
     setTaskErrors((current) => ({ ...current, [activeQuestionId]: null }));
     setError(null);
     try {
-      const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
       const result = await runCode({
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
-        selected_language: selectedLanguage,
-        files: getAllFiles()
+        selected_language: state.selected_language,
+        files: getFilesFromQuestionState(activeQuestion, state)
       });
       setRunResults((current) => ({ ...current, [activeQuestionId]: result }));
+      return result;
     } catch (exception) {
       const message = exception instanceof Error ? exception.message : "Run failed.";
       setTaskErrors((current) => ({ ...current, [activeQuestionId]: message }));
       setError(message);
+      return null;
     } finally {
       setRunState("idle");
       setRunningQuestionId(null);
     }
+  }
+
+  async function handleRun() {
+    const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
+    const currentState = sanitizeQuestionState(activeQuestion, persistCurrentCode()[activeQuestionId], selectedLanguage);
+    await runPublicChecksForState(currentState);
   }
 
   async function sendAi(type: AiInteractionType, overrideMessage?: string) {
@@ -503,6 +596,17 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         last_run_result: runResults[activeQuestionId] ?? null
       });
       const suggestion = response.suggestion;
+      const workspaceActions = response.workspace_actions?.length
+        ? response.workspace_actions
+        : suggestion
+          ? [{
+            type: "replace_file" as const,
+            label: suggestion.apply_label,
+            target_file: suggestion.target_file,
+            language: suggestion.language,
+            replacement_code: suggestion.replacement_code
+          }]
+          : [];
       setMessages((current) => current.map((item) =>
         item.clientId === pendingAssistantId
           ? {
@@ -513,6 +617,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
             suggestedLanguage: suggestion ? suggestion.language : undefined,
             targetFile: suggestion?.target_file ?? undefined,
             applyLabel: suggestion?.apply_label ?? undefined,
+            workspaceActions,
             tokenUsage: response.token_usage
           }
           : item
@@ -535,46 +640,140 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
     }
   }
 
-  function applyAiSuggestion(message: AiChatMessage) {
-    if (!message.suggestedCode) {
-      return;
+  function buildQuestionStateWithAiReplacements(actions: AiWorkspaceAction[]) {
+    if (actions.length === 0) {
+      setError("AI action did not include file edits.");
+      return null;
     }
 
-    if (message.suggestedLanguage && !getVisibleLanguages(activeQuestion).includes(message.suggestedLanguage)) {
-      setError("AI suggestion language is not allowed for this task.");
-      return;
+    const unsupportedAction = actions.find((action) => action.language && !getVisibleLanguages(activeQuestion).includes(action.language));
+    if (unsupportedAction) {
+      setError("AI action language is not allowed for this task.");
+      return null;
     }
 
-    const targetLanguage = resolveAllowedLanguage(activeQuestion, message.suggestedLanguage ?? language);
-    const targetFile = message.targetFile ?? activeFile;
+    const targetLanguage = resolveAllowedLanguage(activeQuestion, actions[0].language ?? language);
+    const mismatchedLanguage = actions.find((action) => resolveAllowedLanguage(activeQuestion, action.language ?? targetLanguage) !== targetLanguage);
+    if (mismatchedLanguage) {
+      setError("AI action files must use the same selected task language.");
+      return null;
+    }
+
     const nextQuestionStates = persistCurrentCode();
     const currentQuestionState = sanitizeQuestionState(
       activeQuestion,
       nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, targetLanguage),
       targetLanguage
     );
+    const visibleFiles = new Set([
+      ...Object.keys(getStarterFiles(activeQuestion, targetLanguage)),
+      ...Object.entries(currentQuestionState.files)
+        .filter(([, file]) => file.language === targetLanguage)
+        .map(([fileName]) => fileName)
+    ]);
+
+    let nextFiles = currentQuestionState.files;
+    let firstTargetFile = currentQuestionState.active_file;
+    let firstReplacementCode = getCodeFromState(currentQuestionState, activeQuestion, targetLanguage, firstTargetFile);
+
+    for (const action of actions) {
+      const replacementCode = action.replacement_code;
+      if (!replacementCode) {
+        setError("AI action did not include replacement code.");
+        return null;
+      }
+
+      const targetFile = action.target_file ?? currentQuestionState.active_file;
+      if (!visibleFiles.has(targetFile)) {
+        setError("AI action target file is not visible in this task.");
+        return null;
+      }
+
+      if (nextFiles === currentQuestionState.files) {
+        firstTargetFile = targetFile;
+        firstReplacementCode = replacementCode;
+      }
+
+      nextFiles = {
+        ...nextFiles,
+        [targetFile]: {
+          language: targetLanguage,
+          content: replacementCode
+        }
+      };
+    }
+
     const updatedQuestionState: WorkspaceQuestionState = {
       ...currentQuestionState,
       selected_language: targetLanguage,
-      active_file: targetFile,
-      files: {
-        ...currentQuestionState.files,
-        [targetFile]: {
-          language: targetLanguage,
-          content: message.suggestedCode
-        }
-      }
+      active_file: firstTargetFile,
+      files: nextFiles
     };
 
-    setQuestionStates({
+    return {
+      nextQuestionStates,
+      updatedQuestionState,
+      targetFile: firstTargetFile,
+      targetLanguage,
+      replacementCode: firstReplacementCode
+    };
+  }
+
+  async function executeAiWorkspaceActions(message: AiChatMessage, runAfterApply: boolean) {
+    if (agentActionState === "applying") {
+      return;
+    }
+
+    const replaceActions = getMessageReplaceFileActions(message, activeFile, language);
+    const shouldRun = runAfterApply || (replaceActions.length === 0 && messageHasRunPublicChecksAction(message));
+    setError(null);
+
+    if (replaceActions.length === 0) {
+      if (shouldRun) {
+        const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
+        const currentQuestionState = sanitizeQuestionState(activeQuestion, persistCurrentCode()[activeQuestionId], selectedLanguage);
+        setOutputTab("console");
+        await runPublicChecksForState(currentQuestionState);
+      }
+      return;
+    }
+
+    const replacement = buildQuestionStateWithAiReplacements(replaceActions);
+    if (!replacement) {
+      return;
+    }
+
+    const { nextQuestionStates, updatedQuestionState, targetFile, targetLanguage, replacementCode } = replacement;
+    const updatedStates = {
       ...nextQuestionStates,
       [activeQuestionId]: updatedQuestionState
-    });
+    };
+
+    setAgentActionState("applying");
+    setQuestionStates(updatedStates);
     setLanguage(targetLanguage);
     setActiveFile(targetFile);
-    setCode(message.suggestedCode);
-    setOutputTab("preview");
-    setSaveState("unsaved");
+    setCode(replacementCode);
+    setOutputTab(runAfterApply ? "console" : "preview");
+    setSaveState("saving");
+
+    try {
+      const savedWorkspace = await saveWorkspace(assessment.assessment_id, { [activeQuestionId]: updatedQuestionState });
+      setQuestionStates((current) => normalizeWorkspaceQuestionStates(
+        assessment.questions,
+        mergeQuestionStates(current, savedWorkspace.questions)
+      ));
+      setSaveState("saved");
+
+      if (runAfterApply) {
+        await runPublicChecksForState(updatedQuestionState);
+      }
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "AI action failed.");
+      setSaveState("unsaved");
+    } finally {
+      setAgentActionState("idle");
+    }
   }
 
   async function submitFinal() {
@@ -867,18 +1066,15 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
                 </span>
               ) : null}
               {renderMarkdown(message.text)}
-              {message.role === "assistant" && message.suggestedCode ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
-                  <button
-                    type="button"
-                    className="btn-primary px-3 py-2 text-xs"
-                    onClick={() => applyAiSuggestion(message)}
-                  >
-                    <SemanticIcon name="file" size={13} />
-                    {message.applyLabel ?? `Apply to ${message.targetFile ?? activeFile}`}
-                  </button>
-                  <span className="text-[11px] text-white/35">Review, then run public checks.</span>
-                </div>
+              {message.role === "assistant" ? (
+                <AiMessageActionButtons
+                  message={message}
+                  activeFile={activeFile}
+                  language={language}
+                  isApplying={agentActionState === "applying"}
+                  isRunning={runState === "running"}
+                  onExecute={(runAfterApply) => void executeAiWorkspaceActions(message, runAfterApply)}
+                />
               ) : null}
               {message.role === "assistant" && message.tokenUsage ? (
                 <p className="mt-2 text-[10px] uppercase tracking-[0.12em] text-white/30">

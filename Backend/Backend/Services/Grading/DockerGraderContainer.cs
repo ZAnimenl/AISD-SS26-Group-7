@@ -5,8 +5,8 @@ namespace Backend.Services.Grading;
 
 internal sealed class DockerGraderContainer
 {
-    private const string ImageTag = "ojsharp-grader:python-js-ts-v2";
-    private const string ContainerName = "ojsharp-grader-python-js-ts-v2";
+    private const string ImageTag = "ojsharp-grader:python-js-ts-v3";
+    private const string ContainerName = "ojsharp-grader-python-js-ts-v3";
     private readonly DockerClient dockerClient;
     private readonly string workspaceHostRoot;
     private readonly SemaphoreSlim gate = new(1, 1);

@@ -106,6 +106,53 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task JavaScript_dom_tests_run_with_jsdom_environment()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "",
+            """
+            test('button clears all tasks', () => {
+              document.body.innerHTML = `
+                <input id="taskInput" />
+                <button id="addBtn">Add Task</button>
+                <button id="clearBtn">Clear All</button>
+                <ul id="taskList"><li>First</li><li>Second</li></ul>
+              `;
+              require('./app.js');
+              document.getElementById('clearBtn').click();
+              expect(document.querySelectorAll('#taskList li')).toHaveLength(0);
+            });
+            """
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["app.js"] = """
+                const taskList = document.getElementById('taskList');
+                const clearBtn = document.getElementById('clearBtn');
+                clearBtn.addEventListener('click', () => {
+                  taskList.innerHTML = '';
+                });
+                """
+            },
+            "javascript",
+            testCase,
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(result.TimedOut);
+        Assert.Null(result.Stderr);
+    }
+
+    [Fact]
     public async Task Snake_case_python_starter_file_can_satisfy_legacy_pascal_case_import()
     {
         if (!IsDockerAvailable())

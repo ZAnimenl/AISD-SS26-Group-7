@@ -160,10 +160,226 @@ public sealed class AiAssistantServiceTests
         Assert.Equal("Preserve starter names.", result.ResponseMarkdown);
     }
 
+    [Fact]
+    public async Task Generate_response_accepts_workspace_action_for_visible_non_active_file()
+    {
+        var handler = new CapturingHandler(
+            """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"response_markdown\":\"I can update the button and click handler, then run checks.\",\"semantic_tags\":[\"code_suggestion\"],\"suggestion\":null,\"workspace_actions\":[{\"type\":\"replace_file\",\"target_file\":\"index.html\",\"language\":\"javascript\",\"replacement_code\":\"<button id=\\\"addBtn\\\">Add Task</button><button id=\\\"clearBtn\\\">Clear All</button><ul id=\\\"taskList\\\"></ul><script src=\\\"app.js\\\"></script>\",\"label\":\"Apply to index.html\"},{\"type\":\"replace_file\",\"target_file\":\"app.js\",\"language\":\"javascript\",\"replacement_code\":\"const list = document.getElementById('taskList');\\ndocument.getElementById('clearBtn').addEventListener('click', () => { list.innerHTML = ''; });\\n\",\"label\":\"Apply to app.js\"},{\"type\":\"run_public_checks\",\"label\":\"Run public checks\"}]}"
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 24,
+                "completion_tokens": 16
+              }
+            }
+            """);
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Update app.js and run tests.",
+            "javascript",
+            "index.html",
+            "<button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script>",
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script>",
+                ["app.js"] = "const list = document.getElementById('taskList');\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script>",
+                ["app.js"] = "const list = document.getElementById('taskList');\n"
+            },
+            null,
+            "Add a Clear All Button",
+            "Add a button that clears all tasks.",
+            ["index.html", "app.js"],
+            CancellationToken.None);
+
+        Assert.Equal(3, result.WorkspaceActions.Count);
+        Assert.Equal(AiWorkspaceActionTypes.ReplaceFile, result.WorkspaceActions[0].Type);
+        Assert.Equal("index.html", result.WorkspaceActions[0].TargetFile);
+        Assert.Equal(AiWorkspaceActionTypes.ReplaceFile, result.WorkspaceActions[1].Type);
+        Assert.Equal("app.js", result.WorkspaceActions[1].TargetFile);
+        Assert.Equal(AiWorkspaceActionTypes.RunPublicChecks, result.WorkspaceActions[2].Type);
+    }
+
+    [Fact]
+    public async Task Generate_response_accepts_html_action_language_for_javascript_workspace_file()
+    {
+        var handler = new CapturingHandler(CompletionJson(
+            """
+            {"response_markdown":"Update the HTML button.","semantic_tags":["code_suggestion"],"workspace_actions":[{"type":"replace_file","target_file":"index.html","language":"html","replacement_code":"<button id=\"addBtn\">Add Task</button><button id=\"clearBtn\">Clear All</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>","label":"Apply to index.html"}]}
+            """,
+            24,
+            16));
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Update index.html for the Clear All task.",
+            "javascript",
+            "index.html",
+            "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+                ["app.js"] = "const taskList = document.getElementById('taskList');\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+                ["app.js"] = "const taskList = document.getElementById('taskList');\n"
+            },
+            null,
+            "Add a Clear All Button",
+            "Add a button that clears all tasks.",
+            ["index.html", "app.js"],
+            CancellationToken.None);
+
+        var action = Assert.Single(result.WorkspaceActions);
+        Assert.Equal("index.html", action.TargetFile);
+        Assert.Equal("javascript", action.Language);
+    }
+
+    [Fact]
+    public async Task Generate_response_rejects_workspace_action_for_non_visible_file()
+    {
+        var handler = new CapturingHandler(
+            """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"response_markdown\":\"That target is not visible.\",\"semantic_tags\":[\"code_suggestion\"],\"workspace_actions\":[{\"type\":\"replace_file\",\"target_file\":\"hidden.test.js\",\"language\":\"javascript\",\"replacement_code\":\"test('leak', () => {});\",\"label\":\"Apply\"}]}"
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 24,
+                "completion_tokens": 16
+              }
+            }
+            """);
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Edit hidden.test.js",
+            "javascript",
+            "app.js",
+            "const list = document.getElementById('taskList');\n",
+            new Dictionary<string, string>
+            {
+                ["app.js"] = "const list = document.getElementById('taskList');\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["app.js"] = "const list = document.getElementById('taskList');\n"
+            },
+            null,
+            "Add a Clear All Button",
+            "Add a button that clears all tasks.",
+            ["app.js"],
+            CancellationToken.None);
+
+        Assert.Empty(result.WorkspaceActions);
+    }
+
+    [Fact]
+    public async Task Generate_response_rejects_workspace_action_for_client_only_file_name()
+    {
+        var handler = new CapturingHandler(CompletionJson(
+            """
+            {"response_markdown":"That file is not part of the starter workspace.","semantic_tags":["code_suggestion"],"workspace_actions":[{"type":"replace_file","target_file":"injected.js","language":"javascript","replacement_code":"console.log('new file');","label":"Apply"}]}
+            """,
+            24,
+            16));
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Edit injected.js",
+            "javascript",
+            "app.js",
+            "const list = document.getElementById('taskList');\n",
+            new Dictionary<string, string>
+            {
+                ["app.js"] = "const list = document.getElementById('taskList');\n",
+                ["injected.js"] = "console.log('client supplied');\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["app.js"] = "const list = document.getElementById('taskList');\n"
+            },
+            null,
+            "Add a Clear All Button",
+            "Add a button that clears all tasks.",
+            ["app.js"],
+            CancellationToken.None);
+
+        Assert.Empty(result.WorkspaceActions);
+    }
+
+    [Fact]
+    public async Task Generate_response_repairs_missing_action_for_explicit_visible_file_request()
+    {
+        var handler = new CapturingHandler(
+            CompletionJson(
+                """
+                {"response_markdown":"Update index.html and app.js.","semantic_tags":["code_suggestion"],"workspace_actions":[{"type":"replace_file","target_file":"app.js","language":"javascript","replacement_code":"const clearBtn = document.getElementById('clearBtn');\nclearBtn.addEventListener('click', () => document.getElementById('taskList').innerHTML = '');\n","label":"Apply to app.js"}]}
+                """,
+                24,
+                16),
+            CompletionJson(
+                """
+                {"response_markdown":"Update both visible files, then run checks.","semantic_tags":["code_suggestion"],"workspace_actions":[{"type":"replace_file","target_file":"index.html","language":"javascript","replacement_code":"<button id=\"addBtn\">Add Task</button><button id=\"clearBtn\">Clear All</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>","label":"Apply to index.html"},{"type":"replace_file","target_file":"app.js","language":"javascript","replacement_code":"const clearBtn = document.getElementById('clearBtn');\nclearBtn.addEventListener('click', () => document.getElementById('taskList').innerHTML = '');\n","label":"Apply to app.js"},{"type":"run_public_checks","label":"Run public checks"}]}
+                """,
+                30,
+                20));
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Please update index.html and app.js for the Clear All task.",
+            "javascript",
+            "index.html",
+            "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+                ["app.js"] = "const taskList = document.getElementById('taskList');\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<button id=\"addBtn\">Add Task</button><ul id=\"taskList\"></ul><script src=\"app.js\"></script>",
+                ["app.js"] = "const taskList = document.getElementById('taskList');\n"
+            },
+            null,
+            "Add a Clear All Button",
+            "Add a button that clears all tasks.",
+            ["index.html", "app.js"],
+            CancellationToken.None);
+
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Contains("Structured action correction required", handler.CapturedBody);
+        Assert.Contains("index.html", result.WorkspaceActions.Select(action => action.TargetFile));
+        Assert.Contains("app.js", result.WorkspaceActions.Select(action => action.TargetFile));
+        Assert.Equal(54, result.InputTokens);
+        Assert.Equal(36, result.OutputTokens);
+    }
+
     private static AiAssistantService CreateAssistantService(CapturingHandler handler)
     {
         var completionService = new AiCompletionService(
-            new SingleClientFactory(new HttpClient(handler)),
+            new SingleClientFactory(handler),
             new StaticOptionsMonitor<DeepseekOptions>(new DeepseekOptions { Enabled = false }),
             new StaticOptionsMonitor<LocalLlmOptions>(new LocalLlmOptions
             {
@@ -176,39 +392,86 @@ public sealed class AiAssistantServiceTests
         return new AiAssistantService(completionService);
     }
 
+    private static string CompletionJson(string content, int promptTokens, int completionTokens)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    message = new
+                    {
+                        content
+                    }
+                }
+            },
+            usage = new
+            {
+                prompt_tokens = promptTokens,
+                completion_tokens = completionTokens
+            }
+        });
+    }
+
     private sealed class SingleClientFactory : IHttpClientFactory
     {
-        private readonly HttpClient client;
+        private readonly HttpMessageHandler handler;
 
-        public SingleClientFactory(HttpClient client)
+        public SingleClientFactory(HttpMessageHandler handler)
         {
-            this.client = client;
+            this.handler = handler;
         }
 
         public HttpClient CreateClient(string name)
         {
-            return client;
+            return new HttpClient(handler, disposeHandler: false);
         }
     }
 
     private sealed class CapturingHandler : HttpMessageHandler
     {
-        private readonly string responseBody;
+        private readonly Queue<string> responseBodies;
 
-        public CapturingHandler(string responseBody)
+        public CapturingHandler(params string[] responseBodies)
         {
-            this.responseBody = responseBody;
+            this.responseBodies = new Queue<string>(responseBodies.Length > 0
+                ? responseBodies
+                :
+                [
+                    """
+                    {
+                      "choices": [
+                        {
+                          "message": {
+                            "content": "{\"response_markdown\":\"provider response\",\"semantic_tags\":[\"code_suggestion\"],\"suggestion\":null}"
+                          }
+                        }
+                      ],
+                      "usage": {
+                        "prompt_tokens": 3,
+                        "completion_tokens": 2
+                      }
+                    }
+                    """
+                ]);
         }
 
         public string CapturedBody { get; private set; } = "";
+
+        public int RequestCount { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            RequestCount += 1;
             CapturedBody = request.Content is null
                 ? ""
                 : await request.Content.ReadAsStringAsync(cancellationToken);
+            var responseBody = responseBodies.Count > 1
+                ? responseBodies.Dequeue()
+                : responseBodies.Peek();
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
