@@ -64,11 +64,14 @@
 - Dynamic assessment routes resolve the URL `assessment_id` on production Next.js builds and do not treat existing backend assessments as missing.
 - The administrator create-assessment page does not expose shared prototype reference or shared prototype version inputs.
 - Student assessment start pages show backend-provided public question previews for active assessments without exposing hidden tests, administrator notes, or grading configuration.
+- Student assessment start pages verify the real backend workspace is readable after start-attempt succeeds before navigating to the IDE.
+- Student workspace language controls expose only languages allowed by the active question, and autosave, run, submit, and AI requests do not send disallowed selected-language or file-language values.
 - Workspace task, AI, and output panels can be collapsed/expanded and resized without changing backend state.
 - Sandbox output surfaces use opaque readable backgrounds and do not visually merge with editor or sidebar text.
 - Browser-preview runs for the platform Todo summary task resolve the visible starter file even when legacy tests import `TodoSummaryPanel`.
 - AI workspace assistance is documented in `docs/design/ai-agent-workspace-context.md`.
 - AI assist requests include active file name, visible selected-language files, and latest public run feedback when available.
+- AI assist requests use the active question's allowed language after workspace state normalization, not stale or disallowed frontend state.
 - AI Apply actions appear only for backend-validated structured suggestions targeting the active file and selected language.
 - Arbitrary Markdown code blocks in AI responses are not treated as file replacements.
 - AI structured suggestions preserve required public function names or exports from visible starter files before the frontend can apply them.

@@ -164,45 +164,13 @@ public static class SubmissionEndpoints
 
         foreach (var question in session.Assessment!.Questions.Where(question => !existingQuestionIds.Contains(question.Id)))
         {
-            var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
-            var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
-            var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
-            var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
-            var workspaceFiles = languageFiles.ToDictionary(
-                entry => entry.Key,
-                entry => new WorkspaceFileDto(language, entry.Value));
-            if (workspaceFiles.Count == 0)
-            {
-                workspaceFiles[firstFile] = new WorkspaceFileDto(language, string.Empty);
-            }
-
-            var state = new WorkspaceQuestionState
-            {
-                Id = Guid.NewGuid(),
-                SessionId = session.Id,
-                QuestionId = question.Id,
-                SelectedLanguage = language,
-                ActiveFile = firstFile,
-                FilesJson = JsonDocumentSerializer.Serialize(workspaceFiles),
-                LastSavedAt = now,
-                Version = 1
-            };
+            var state = WorkspaceStateFactory.Create(session.Id, question, now);
 
             session.WorkspaceStates.Add(state);
             addedStates.Add(state);
         }
 
         return addedStates;
-    }
-
-    private static string GetActiveFile(string language)
-    {
-        return language switch
-        {
-            "javascript" => "main.js",
-            "typescript" => "main.ts",
-            _ => "main.py"
-        };
     }
 
     private static string BuildFinalStatus(IReadOnlyCollection<Submission> submissions, int totalScore, int maxScore)

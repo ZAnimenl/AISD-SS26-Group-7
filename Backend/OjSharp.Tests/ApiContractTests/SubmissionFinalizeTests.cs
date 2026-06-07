@@ -87,4 +87,43 @@ public sealed class SubmissionFinalizeTests
         Assert.Single(session.WorkspaceStates);
         Assert.Same(existingState, session.WorkspaceStates[0]);
     }
+
+    [Fact]
+    public void Finalize_backfill_uses_question_language_constraints()
+    {
+        var questionId = Guid.NewGuid();
+        var session = new AssessmentSession
+        {
+            Id = Guid.NewGuid(),
+            Assessment = new Assessment
+            {
+                Questions =
+                [
+                    new Question
+                    {
+                        Id = questionId,
+                        LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "javascript" }),
+                        StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+                        {
+                            ["python"] = new()
+                            {
+                                ["main.py"] = "def solve(value):\n    return value\n"
+                            },
+                            ["javascript"] = new()
+                            {
+                                ["main.js"] = "function solve(value) {\n  return value;\n}\n"
+                            }
+                        })
+                    }
+                ]
+            }
+        };
+
+        var addedState = Assert.Single(SubmissionEndpoints.EnsureWorkspaceStates(session, DateTimeOffset.UtcNow));
+
+        Assert.Equal(questionId, addedState.QuestionId);
+        Assert.Equal("javascript", addedState.SelectedLanguage);
+        Assert.Equal("main.js", addedState.ActiveFile);
+        Assert.DoesNotContain("main.py", addedState.FilesJson);
+    }
 }

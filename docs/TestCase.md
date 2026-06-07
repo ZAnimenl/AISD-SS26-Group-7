@@ -28,6 +28,8 @@ the active requirements. It does not replace automated test files.
 - Students can start an active assessment and open the browser workspace.
 - Starting an assessment shows a pending state while the backend resolves the
   real active attempt and prevents duplicate start clicks.
+- After start succeeds, the start page verifies the real backend workspace is
+  readable before navigating to the IDE.
 - Direct deep links to student assessment start, workspace, and review pages
   resolve the `assessment_id` from the URL and do not show not-found states for
   assessments returned by the backend.
@@ -36,6 +38,10 @@ the active requirements. It does not replace automated test files.
   configuration, or other administrator-only data.
 - Workspace context displays public task details and starter files.
 - Workspace APIs do not require frontend-sent `session_id` or `attempt_id`.
+- Workspace language controls show only languages allowed by the active
+  question.
+- Existing workspace state with disallowed selected-language or file-language
+  values is normalized before autosave, run, submit, or AI requests.
 - Autosave persists selected language, active file, file contents, and version.
 - Browser preview renders sandbox-produced HTML or a no-output state, never
   sample task content.
@@ -73,6 +79,8 @@ the active requirements. It does not replace automated test files.
 - AI requests include active file name, selected language, visible
   selected-language file contents, active file content, and latest public run
   output when available.
+- AI requests use the active question's allowed selected language and do not
+  send stale disallowed workspace file languages.
 - AI provider prompts request structured JSON with student-visible Markdown and
   an optional active-file replacement suggestion.
 - AI Apply buttons are shown only for structured suggestions whose target file

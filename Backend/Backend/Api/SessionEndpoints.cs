@@ -184,42 +184,10 @@ public static class SessionEndpoints
                      .OrderBy(question => question.SortOrder)
                      .ThenBy(question => question.Id))
         {
-            var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
-            var language = starterCode.ContainsKey("python") ? "python" : starterCode.Keys.FirstOrDefault() ?? "python";
-            var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
-            var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
-            var workspaceFiles = languageFiles.ToDictionary(
-                entry => entry.Key,
-                entry => new WorkspaceFileDto(language, entry.Value));
-            if (workspaceFiles.Count == 0)
-            {
-                workspaceFiles[firstFile] = new WorkspaceFileDto(language, string.Empty);
-            }
-
-            workspaceStates.Add(new WorkspaceQuestionState
-            {
-                Id = Guid.NewGuid(),
-                SessionId = sessionId,
-                QuestionId = question.Id,
-                SelectedLanguage = language,
-                ActiveFile = firstFile,
-                FilesJson = JsonDocumentSerializer.Serialize(workspaceFiles),
-                LastSavedAt = now,
-                Version = 1
-            });
+            workspaceStates.Add(WorkspaceStateFactory.Create(sessionId, question, now));
         }
 
         return workspaceStates;
-    }
-
-    private static string GetActiveFile(string language)
-    {
-        return language switch
-        {
-            "javascript" => "main.js",
-            "typescript" => "main.ts",
-            _ => "main.py"
-        };
     }
 
     private static object ToAttemptDto(AssessmentSession session, DateTimeOffset now)

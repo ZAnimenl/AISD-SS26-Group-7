@@ -5,8 +5,16 @@ import { useParams, useRouter } from "next/navigation";
 import { Clock, Loader2, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAssessment, isAuthenticationError, startAssessment } from "@/lib/api";
+import { getAssessment, getWorkspace, isAuthenticationError, startAssessment } from "@/lib/api";
 import type { Assessment } from "@/lib/types";
+
+function formatQuestionLanguages(question: Assessment["questions"][number]) {
+  const languages = question.language_constraints
+    .filter((language) => language === "python" || language === "javascript")
+    .map((language) => language === "javascript" ? "JavaScript" : "Python");
+
+  return languages.length ? languages.join(", ") : "Python, JavaScript";
+}
 
 export default function AssessmentStartPage() {
   const router = useRouter();
@@ -36,6 +44,7 @@ export default function AssessmentStartPage() {
     setIsStarting(true);
     try {
       await startAssessment(assessmentId);
+      await getWorkspace(assessmentId);
       router.push(`/student/assessments/${assessmentId}/workspace`);
     } catch (exception) {
       if (isAuthenticationError(exception)) {
@@ -80,7 +89,7 @@ export default function AssessmentStartPage() {
             ) : (
               <p className="mt-8 text-sm text-white/50">This assessment is not open for new attempts.</p>
             )}
-            {isStarting ? <p className="mt-3 text-sm text-white/55" aria-live="polite">Backend is resolving your real active attempt before opening the workspace.</p> : null}
+            {isStarting ? <p className="mt-3 text-sm text-white/55" aria-live="polite">Backend is resolving your real active attempt and workspace before opening the IDE.</p> : null}
             {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
           </div>
         </section>
@@ -92,7 +101,7 @@ export default function AssessmentStartPage() {
                 <div key={question.question_id} className="rounded-xl border border-white/10 bg-black/20 p-4">
                   <p className="text-xs text-cyanGlow/70">Question {index + 1}</p>
                   <p className="mt-1 font-semibold">{question.title}</p>
-                  <p className="mt-2 text-xs text-white/45">Languages: Python, JavaScript</p>
+                  <p className="mt-2 text-xs text-white/45">Languages: {formatQuestionLanguages(question)}</p>
                 </div>
               ))
             ) : (
