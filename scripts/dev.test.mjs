@@ -18,6 +18,7 @@ import {
   isSqliteConnectionString,
   isUsableConfigValue,
   mergeEffectiveConfig,
+  normalizeDockerHost,
   normalizeDeepseekApiKey,
   resolveBackendPort,
   parseEnvFileContent,
@@ -81,6 +82,21 @@ test("normalizeDeepseekApiKey collapses accidental repeated pastes", () => {
   assert.equal(normalizeDeepseekApiKey(` ${key}\n`), key);
   assert.equal(isAcceptableDeepseekApiKey(key), true);
   assert.equal(isAcceptableDeepseekApiKey(`${key}sk-different1234567890abcdef`), false);
+});
+
+test("normalizeDockerHost accepts Docker Desktop npipe variants", () => {
+  assert.equal(
+    normalizeDockerHost("npipe:////./pipe/dockerDesktopLinuxEngine"),
+    "npipe://./pipe/dockerDesktopLinuxEngine"
+  );
+  assert.equal(
+    normalizeDockerHost("npipe:////pipe/docker_engine"),
+    "npipe://./pipe/docker_engine"
+  );
+  assert.equal(
+    normalizeDockerHost("unix:///var/run/docker.sock"),
+    "unix:///var/run/docker.sock"
+  );
 });
 
 test("cleanLocalAiConfig removes stale LocalLlm provider settings", () => {
@@ -232,6 +248,7 @@ test("isSafeFrontendProcessCommand recognizes local Next.js listeners only", () 
   assert.equal(isSafeFrontendProcessCommand("next-server (v16.2.7)"), true);
   assert.equal(isSafeFrontendProcessCommand("/repo/node_modules/.bin/next dev"), true);
   assert.equal(isSafeFrontendProcessCommand("/usr/local/bin/node /repo/node_modules/.bin/next dev"), true);
+  assert.equal(isSafeFrontendProcessCommand('"C:\\Program Files\\nodejs\\node.exe" "C:\\repo\\node_modules\\next\\dist\\server\\lib\\start-server.js"'), true);
   assert.equal(isSafeFrontendProcessCommand("/usr/local/bin/node api.js"), false);
 });
 

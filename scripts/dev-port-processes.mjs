@@ -20,7 +20,8 @@ export function isSafeFrontendProcessCommand(command) {
   const normalized = String(command ?? "").trim();
   return /next-server/i.test(normalized)
     || /(?:^|[\\/])next(?:\.cmd)?(?:\s|$).*dev/i.test(normalized)
-    || /(?:^|[\\/])node(?:\.exe)?(?:\s|$).*next.*dev/i.test(normalized);
+    || /(?:^|[\\/])node(?:\.exe)?(?:\s|$).*next.*dev/i.test(normalized)
+    || /(?:^|[\\/])node(?:\.exe)?(?:"|\s|$).*node_modules[\\/]next[\\/]dist[\\/]server[\\/]lib[\\/]start-server\.js/i.test(normalized);
 }
 
 export function findListeningProcessIds(port, cwd = process.cwd()) {
@@ -43,6 +44,11 @@ export function findListeningProcessIds(port, cwd = process.cwd()) {
 
 export function readProcessCommand(processId, cwd = process.cwd()) {
   if (process.platform === "win32") {
+    const commandLine = readWindowsProcessCommandLine(processId, cwd);
+    if (commandLine) {
+      return commandLine;
+    }
+
     const result = spawnSync("tasklist", ["/FI", `PID eq ${processId}`, "/FO", "CSV", "/NH"], {
       cwd,
       encoding: "utf8",
@@ -57,6 +63,20 @@ export function readProcessCommand(processId, cwd = process.cwd()) {
     stdio: ["ignore", "pipe", "ignore"]
   });
   return result.status === 0 ? result.stdout : "";
+}
+
+function readWindowsProcessCommandLine(processId, cwd) {
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-Command",
+    `(Get-CimInstance Win32_Process -Filter "ProcessId = ${processId}").CommandLine`
+  ], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+
+  return result.status === 0 ? result.stdout.trim() : "";
 }
 
 export function stopProcessIds(processIds, cwd = process.cwd()) {

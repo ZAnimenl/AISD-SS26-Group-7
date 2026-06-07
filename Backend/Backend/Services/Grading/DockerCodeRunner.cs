@@ -68,7 +68,7 @@ internal sealed class DockerCodeRunner : ICodeRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw;
+            return new CodeRunResult(string.Empty, "Grader container unavailable: the run request was canceled before the sandbox became ready.", 1, false);
         }
         catch (Exception exception)
         {

@@ -75,6 +75,9 @@ export {
   isSafeFrontendProcessCommand,
   resolveUrlPort
 } from "./dev-port-processes.mjs";
+export {
+  normalizeDockerHost
+};
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -460,7 +463,7 @@ async function ensureLocalConfig(fileConfig, options) {
     ? "true"
     : String(writableConfig.Deepseek__Enabled ?? "false");
 
-  const dockerHost = writableConfig.DOCKER_HOST || detectDockerHostFromContext();
+  const dockerHost = normalizeDockerHost(writableConfig.DOCKER_HOST || detectDockerHostFromContext());
   if (dockerHost) {
     writableConfig.DOCKER_HOST = dockerHost;
   }
@@ -632,6 +635,15 @@ function detectDockerHostFromContext() {
   }
 
   return "";
+}
+
+function normalizeDockerHost(value) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed.toLowerCase().startsWith("npipe:")) {
+    return trimmed;
+  }
+
+  return trimmed.replace(/^npipe:\/+(?:\.\/)?pipe\//i, "npipe://./pipe/");
 }
 
 async function restoreDependencies() {
