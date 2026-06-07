@@ -65,6 +65,79 @@ public sealed class SessionStartConcurrencyTests
         Assert.Equal("console.log('second');", secondFiles["main.js"].Content);
     }
 
+    [Fact]
+    public void Missing_workspace_states_prefer_question_language_constraints_over_python_starter()
+    {
+        var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333334");
+        var now = new DateTimeOffset(2026, 6, 5, 12, 0, 0, TimeSpan.Zero);
+        var questionId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var question = new Question
+        {
+            Id = questionId,
+            SortOrder = 1,
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "javascript" }),
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+            {
+                ["python"] = new()
+                {
+                    ["main.py"] = "def solve():\n    pass\n"
+                },
+                ["javascript"] = new()
+                {
+                    ["main.js"] = "function solve() {\n  return true;\n}\n"
+                }
+            })
+        };
+
+        var states = SessionEndpoints.CreateMissingWorkspaceStates(
+            sessionId,
+            [question],
+            new HashSet<Guid>(),
+            now);
+
+        var state = Assert.Single(states);
+        Assert.Equal(questionId, state.QuestionId);
+        Assert.Equal("javascript", state.SelectedLanguage);
+        Assert.Equal("main.js", state.ActiveFile);
+        var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+        Assert.Single(files);
+        Assert.Equal("javascript", files["main.js"].Language);
+        Assert.Contains("function solve", files["main.js"].Content);
+    }
+
+    [Fact]
+    public void Missing_workspace_states_create_empty_allowed_file_when_starter_language_is_not_allowed()
+    {
+        var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333335");
+        var now = new DateTimeOffset(2026, 6, 5, 12, 0, 0, TimeSpan.Zero);
+        var question = new Question
+        {
+            Id = Guid.Parse("44444444-4444-4444-4444-444444444445"),
+            SortOrder = 1,
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "javascript" }),
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+            {
+                ["python"] = new()
+                {
+                    ["main.py"] = "def solve():\n    pass\n"
+                }
+            })
+        };
+
+        var state = Assert.Single(SessionEndpoints.CreateMissingWorkspaceStates(
+            sessionId,
+            [question],
+            new HashSet<Guid>(),
+            now));
+
+        Assert.Equal("javascript", state.SelectedLanguage);
+        Assert.Equal("main.js", state.ActiveFile);
+        var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+        Assert.Single(files);
+        Assert.Equal("javascript", files["main.js"].Language);
+        Assert.Equal(string.Empty, files["main.js"].Content);
+    }
+
     private static Question Question(Guid id, int sortOrder, string language, string fileName, string content)
     {
         return new Question

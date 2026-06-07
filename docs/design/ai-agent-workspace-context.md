@@ -61,6 +61,8 @@ Guards:
   and server-side system prompts never enter frontend-visible data.
 - Apply is shown only for structured suggestions targeting the active file and
   selected language.
+- The selected language must be one of the active question's allowed student
+  languages after workspace state normalization.
 
 Transitions:
 
@@ -93,6 +95,8 @@ Transitions:
 - AI assist requests include the active file name, selected language, active
   file content, visible selected-language files, and latest public run feedback
   when available.
+- AI assist requests do not send stale selected-language or visible-file
+  language values that are disallowed by the active question.
 - Backend prompts instruct the provider to return JSON with Markdown and an
   optional active-file replacement suggestion.
 - The frontend shows Apply only for backend-validated structured suggestions,

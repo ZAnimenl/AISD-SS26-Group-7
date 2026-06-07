@@ -68,43 +68,89 @@ const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "javascript", label: "JavaScript" }
 ];
 
+function getDefaultFileName(language: Language) {
+  return language === "javascript" ? "main.js" : language === "typescript" ? "main.ts" : "main.py";
+}
+
+function getVisibleLanguages(question: Question | undefined) {
+  const constraints = question?.language_constraints?.filter((item): item is Language => item === "python" || item === "javascript") ?? [];
+  return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
+}
+
+function resolveAllowedLanguage(question: Question | undefined, language?: Language) {
+  const visibleLanguages = getVisibleLanguages(question);
+  return language && visibleLanguages.includes(language) ? language : visibleLanguages[0] ?? "python";
+}
+
 function getStarterFiles(question: Question | undefined, language: Language): Record<string, string> {
   return question?.starter_code[language] ?? {};
 }
 
-function getFileNames(question: Question | undefined, language: Language): string[] {
+function getFileNames(question: Question | undefined, language: Language, state?: WorkspaceQuestionState): string[] {
   const files = getStarterFiles(question, language);
-  const names = Object.keys(files);
-  return names.length > 0 ? names : [language === "javascript" ? "main.js" : "main.py"];
+  const savedNames = Object.entries(state?.files ?? {})
+    .filter(([, file]) => file.language === language)
+    .map(([fileName]) => fileName);
+  const names = Array.from(new Set([...savedNames, ...Object.keys(files)]));
+  return names.length > 0 ? names : [getDefaultFileName(language)];
 }
 
-function createQuestionState(question: Question | undefined, language: Language = "python"): WorkspaceQuestionState {
+function sanitizeQuestionState(question: Question | undefined, state?: WorkspaceQuestionState, preferredLanguage?: Language): WorkspaceQuestionState {
+  const language = resolveAllowedLanguage(question, preferredLanguage ?? state?.selected_language);
   const starterFiles = getStarterFiles(question, language);
-  const fileNames = Object.keys(starterFiles);
-  const firstFile = fileNames[0] ?? (language === "javascript" ? "main.js" : "main.py");
-
+  const allowedLanguages = new Set(getVisibleLanguages(question));
   const files: Record<string, { language: Language; content: string }> = {};
-  if (fileNames.length > 0) {
-    for (const [name, content] of Object.entries(starterFiles)) {
-      files[name] = { language, content };
+
+  for (const [fileName, file] of Object.entries(state?.files ?? {})) {
+    if (allowedLanguages.has(file.language)) {
+      files[fileName] = file;
     }
-  } else {
-    files[firstFile] = { language, content: "" };
+  }
+
+  for (const [fileName, content] of Object.entries(starterFiles)) {
+    const existing = files[fileName];
+    files[fileName] = existing?.language === language ? existing : { language, content };
+  }
+
+  const languageFileNames = Object.entries(files)
+    .filter(([, file]) => file.language === language)
+    .map(([fileName]) => fileName);
+  const activeFile = state?.active_file && languageFileNames.includes(state.active_file)
+    ? state.active_file
+    : languageFileNames[0] ?? getDefaultFileName(language);
+
+  if (!files[activeFile] || files[activeFile].language !== language) {
+    files[activeFile] = { language, content: starterFiles[activeFile] ?? "" };
   }
 
   return {
     selected_language: language,
-    active_file: firstFile,
+    active_file: activeFile,
     files,
-    last_saved_at: "",
-    version: 0
+    last_saved_at: state?.last_saved_at ?? "",
+    version: state?.version ?? 0
   };
 }
 
+function createQuestionState(question: Question | undefined, language?: Language): WorkspaceQuestionState {
+  return sanitizeQuestionState(question, undefined, language);
+}
+
+function normalizeWorkspaceQuestionStates(
+  questions: Question[],
+  savedStates: WorkspaceState["questions"]
+): WorkspaceState["questions"] {
+  return questions.reduce<WorkspaceState["questions"]>((states, question) => ({
+    ...states,
+    [question.question_id]: sanitizeQuestionState(question, savedStates[question.question_id])
+  }), {});
+}
+
 function getCodeFromState(state: WorkspaceQuestionState | undefined, question: Question | undefined, language: Language, fileName?: string) {
-  const targetFile = fileName ?? state?.active_file ?? getFileNames(question, language)[0];
-  if (state?.files[targetFile]) {
-    return state.files[targetFile].content;
+  const targetFile = fileName ?? state?.active_file ?? getFileNames(question, language, state)[0];
+  const savedFile = state?.files[targetFile];
+  if (savedFile?.language === language) {
+    return savedFile.content;
   }
   const starterFiles = getStarterFiles(question, language);
   return starterFiles[targetFile] ?? "";
@@ -166,11 +212,6 @@ function useRemainingTime(expiresAt: string) {
   return formatRemainingTime(expiresAt, now);
 }
 
-function getVisibleLanguages(question: Question | undefined) {
-  const constraints = question?.language_constraints?.filter((item): item is Language => item === "python" || item === "javascript") ?? [];
-  return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
-}
-
 export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   if (!firstQuestion) {
@@ -203,16 +244,20 @@ function EmptyTaskWorkspace() {
 function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceClientProps & { firstQuestion: Question }) {
   const router = useRouter();
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "");
-  const [questionStates, setQuestionStates] = useState(workspace.questions);
-  const questionStatesRef = useRef(workspace.questions);
+  const initialQuestionStates = useMemo(
+    () => normalizeWorkspaceQuestionStates(assessment.questions, workspace.questions),
+    [assessment.questions, workspace.questions]
+  );
+  const [questionStates, setQuestionStates] = useState(initialQuestionStates);
+  const questionStatesRef = useRef(initialQuestionStates);
   const activeQuestion = useMemo(
     () => assessment.questions.find((question) => question.question_id === activeQuestionId) ?? assessment.questions[0],
     [assessment.questions, activeQuestionId]
   );
-  const initialState = questionStates[activeQuestionId] ?? createQuestionState(activeQuestion);
-  const [language, setLanguage] = useState<Language>(initialState?.selected_language ?? "python");
-  const [activeFile, setActiveFile] = useState(initialState?.active_file ?? getFileNames(activeQuestion, language)[0]);
-  const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState?.selected_language ?? "python", activeFile));
+  const initialState = sanitizeQuestionState(activeQuestion, initialQuestionStates[activeQuestionId]);
+  const [language, setLanguage] = useState<Language>(initialState.selected_language);
+  const [activeFile, setActiveFile] = useState(initialState.active_file);
+  const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState.selected_language, initialState.active_file));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
@@ -231,12 +276,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   ]);
 
   const fileNames = useMemo(() => {
-    const state = questionStates[activeQuestionId];
-    const starterFileNames = getFileNames(activeQuestion, language);
-    if (state && Object.keys(state.files).length > 0) {
-      return Array.from(new Set([...Object.keys(state.files), ...starterFileNames]));
-    }
-    return starterFileNames;
+    const state = sanitizeQuestionState(activeQuestion, questionStates[activeQuestionId], language);
+    return getFileNames(activeQuestion, state.selected_language, state);
   }, [questionStates, activeQuestionId, activeQuestion, language]);
 
   const visibleLanguages = useMemo(() => getVisibleLanguages(activeQuestion), [activeQuestion]);
@@ -260,16 +301,24 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }, [messages, aiState]);
 
   const persistCurrentCode = useCallback((nextQuestionStates = questionStatesRef.current) => {
-    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
+    const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
+    const currentQuestionState = sanitizeQuestionState(
+      activeQuestion,
+      nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, selectedLanguage),
+      selectedLanguage
+    );
+    const currentFile = currentQuestionState.active_file === activeFile || currentQuestionState.files[activeFile]?.language === selectedLanguage
+      ? activeFile
+      : currentQuestionState.active_file;
     return {
       ...nextQuestionStates,
       [activeQuestionId]: {
         ...currentQuestionState,
-        selected_language: language,
-        active_file: activeFile,
+        selected_language: selectedLanguage,
+        active_file: currentFile,
         files: {
           ...currentQuestionState.files,
-          [activeFile]: { language, content: code }
+          [currentFile]: { language: selectedLanguage, content: code }
         },
         last_saved_at: currentQuestionState.last_saved_at ?? new Date().toISOString(),
         version: currentQuestionState.version ?? 0
@@ -286,7 +335,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         if (!stateToSave) return;
 
         const savedWorkspace = await saveWorkspace(assessment.assessment_id, { [activeQuestionId]: stateToSave });
-        setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
+        setQuestionStates((current) => normalizeWorkspaceQuestionStates(
+          assessment.questions,
+          mergeQuestionStates(current, savedWorkspace.questions)
+        ));
         setSaveState("saved");
       } catch (exception) {
         setError(exception instanceof Error ? exception.message : "Autosave failed.");
@@ -297,22 +349,27 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
       window.clearTimeout(saving);
       window.clearTimeout(saved);
     };
-  }, [activeQuestionId, assessment.assessment_id, persistCurrentCode]);
+  }, [activeQuestionId, assessment.assessment_id, assessment.questions, persistCurrentCode]);
 
   function updateCode(nextCode: string) {
     setSaveState("unsaved");
     setCode(nextCode);
     setQuestionStates((current) => {
-      const currentQuestionState = current[activeQuestionId] ?? createQuestionState(activeQuestion, language);
+      const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
+      const currentQuestionState = sanitizeQuestionState(
+        activeQuestion,
+        current[activeQuestionId] ?? createQuestionState(activeQuestion, selectedLanguage),
+        selectedLanguage
+      );
       return {
         ...current,
         [activeQuestionId]: {
           ...currentQuestionState,
-          selected_language: language,
+          selected_language: selectedLanguage,
           active_file: activeFile,
           files: {
             ...currentQuestionState.files,
-            [activeFile]: { language, content: nextCode }
+            [activeFile]: { language: selectedLanguage, content: nextCode }
           }
         }
       };
@@ -321,51 +378,34 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
 
   function switchFile(nextFile: string) {
     const nextQuestionStates = persistCurrentCode();
-    const currentState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, language);
-    const nextCode = currentState.files[nextFile]?.content ?? getStarterFiles(activeQuestion, language)[nextFile] ?? "";
+    const currentState = sanitizeQuestionState(activeQuestion, nextQuestionStates[activeQuestionId], language);
+    const nextCode = getCodeFromState(currentState, activeQuestion, currentState.selected_language, nextFile);
 
-    setQuestionStates(nextQuestionStates);
+    setQuestionStates({
+      ...nextQuestionStates,
+      [activeQuestionId]: currentState
+    });
     setActiveFile(nextFile);
     setCode(nextCode);
   }
 
   function switchLanguage(nextLanguage: Language) {
     const nextQuestionStates = persistCurrentCode();
-    const starterFiles = getStarterFiles(activeQuestion, nextLanguage);
-    const newFileNames = Object.keys(starterFiles);
-    const nextFile = newFileNames[0] ?? (nextLanguage === "javascript" ? "main.js" : "main.py");
-
-    const existingState = nextQuestionStates[activeQuestionId];
-    const hasFilesForLang = existingState && Object.keys(existingState.files).some(f =>
-      newFileNames.includes(f)
-    );
-
-    const files: Record<string, { language: Language; content: string }> = {};
-    for (const [name, content] of Object.entries(starterFiles)) {
-      const existing = hasFilesForLang ? existingState?.files[name] : undefined;
-      files[name] = { language: nextLanguage, content: existing?.content ?? content };
-    }
+    const selectedLanguage = resolveAllowedLanguage(activeQuestion, nextLanguage);
+    const nextState = sanitizeQuestionState(activeQuestion, nextQuestionStates[activeQuestionId], selectedLanguage);
 
     setQuestionStates({
       ...nextQuestionStates,
-      [activeQuestionId]: {
-        ...(existingState ?? createQuestionState(activeQuestion, nextLanguage)),
-        selected_language: nextLanguage,
-        active_file: nextFile,
-        files: {
-          ...(existingState?.files ?? {}),
-          ...files
-        }
-      }
+      [activeQuestionId]: nextState
     });
-    setLanguage(nextLanguage);
-    setActiveFile(nextFile);
-    setCode(files[nextFile]?.content ?? "");
+    setLanguage(nextState.selected_language);
+    setActiveFile(nextState.active_file);
+    setCode(getCodeFromState(nextState, activeQuestion, nextState.selected_language, nextState.active_file));
   }
 
   function switchQuestion(question: Question) {
     const nextQuestionStates = persistCurrentCode();
-    const nextState = nextQuestionStates[question.question_id] ?? createQuestionState(question);
+    const nextState = sanitizeQuestionState(question, nextQuestionStates[question.question_id]);
     const nextLanguage = nextState.selected_language;
     const nextFile = nextState.active_file;
 
@@ -382,20 +422,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
 
   function getAllFiles(): Record<string, string> {
     const currentState = persistCurrentCode();
-    const qState = currentState[activeQuestionId];
+    const qState = sanitizeQuestionState(activeQuestion, currentState[activeQuestionId], language);
     if (!qState) return { [activeFile]: code };
 
     const result: Record<string, string> = {};
-    for (const [fileName, content] of Object.entries(getStarterFiles(activeQuestion, language))) {
+    for (const [fileName, content] of Object.entries(getStarterFiles(activeQuestion, qState.selected_language))) {
       result[fileName] = content;
     }
     for (const [fileName, fileData] of Object.entries(qState.files)) {
-      if (fileData.language === language) {
+      if (fileData.language === qState.selected_language) {
         result[fileName] = fileData.content;
       }
     }
     if (Object.keys(result).length === 0) {
-      result[activeFile] = code;
+      result[qState.active_file] = code;
     }
     return result;
   }
@@ -407,10 +447,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
     setTaskErrors((current) => ({ ...current, [activeQuestionId]: null }));
     setError(null);
     try {
+      const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
       const result = await runCode({
         assessment_id: assessment.assessment_id,
         question_id: activeQuestionId,
-        selected_language: language,
+        selected_language: selectedLanguage,
         files: getAllFiles()
       });
       setRunResults((current) => ({ ...current, [activeQuestionId]: result }));
@@ -431,7 +472,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
 
     setError(null);
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
-    const requestLanguage = language;
+    const requestLanguage = resolveAllowedLanguage(activeQuestion, language);
+    const currentState = sanitizeQuestionState(activeQuestion, questionStatesRef.current[activeQuestionId], requestLanguage);
+    const currentFile = currentState.files[activeFile]?.language === requestLanguage ? activeFile : currentState.active_file;
+    const currentCode = currentFile === activeFile ? code : getCodeFromState(currentState, activeQuestion, requestLanguage, currentFile);
     aiRequestCounterRef.current += 1;
     const pendingAssistantId = `pending-ai-${aiRequestCounterRef.current}`;
     setAiState("running");
@@ -453,8 +497,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
         interaction_type: type,
         message,
         selected_language: requestLanguage,
-        active_file_content: code,
-        active_file_name: activeFile,
+        active_file_content: currentCode,
+        active_file_name: currentFile,
         visible_files: getAllFiles(),
         last_run_result: runResults[activeQuestionId] ?? null
       });
@@ -496,10 +540,19 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
       return;
     }
 
-    const targetLanguage = message.suggestedLanguage ?? language;
+    if (message.suggestedLanguage && !getVisibleLanguages(activeQuestion).includes(message.suggestedLanguage)) {
+      setError("AI suggestion language is not allowed for this task.");
+      return;
+    }
+
+    const targetLanguage = resolveAllowedLanguage(activeQuestion, message.suggestedLanguage ?? language);
     const targetFile = message.targetFile ?? activeFile;
     const nextQuestionStates = persistCurrentCode();
-    const currentQuestionState = nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, targetLanguage);
+    const currentQuestionState = sanitizeQuestionState(
+      activeQuestion,
+      nextQuestionStates[activeQuestionId] ?? createQuestionState(activeQuestion, targetLanguage),
+      targetLanguage
+    );
     const updatedQuestionState: WorkspaceQuestionState = {
       ...currentQuestionState,
       selected_language: targetLanguage,
@@ -534,10 +587,13 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
     setSaveState("saving");
     setSubmitState("saving");
     try {
-      const nextQuestionStates = persistCurrentCode();
+      const nextQuestionStates = normalizeWorkspaceQuestionStates(assessment.questions, persistCurrentCode());
       setQuestionStates(nextQuestionStates);
       const savedWorkspace = await saveWorkspace(assessment.assessment_id, nextQuestionStates);
-      setQuestionStates((current) => mergeQuestionStates(current, savedWorkspace.questions));
+      setQuestionStates((current) => normalizeWorkspaceQuestionStates(
+        assessment.questions,
+        mergeQuestionStates(current, savedWorkspace.questions)
+      ));
       setSaveState("saved");
       setSubmitState("submitting");
       await finalizeSubmission(assessment.assessment_id);
