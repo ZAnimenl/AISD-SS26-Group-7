@@ -217,7 +217,7 @@ internal sealed class DockerGraderContainer
 
     private static DockerClient CreateDockerClient()
     {
-        var dockerHost = Environment.GetEnvironmentVariable("DOCKER_HOST");
+        var dockerHost = NormalizeDockerHost(Environment.GetEnvironmentVariable("DOCKER_HOST"));
         if (!string.IsNullOrWhiteSpace(dockerHost))
         {
             return new DockerClientConfiguration(new Uri(dockerHost)).CreateClient();
@@ -227,6 +227,22 @@ internal sealed class DockerGraderContainer
             ? "npipe://./pipe/docker_engine"
             : "unix:///var/run/docker.sock";
         return new DockerClientConfiguration(new Uri(endpoint)).CreateClient();
+    }
+
+    private static string? NormalizeDockerHost(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !value.StartsWith("npipe:", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        var pipeIndex = value.IndexOf("pipe/", StringComparison.OrdinalIgnoreCase);
+        if (pipeIndex < 0)
+        {
+            return value;
+        }
+
+        return $"npipe://./{value[pipeIndex..]}";
     }
 }
 

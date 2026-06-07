@@ -10,6 +10,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 backend-dev*.log
+dev-session*.log
+backend-only-session*.log
+frontend-session*.log
 .local-data/
 
 .vercel
