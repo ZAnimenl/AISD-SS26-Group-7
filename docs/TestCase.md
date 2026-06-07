@@ -26,6 +26,9 @@ the active requirements. It does not replace automated test files.
 - Direct deep links to student assessment start, workspace, and review pages
   resolve the `assessment_id` from the URL and do not show not-found states for
   assessments returned by the backend.
+- Student assessment start pages list backend-provided public question previews
+  for active assessments without hidden tests, administrator notes, grading
+  configuration, or other administrator-only data.
 - Workspace context displays public task details and starter files.
 - Workspace APIs do not require frontend-sent `session_id` or `attempt_id`.
 - Autosave persists selected language, active file, file contents, and version.
@@ -53,6 +56,9 @@ the active requirements. It does not replace automated test files.
 - Submit evaluates final work and returns visible and hidden test summary counts
   without hidden inputs or expected outputs.
 - Expired or closed attempts reject new runs and submissions.
+- Under local SQLite, active-attempt expiry checks for start, workspace, run,
+  submit, and AI request flows do not fail because of provider-specific
+  `DateTimeOffset` comparison translation.
 
 ## AI Assistance
 

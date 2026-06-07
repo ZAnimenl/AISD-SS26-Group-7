@@ -47,11 +47,13 @@ public static class AiEndpoints
             return ApiResults.Error("ASSESSMENT_CLOSED", "AI assistance is not available for this assessment status.", StatusCodes.Status409Conflict);
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.AssessmentId == assessmentId
-                    && item.UserId == user!.Id
-                    && item.Status == SessionStatuses.Active
-                    && item.ExpiresAt > DateTimeOffset.UtcNow,
+        var session = await SessionQueries.FirstUnexpiredAsync(
+            dbContext.AssessmentSessions.Where(
+                item => item.AssessmentId == assessmentId
+                        && item.UserId == user!.Id
+                        && item.Status == SessionStatuses.Active),
+            dbContext,
+            DateTimeOffset.UtcNow,
             cancellationToken);
         if (session is null)
         {
@@ -214,9 +216,12 @@ public static class AiEndpoints
             return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
         }
 
-        var interactions = await dbContext.AiInteractions
-            .Where(interaction => interaction.SessionId == session.Id)
-            .OrderBy(interaction => interaction.CreatedAt)
+        var aiInteractions = await DateTimeOffsetOrdering.ToAscendingListAsync(
+            dbContext.AiInteractions.Where(interaction => interaction.SessionId == session.Id),
+            dbContext,
+            interaction => interaction.CreatedAt,
+            cancellationToken);
+        var interactions = aiInteractions
             .Select(interaction => new
             {
                 interaction_id = interaction.Id,
@@ -234,7 +239,7 @@ public static class AiEndpoints
                 },
                 created_at = interaction.CreatedAt
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return ApiResults.Success(interactions);
     }

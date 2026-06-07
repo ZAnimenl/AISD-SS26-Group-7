@@ -62,12 +62,15 @@ public static class SessionEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
-        var expiredSessions = await dbContext.AssessmentSessions
+        var studentActiveSessions = dbContext.AssessmentSessions
             .Where(item => item.AssessmentId == assessmentId
                            && item.UserId == student.Id
-                           && item.Status == SessionStatuses.Active
-                           && item.ExpiresAt <= now)
-            .ToListAsync(cancellationToken);
+                           && item.Status == SessionStatuses.Active);
+        var expiredSessions = await SessionQueries.ToExpiredListAsync(
+            studentActiveSessions,
+            dbContext,
+            now,
+            cancellationToken);
         foreach (var expiredSession in expiredSessions)
         {
             expiredSession.Status = SessionStatuses.Expired;
@@ -78,13 +81,11 @@ public static class SessionEndpoints
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        var session = await dbContext.AssessmentSessions
-            .FirstOrDefaultAsync(
-                item => item.AssessmentId == assessmentId
-                        && item.UserId == student.Id
-                        && item.Status == SessionStatuses.Active
-                        && item.ExpiresAt > now,
-                cancellationToken);
+        var session = await SessionQueries.FirstUnexpiredAsync(
+            studentActiveSessions,
+            dbContext,
+            now,
+            cancellationToken);
 
         if (session is null)
         {

@@ -45,6 +45,7 @@
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
 - Local development login exposes a quick fill action for the seeded administrator account and successful sign-in remains on the role dashboard instead of returning to `/login`.
 - After local default administrator sign-in, the administrator dashboard API succeeds under the repository-owned SQLite database.
+- Local SQLite-backed active-attempt checks for start, workspace, run, submit, and AI request flows do not fail on `DateTimeOffset` ordering or expiry comparisons.
 - Authentication state is cleared on backend 401 responses or explicit logout, not merely because the login page mounted or a non-auth data request failed.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.
@@ -60,6 +61,7 @@
 - Loading pages show backend-loading or backend-error states instead of appearing empty while data is still pending.
 - Failed long-running actions preserve user-entered data and show the real backend/provider error.
 - Dynamic assessment routes resolve the URL `assessment_id` on production Next.js builds and do not treat existing backend assessments as missing.
+- Student assessment start pages show backend-provided public question previews for active assessments without exposing hidden tests, administrator notes, or grading configuration.
 - Workspace task, AI, and output panels can be collapsed/expanded and resized without changing backend state.
 - Sandbox output surfaces use opaque readable backgrounds and do not visually merge with editor or sidebar text.
 - Browser-preview runs for the platform Todo summary task resolve the visible starter file even when legacy tests import `TodoSummaryPanel`.

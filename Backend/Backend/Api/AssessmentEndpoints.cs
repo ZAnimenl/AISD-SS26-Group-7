@@ -37,10 +37,12 @@ public static class AssessmentEndpoints
 
         await schemaCompatibilityService.EnsureAsync(cancellationToken);
 
-        var assessments = await dbContext.Assessments
-            .Include(assessment => assessment.Questions)
-            .OrderByDescending(assessment => assessment.CreatedAt)
-            .ToListAsync(cancellationToken);
+        var assessments = await DateTimeOffsetOrdering.ToDescendingListAsync(
+            dbContext.Assessments
+                .Include(assessment => assessment.Questions),
+            dbContext,
+            assessment => assessment.CreatedAt,
+            cancellationToken);
 
         return ApiResults.Success(assessments.Select(projectionService.ToAdminAssessment));
     }
@@ -340,11 +342,13 @@ public static class AssessmentEndpoints
             return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
         }
 
-        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
-            item => item.AssessmentId == assessmentId
-                    && item.UserId == user!.Id
-                    && item.Status == SessionStatuses.Active
-                    && item.ExpiresAt > DateTimeOffset.UtcNow,
+        var session = await SessionQueries.FirstUnexpiredAsync(
+            dbContext.AssessmentSessions.Where(
+                item => item.AssessmentId == assessmentId
+                        && item.UserId == user!.Id
+                        && item.Status == SessionStatuses.Active),
+            dbContext,
+            DateTimeOffset.UtcNow,
             cancellationToken);
         if (session is null)
         {

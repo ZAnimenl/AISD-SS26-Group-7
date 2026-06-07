@@ -161,14 +161,15 @@ public static class WorkspaceEndpoints
             return (null, error);
         }
 
-        var session = await dbContext.AssessmentSessions
-            .Include(item => item.Assessment)
-            .FirstOrDefaultAsync(
-                item => item.AssessmentId == assessmentId
-                    && item.UserId == user!.Id
-                    && item.Status == SessionStatuses.Active
-                    && item.ExpiresAt > DateTimeOffset.UtcNow,
-                cancellationToken);
+        var session = await SessionQueries.FirstUnexpiredAsync(
+            dbContext.AssessmentSessions
+                .Include(item => item.Assessment)
+                .Where(item => item.AssessmentId == assessmentId
+                               && item.UserId == user!.Id
+                               && item.Status == SessionStatuses.Active),
+            dbContext,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
         if (session is null)
         {
             return (null, ApiResults.Error("ATTEMPT_NOT_FOUND", "Active assessment attempt was not found.", StatusCodes.Status404NotFound));
