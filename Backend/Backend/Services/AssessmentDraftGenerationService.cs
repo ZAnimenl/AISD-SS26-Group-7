@@ -14,6 +14,8 @@ public sealed class AiDraftGenerationException : Exception
 
 public sealed class AssessmentDraftGenerationService
 {
+    private const int DraftMaxTokens = 8192;
+
     private static readonly string[] RequiredTaskTypes =
     [
         TaskTypes.FrontendUiExtension,
@@ -38,7 +40,9 @@ public sealed class AssessmentDraftGenerationService
             BuildDraftSystemPrompt(),
             BuildAssessmentDraftPrompt(request),
             AiResponseFormat.Json,
-            cancellationToken);
+            cancellationToken,
+            DraftMaxTokens);
+        EnsureDraftCompletionWasNotTruncated(result);
         var tasks = ParseTasks(result.Content, assessmentId, expectedTaskTypes: RequiredTaskTypes);
 
         for (var index = 0; index < tasks.Count; index += 1)
@@ -62,7 +66,9 @@ public sealed class AssessmentDraftGenerationService
             BuildDraftSystemPrompt(),
             BuildSingleTaskDraftPrompt(request, taskType, sharedPrototypeReference),
             AiResponseFormat.Json,
-            cancellationToken);
+            cancellationToken,
+            DraftMaxTokens);
+        EnsureDraftCompletionWasNotTruncated(result);
         var tasks = ParseTasks(result.Content, assessmentId, expectedTaskTypes: [taskType]);
         var draft = tasks.Single();
         draft.SortOrder = sortOrder;
@@ -115,6 +121,15 @@ public sealed class AssessmentDraftGenerationService
             "",
             "Every task must include at least one public test case and one hidden test case."
         ]);
+    }
+
+    private static void EnsureDraftCompletionWasNotTruncated(AiCompletionResult result)
+    {
+        if (string.Equals(result.FinishReason, "length", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new AiDraftGenerationException(
+                "AI draft generation was cut off by the provider output limit. Try a shorter assessment description or generate one task draft at a time.");
+        }
     }
 
     private static string BuildAssessmentDraftPrompt(AssessmentRequest request)

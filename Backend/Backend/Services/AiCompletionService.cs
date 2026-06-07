@@ -14,7 +14,8 @@ public enum AiResponseFormat
 public sealed record AiCompletionResult(
     string Content,
     int InputTokens,
-    int OutputTokens);
+    int OutputTokens,
+    string? FinishReason = null);
 
 public sealed class AiProviderUnavailableException : Exception
 {
@@ -47,7 +48,8 @@ public sealed class AiCompletionService
         string systemPrompt,
         string userPrompt,
         AiResponseFormat responseFormat,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? maxTokens = null)
     {
         var failures = new List<string>();
         var deepseek = deepseekOptions.CurrentValue;
@@ -59,7 +61,7 @@ public sealed class AiCompletionService
             }
             else
             {
-                var result = await TryGenerateDeepseekAsync(deepseek, systemPrompt, userPrompt, responseFormat, cancellationToken);
+                var result = await TryGenerateDeepseekAsync(deepseek, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
                 if (result is not null)
                 {
                     return result;
@@ -72,7 +74,7 @@ public sealed class AiCompletionService
         var local = localLlmOptions.CurrentValue;
         if (local.Enabled)
         {
-            var result = await TryGenerateLocalLlmAsync(local, systemPrompt, userPrompt, responseFormat, cancellationToken);
+            var result = await TryGenerateLocalLlmAsync(local, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
             if (result is not null)
             {
                 return result;
@@ -92,6 +94,7 @@ public sealed class AiCompletionService
         string systemPrompt,
         string userPrompt,
         AiResponseFormat responseFormat,
+        int? maxTokens,
         CancellationToken cancellationToken)
     {
         var requestBody = new Dictionary<string, object?>
@@ -107,7 +110,7 @@ public sealed class AiCompletionService
                 type = options.ThinkingEnabled ? "enabled" : "disabled"
             },
             ["temperature"] = options.Temperature,
-            ["max_tokens"] = options.MaxTokens,
+            ["max_tokens"] = ResolveMaxTokens(maxTokens, options.MaxTokens),
             ["stream"] = false
         };
 
@@ -130,6 +133,7 @@ public sealed class AiCompletionService
         string systemPrompt,
         string userPrompt,
         AiResponseFormat responseFormat,
+        int? maxTokens,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.Model))
@@ -147,7 +151,7 @@ public sealed class AiCompletionService
                 new { role = "user", content = userPrompt }
             },
             ["temperature"] = options.Temperature,
-            ["max_tokens"] = options.MaxTokens,
+            ["max_tokens"] = ResolveMaxTokens(maxTokens, options.MaxTokens),
             ["stream"] = false
         };
 
@@ -218,7 +222,7 @@ public sealed class AiCompletionService
                 return null;
             }
 
-            return new AiCompletionResult(content.Trim(), inputTokens, outputTokens);
+            return new AiCompletionResult(content.Trim(), inputTokens, outputTokens, ExtractFinishReason(document.RootElement));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -248,6 +252,20 @@ public sealed class AiCompletionService
         return contentElement.GetString();
     }
 
+    private static string? ExtractFinishReason(JsonElement root)
+    {
+        if (!root.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var firstChoice = choices[0];
+        return firstChoice.TryGetProperty("finish_reason", out var finishReason)
+            && finishReason.ValueKind == JsonValueKind.String
+            ? finishReason.GetString()
+            : null;
+    }
+
     private static bool TryExtractUsage(JsonElement root, out int inputTokens, out int outputTokens)
     {
         inputTokens = 0;
@@ -266,5 +284,10 @@ public sealed class AiCompletionService
         inputTokens = promptTokens.GetInt32();
         outputTokens = completionTokens.GetInt32();
         return true;
+    }
+
+    private static int ResolveMaxTokens(int? requestedMaxTokens, int defaultMaxTokens)
+    {
+        return requestedMaxTokens is > 0 ? requestedMaxTokens.Value : defaultMaxTokens;
     }
 }

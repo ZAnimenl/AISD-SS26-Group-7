@@ -39,8 +39,8 @@ export default function NewAssessmentPage() {
                 duration_minutes: Number(form.get("duration_minutes") ?? 75),
                 status: (shouldGenerate ? "draft" : String(form.get("status") ?? "draft")) as any,
                 ai_enabled: form.get("ai_enabled") === "enabled",
-                shared_prototype_reference: normalizeOptionalFormValue(form.get("shared_prototype_reference")),
-                shared_prototype_version: normalizeOptionalFormValue(form.get("shared_prototype_version"))
+                shared_prototype_reference: null,
+                shared_prototype_version: null
               });
               setSaved(true);
             } catch (exception) {
@@ -56,10 +56,6 @@ export default function NewAssessmentPage() {
             <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" name="duration_minutes" type="number" defaultValue={75} /></label>
             <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue="draft"><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
             <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue="enabled"><option>enabled</option><option>disabled</option></select></label>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" /></label>
-            <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" /></label>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-semibold">Questions will be added after creation</p>
@@ -90,9 +86,4 @@ export default function NewAssessmentPage() {
       </section>
     </div>
   );
-}
-
-function normalizeOptionalFormValue(value: FormDataEntryValue | null) {
-  const text = String(value ?? "").trim();
-  return text ? text : null;
 }

@@ -13,10 +13,15 @@ the active requirements. It does not replace automated test files.
 ## Assessment Management
 
 - Administrators can create an assessment with title, description, duration,
-  status, AI enabled state, and shared prototype reference.
+  status, and AI enabled state.
 - Administrators can create tasks using the supported task categories.
 - AI-generated assessment drafts are provider-backed, editable before
   publication, and never template fallbacks labeled as LLM output.
+- AI-generated assessment drafts request enough provider output tokens for
+  structured JSON and return an actionable truncation error instead of a raw JSON
+  parse failure when the provider cuts off output.
+- The administrator create-assessment page does not show shared prototype
+  reference or shared prototype version inputs.
 
 ## Student Workspace
 
