@@ -43,7 +43,7 @@ Runtime paths must not use hardcoded demo data, mock AI responses, static execut
 - States: run requested, sandbox executing, sandbox completed, sandbox unavailable, result persisted.
 - Events: test selected, sandbox returns result, sandbox process unavailable, timeout.
 - Guards: all runs use the sandboxed `ICodeRunner`; task-specific static fallback may not mark tests passed.
-- Transitions: sandbox unavailable persists `internal_error`.
+- Transitions: backend config reports sandbox unavailable before workspace run/submit actions; sandbox unavailable execution requests persist `internal_error`.
 - Side effects: execution records and submissions store the real sandbox result or a dependency error.
 - Failure paths: public and hidden tests fail closed with `internal_error` when the sandbox is unavailable.
 - Rollback path: restore the removed fallback helper in `CodeEvaluationService`.
@@ -74,7 +74,7 @@ Runtime paths must not use hardcoded demo data, mock AI responses, static execut
 - The backend does not seed demo student users or demo assessments automatically in any environment.
 - AI assistance never returns mock guidance when no configured provider returns a response.
 - LLM draft generation never labels template content as LLM-generated.
-- Sandbox-unavailable runs and submissions return dependency errors instead of static pass/fail results.
+- Sandbox-unavailable workspace state disables Run and Submit, and any sandbox-unavailable execution request returns a dependency error instead of static pass/fail results.
 - Browser preview renders only sandbox-produced HTML and otherwise shows that no real preview output is available.
 - Login UI does not prefill demo credentials or display seed/demo credential values.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL` instead of falling back to localhost.

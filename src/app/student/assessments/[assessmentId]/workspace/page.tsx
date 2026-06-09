@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { WorkspaceClient } from "@/components/workspace/WorkspaceClient";
-import { getWorkspace, getWorkspaceContext, isAuthenticationError, startAssessment } from "@/lib/api";
+import { getSystemConfig, getWorkspace, getWorkspaceContext, isAuthenticationError, startAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Assessment, WorkspaceState } from "@/lib/types";
 
@@ -13,6 +13,7 @@ export default function WorkspacePage() {
   const assessmentId = params.assessmentId;
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
+  const [sandboxAvailable, setSandboxAvailable] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,10 +21,14 @@ export default function WorkspacePage() {
       setError(null);
       try {
         await startAssessment(assessmentId);
-        const nextAssessment = await getWorkspaceContext(assessmentId);
-        const nextWorkspace = await getWorkspace(assessmentId);
+        const [nextAssessment, nextWorkspace, systemConfig] = await Promise.all([
+          getWorkspaceContext(assessmentId),
+          getWorkspace(assessmentId),
+          getSystemConfig()
+        ]);
         setAssessment(nextAssessment);
         setWorkspace(nextWorkspace);
+        setSandboxAvailable(systemConfig.features.real_sandbox_enabled);
       } catch (exception) {
         if (isAuthenticationError(exception)) {
           router.replace("/login");
@@ -45,5 +50,5 @@ export default function WorkspacePage() {
     return <SectionHeader eyebrow="Workspace" title="Connecting to backend..." />;
   }
 
-  return <WorkspaceClient assessment={assessment} workspace={workspace} />;
+  return <WorkspaceClient assessment={assessment} workspace={workspace} sandboxAvailable={sandboxAvailable} />;
 }

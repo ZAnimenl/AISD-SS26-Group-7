@@ -17,6 +17,7 @@ import type {
   RunResult,
   StudentDashboard,
   SubmissionResult,
+  SystemConfig,
   TaskType,
   TokenEfficiencyIndicator,
   UserAccount,
@@ -239,6 +240,10 @@ export async function registerStudent(input: { full_name: string; email: string;
     method: "POST",
     body: JSON.stringify(input)
   }));
+}
+
+export async function getSystemConfig() {
+  return apiRequest<SystemConfig>("/config");
 }
 
 export async function getAdminUsers() {

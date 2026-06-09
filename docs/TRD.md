@@ -47,6 +47,9 @@
   string automatically and reports concrete repair steps for local SQLite
   regeneration, external database configuration, Docker sandbox permission, or
   system-runtime failures.
+- Local startup and doctor mode detect common Docker Desktop and Colima socket
+  locations and report sandbox runtime readiness without making Docker a
+  startup requirement.
 - Local startup normalizes accidental repeated DeepSeek key pastes and disables
   stale `LocalLlm__*` overrides so old local files do not activate a second AI
   provider path.

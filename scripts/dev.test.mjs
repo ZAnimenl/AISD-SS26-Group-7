@@ -21,6 +21,7 @@ import {
   normalizeDockerHost,
   normalizeDeepseekApiKey,
   resolveBackendPort,
+  resolveDockerSocketHost,
   parseEnvFileContent,
   parseDotnetUserSecrets,
   resolveBackendHealthUrl,
@@ -96,6 +97,33 @@ test("normalizeDockerHost accepts Docker Desktop npipe variants", () => {
   assert.equal(
     normalizeDockerHost("unix:///var/run/docker.sock"),
     "unix:///var/run/docker.sock"
+  );
+});
+
+test("resolveDockerSocketHost detects Docker Desktop socket under home", () => {
+  const home = path.join(os.tmpdir(), "ojsharp-home");
+  const socket = path.join(home, ".docker", "run", "docker.sock");
+
+  assert.equal(
+    resolveDockerSocketHost("", home, (candidate) => candidate === socket, "darwin"),
+    `unix://${socket}`
+  );
+});
+
+test("resolveDockerSocketHost detects Colima socket under home", () => {
+  const home = path.join(os.tmpdir(), "ojsharp-home");
+  const socket = path.join(home, ".colima", "default", "docker.sock");
+
+  assert.equal(
+    resolveDockerSocketHost("", home, (candidate) => candidate === socket, "darwin"),
+    `unix://${socket}`
+  );
+});
+
+test("resolveDockerSocketHost keeps explicit Docker host values", () => {
+  assert.equal(
+    resolveDockerSocketHost(" unix:///custom/docker.sock ", "/unused", () => false, "darwin"),
+    "unix:///custom/docker.sock"
   );
 });
 

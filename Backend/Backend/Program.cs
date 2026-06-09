@@ -61,6 +61,7 @@ builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<SessionClock>();
 builder.Services.AddSingleton<AssessmentProjectionService>();
 builder.Services.AddSingleton<WorkspaceProjectionService>();
+builder.Services.AddSingleton<DockerRuntimeProbe>();
 builder.Services.AddSingleton<ICodeRunner, DockerCodeRunner>();
 builder.Services.AddSingleton<CodeEvaluationService>();
 builder.Services.AddHttpClient();

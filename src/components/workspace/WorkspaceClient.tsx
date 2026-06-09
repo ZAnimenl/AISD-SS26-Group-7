@@ -15,6 +15,7 @@ import type { AiInteractionType, AiWorkspaceAction, Assessment, Language, Questi
 interface WorkspaceClientProps {
   assessment: Assessment;
   workspace: WorkspaceState;
+  sandboxAvailable: boolean;
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
@@ -68,6 +69,7 @@ const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
   { value: "python", label: "Python" },
   { value: "javascript", label: "JavaScript" }
 ];
+const SANDBOX_UNAVAILABLE_MESSAGE = "Run environment unavailable. The sandbox grader is not reachable from the backend right now.";
 
 function getMessageReplaceFileActions(message: AiChatMessage, fallbackFile: string, fallbackLanguage: Language): AiWorkspaceAction[] {
   const actions = message.workspaceActions?.filter((item) => item.type === "replace_file" && item.replacement_code) ?? [];
@@ -96,6 +98,7 @@ function AiMessageActionButtons({
   language,
   isApplying,
   isRunning,
+  canRun,
   onExecute
 }: {
   message: AiChatMessage;
@@ -103,6 +106,7 @@ function AiMessageActionButtons({
   language: Language;
   isApplying: boolean;
   isRunning: boolean;
+  canRun: boolean;
   onExecute: (runAfterApply: boolean) => void;
 }) {
   const replaceActions = getMessageReplaceFileActions(message, activeFile, language);
@@ -137,11 +141,11 @@ function AiMessageActionButtons({
         <button
           type="button"
           className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={isApplying || isRunning}
+          disabled={isApplying || isRunning || !canRun}
           onClick={() => onExecute(hasReplaceActions)}
         >
           <SemanticIcon name="play" size={13} />
-          {hasReplaceActions ? "Apply & run" : "Run public checks"}
+          {canRun ? (hasReplaceActions ? "Apply & run" : "Run public checks") : "Run unavailable"}
         </button>
       ) : null}
       {targetLabel ? (
@@ -311,13 +315,13 @@ function useRemainingTime(expiresAt: string) {
   return formatRemainingTime(expiresAt, now);
 }
 
-export function WorkspaceClient({ assessment, workspace }: WorkspaceClientProps) {
+export function WorkspaceClient({ assessment, workspace, sandboxAvailable }: WorkspaceClientProps) {
   const firstQuestion = assessment.questions[0];
   if (!firstQuestion) {
     return <EmptyTaskWorkspace />;
   }
 
-  return <WorkspaceWithTasks assessment={assessment} workspace={workspace} firstQuestion={firstQuestion} />;
+  return <WorkspaceWithTasks assessment={assessment} workspace={workspace} firstQuestion={firstQuestion} sandboxAvailable={sandboxAvailable} />;
 }
 
 function EmptyTaskWorkspace() {
@@ -340,7 +344,7 @@ function EmptyTaskWorkspace() {
   );
 }
 
-function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceClientProps & { firstQuestion: Question }) {
+function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvailable }: WorkspaceClientProps & { firstQuestion: Question }) {
   const router = useRouter();
   const [activeQuestionId, setActiveQuestionId] = useState(firstQuestion?.question_id ?? "");
   const initialQuestionStates = useMemo(
@@ -527,6 +531,12 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
   }
 
   async function runPublicChecksForState(state: WorkspaceQuestionState) {
+    if (!sandboxAvailable) {
+      setTaskErrors((current) => ({ ...current, [activeQuestionId]: SANDBOX_UNAVAILABLE_MESSAGE }));
+      setError(SANDBOX_UNAVAILABLE_MESSAGE);
+      return null;
+    }
+
     setRunState("running");
     setRunningQuestionId(activeQuestionId);
     setRunResults((current) => ({ ...current, [activeQuestionId]: null }));
@@ -781,6 +791,12 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
       return;
     }
 
+    if (!sandboxAvailable) {
+      setConfirmSubmit(false);
+      setError(SANDBOX_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
     setConfirmSubmit(false);
     setError(null);
     setSaveState("saving");
@@ -932,11 +948,12 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           </div>
           <span className="badge hidden xl:inline-flex"><SemanticIcon name="clock" size={14} /> {remainingTime}</span>
           <span className="badge">{saveState}</span>
-          <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)} disabled={isSubmitPending}>
+          <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)} disabled={isSubmitPending || !sandboxAvailable}>
             {isSubmitPending ? <Loader2 className="animate-spin" size={16} /> : null}
             {submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit"}
           </button>
         </div>
+        {!sandboxAvailable ? <p className="relative border-b border-amber-500/20 bg-[#241d0d] px-4 py-2 text-sm text-amber-100/80">{SANDBOX_UNAVAILABLE_MESSAGE}</p> : null}
         {error ? <p className="relative border-b border-white/10 px-4 py-2 text-sm text-pinkGlow">{error}</p> : null}
         {isSubmitPending ? (
           <p className="relative border-b border-white/10 px-4 py-2 text-sm text-white/55" aria-live="polite">
@@ -970,9 +987,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <button className="btn-secondary px-4 py-2" onClick={handleRun} disabled={runState === "running"}>
+          <button className="btn-secondary px-4 py-2" onClick={handleRun} disabled={runState === "running" || !sandboxAvailable}>
             <SemanticIcon name="play" size={16} />
-            {isRunningActiveTask ? "Running..." : "Run"}
+            {!sandboxAvailable ? "Run unavailable" : isRunningActiveTask ? "Running..." : "Run"}
           </button>
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden bg-black/30 p-3">
@@ -1073,6 +1090,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
                   language={language}
                   isApplying={agentActionState === "applying"}
                   isRunning={runState === "running"}
+                  canRun={sandboxAvailable}
                   onExecute={(runAfterApply) => void executeAiWorkspaceActions(message, runAfterApply)}
                 />
               ) : null}
@@ -1210,7 +1228,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion }: WorkspaceC
           <p className="text-white/60">This submits the current attempt. Hidden test input and expected output remain private.</p>
           <div className="mt-6 flex justify-end gap-3">
             <button className="btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button>
-            <button className="btn-primary" onClick={submitFinal} disabled={isSubmitPending}>
+            <button className="btn-primary" onClick={submitFinal} disabled={isSubmitPending || !sandboxAvailable}>
               {isSubmitPending ? <Loader2 className="animate-spin" size={16} /> : null}
               {submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit result"}
             </button>

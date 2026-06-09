@@ -37,6 +37,14 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - Npgsql keyword connection strings remain supported for explicit external
   PostgreSQL use:
   https://www.npgsql.org/doc/connection-string-parameters
+- Docker documents `DOCKER_HOST`, contexts, Unix sockets, and Windows named
+  pipes for Docker Engine clients:
+  https://docs.docker.com/reference/cli/docker/
+- Docker Desktop for Mac documents the optional `/var/run/docker.sock` symlink
+  to `$HOME/.docker/run/docker.sock`; Docker Desktop for Linux documents the
+  per-user `$HOME/.docker/desktop/docker.sock` location:
+  https://docs.docker.com/desktop/setup/install/mac-permission-requirements/
+  https://docs.docker.com/desktop/troubleshoot-and-support/faqs/linuxfaqs/
 
 ## State Machine
 
@@ -101,6 +109,7 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 ## Impact Surface
 
 - Root startup scripts and local dependency restore marker behavior.
+- Docker-compatible sandbox runtime discovery and readiness diagnostics.
 - Backend EF Core provider selection for SQLite local startup and PostgreSQL
   external deployment.
 - Local-only environment file workflow through `.env.local`.
@@ -114,6 +123,11 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - `npm run dev` uses a cross-platform startup script.
 - `npm run dev:doctor` reports local readiness without starting servers,
   restoring dependencies, or writing secrets.
+- Local startup and doctor output report whether a Docker-compatible sandbox
+  runtime socket was detected for Run and Submit.
+- Local startup discovers Docker through `DOCKER_HOST`, Docker CLI context,
+  `/var/run/docker.sock`, Docker Desktop user sockets, and Colima's default
+  socket when available.
 - On a fresh checkout with Node and npm available, startup installs root npm
   dependencies from `package-lock.json` when needed.
 - Repeated startups skip root npm installation when the current

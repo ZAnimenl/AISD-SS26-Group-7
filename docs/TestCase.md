@@ -62,6 +62,10 @@ the active requirements. It does not replace automated test files.
 - With `DOCKER_HOST` pointed at a real Docker-compatible runtime, sandbox
   integration tests execute Python and JavaScript submissions in the grader
   container.
+- Local startup detects common Docker Desktop and Colima socket locations and
+  reports sandbox runtime readiness in doctor/startup output.
+- Student workspace Run and Submit controls are disabled when backend config
+  reports the real sandbox runtime is unavailable.
 - If the sandbox grader is unavailable, run and submit report `internal_error`
   rather than static task-specific pass/fail results.
 - Submit evaluates final work and returns visible and hidden test summary counts
@@ -117,6 +121,8 @@ the active requirements. It does not replace automated test files.
   the same lockfile.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness
   without starting servers or writing secrets.
+- `npm run dev:doctor` reports whether a Docker-compatible sandbox runtime was
+  detected for Run and Submit.
 - PostgreSQL URLs such as
   `postgresql://postgres:password@localhost:5432/aisd_ss26_group_7` are
   still accepted and normalized for explicit external database use.
