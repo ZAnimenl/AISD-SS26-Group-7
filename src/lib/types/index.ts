@@ -163,6 +163,21 @@ export interface SubmissionResult {
   hidden_test_summary: { passed: number; failed: number; total: number };
 }
 
+export interface SystemConfig {
+  features: {
+    registration_enabled: boolean;
+    embedded_ai_agent_enabled: boolean;
+    ai_chat_enabled: boolean;
+    ai_inline_completion_enabled: boolean;
+    token_tracking_enabled: boolean;
+    multi_file_workspace_enabled: boolean;
+    real_sandbox_enabled: boolean;
+  };
+  supported_languages: Language[];
+  auth_method: string;
+  roles: Role[];
+}
+
 export interface StudentDashboard {
   summary: {
     available_assessments: number;

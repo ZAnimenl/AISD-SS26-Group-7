@@ -7,6 +7,8 @@ internal sealed class DockerGraderContainer
 {
     private const string ImageTag = "ojsharp-grader:python-js-ts-v3";
     private const string ContainerName = "ojsharp-grader-python-js-ts-v3";
+    private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";
+    private const string DefaultWindowsEndpoint = "npipe://./pipe/docker_engine";
     private readonly DockerClient dockerClient;
     private readonly string workspaceHostRoot;
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -215,34 +217,80 @@ internal sealed class DockerGraderContainer
             && string.Equals(mount.Destination, "/workspace", StringComparison.Ordinal));
     }
 
-    private static DockerClient CreateDockerClient()
+    internal static DockerClient CreateDockerClient()
     {
-        var dockerHost = NormalizeDockerHost(Environment.GetEnvironmentVariable("DOCKER_HOST"));
-        if (!string.IsNullOrWhiteSpace(dockerHost))
-        {
-            return new DockerClientConfiguration(new Uri(dockerHost)).CreateClient();
-        }
+        return CreateDockerClient(ResolveDockerEndpoint(
+            Environment.GetEnvironmentVariable("DOCKER_HOST"),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            OperatingSystem.IsWindows(),
+            Path.Exists));
+    }
 
-        var endpoint = OperatingSystem.IsWindows()
-            ? "npipe://./pipe/docker_engine"
-            : "unix:///var/run/docker.sock";
+    internal static DockerClient CreateDockerClient(string endpoint)
+    {
         return new DockerClientConfiguration(new Uri(endpoint)).CreateClient();
     }
 
-    private static string? NormalizeDockerHost(string? value)
+    internal static string ResolveDockerEndpoint(
+        string? dockerHost,
+        string? homeDirectory,
+        bool isWindows,
+        Func<string, bool> pathExists)
+    {
+        return TryResolveDockerEndpoint(dockerHost, homeDirectory, isWindows, pathExists)
+               ?? (isWindows ? DefaultWindowsEndpoint : DefaultUnixEndpoint);
+    }
+
+    internal static string? TryResolveDockerEndpoint(
+        string? dockerHost,
+        string? homeDirectory,
+        bool isWindows,
+        Func<string, bool> pathExists)
+    {
+        var normalizedDockerHost = NormalizeDockerHost(dockerHost);
+        if (!string.IsNullOrWhiteSpace(normalizedDockerHost))
+        {
+            return normalizedDockerHost;
+        }
+
+        if (isWindows)
+        {
+            return DefaultWindowsEndpoint;
+        }
+
+        var candidates = BuildUnixSocketCandidates(homeDirectory);
+        var socketPath = candidates.FirstOrDefault(pathExists);
+        return socketPath is null ? null : $"unix://{socketPath}";
+    }
+
+    internal static string? NormalizeDockerHost(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || !value.StartsWith("npipe:", StringComparison.OrdinalIgnoreCase))
         {
-            return value;
+            return value?.Trim();
         }
 
-        var pipeIndex = value.IndexOf("pipe/", StringComparison.OrdinalIgnoreCase);
+        var trimmed = value.Trim();
+        var pipeIndex = trimmed.IndexOf("pipe/", StringComparison.OrdinalIgnoreCase);
         if (pipeIndex < 0)
         {
-            return value;
+            return trimmed;
         }
 
-        return $"npipe://./{value[pipeIndex..]}";
+        return $"npipe://./{trimmed[pipeIndex..]}";
+    }
+
+    private static IReadOnlyList<string> BuildUnixSocketCandidates(string? homeDirectory)
+    {
+        var candidates = new List<string> { "/var/run/docker.sock" };
+        if (!string.IsNullOrWhiteSpace(homeDirectory))
+        {
+            candidates.Add(Path.Combine(homeDirectory, ".docker", "run", "docker.sock"));
+            candidates.Add(Path.Combine(homeDirectory, ".docker", "desktop", "docker.sock"));
+            candidates.Add(Path.Combine(homeDirectory, ".colima", "default", "docker.sock"));
+        }
+
+        return candidates;
     }
 }
 

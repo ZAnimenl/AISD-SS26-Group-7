@@ -41,6 +41,7 @@
 - `npm run dev` resolves Windows npm shims to an executable command and prints the frontend URL when the frontend startup step begins.
 - `npm run dev` restarts an old local Next.js process on the frontend port when it can be safely identified so the printed URL serves the pulled code.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness without starting servers or writing secrets.
+- `npm run dev:doctor` reports sandbox runtime readiness for Run and Submit without making Docker a startup requirement.
 - Backend startup supports SQLite for local development and PostgreSQL for explicit external database deployment.
 - Backend startup failures produce CLI repair guidance for local SQLite regeneration, external database configuration, Docker sandbox permission, and missing-runtime failures.
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
@@ -48,6 +49,7 @@
 - After local default administrator sign-in, the administrator dashboard API succeeds under the repository-owned SQLite database.
 - Local SQLite-backed active-attempt checks for start, workspace, run, submit, and AI request flows do not fail on `DateTimeOffset` ordering or expiry comparisons.
 - Authentication state is cleared on backend 401 responses or explicit logout, not merely because the login page mounted or a non-auth data request failed.
+- Backend config reports `real_sandbox_enabled=false` when no Docker-compatible runtime is reachable, and the student workspace disables Run and Submit in that state.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL`; localhost API fallback is Development-only.

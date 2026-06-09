@@ -1,4 +1,5 @@
 using Backend.Contracts;
+using Backend.Services.Grading;
 
 namespace Backend.Api;
 
@@ -12,21 +13,27 @@ public static class SystemEndpoints
             checked_at = DateTimeOffset.UtcNow
         }));
 
-        api.MapGet("/config", () => ApiResults.Success(new
+        api.MapGet("/config", async (
+            DockerRuntimeProbe dockerRuntimeProbe,
+            CancellationToken cancellationToken) =>
         {
-            features = new
+            var sandboxStatus = await dockerRuntimeProbe.CheckAsync(cancellationToken);
+            return ApiResults.Success(new
             {
-                registration_enabled = true,
-                embedded_ai_agent_enabled = true,
-                ai_chat_enabled = true,
-                ai_inline_completion_enabled = false,
-                token_tracking_enabled = true,
-                multi_file_workspace_enabled = true,
-                real_sandbox_enabled = true
-            },
-            supported_languages = new[] { "python", "javascript" },
-            auth_method = "bearer_token",
-            roles = new[] { "student", "administrator" }
-        }));
+                features = new
+                {
+                    registration_enabled = true,
+                    embedded_ai_agent_enabled = true,
+                    ai_chat_enabled = true,
+                    ai_inline_completion_enabled = false,
+                    token_tracking_enabled = true,
+                    multi_file_workspace_enabled = true,
+                    real_sandbox_enabled = sandboxStatus.IsAvailable
+                },
+                supported_languages = new[] { "python", "javascript" },
+                auth_method = "bearer_token",
+                roles = new[] { "student", "administrator" }
+            });
+        });
     }
 }

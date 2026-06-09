@@ -76,7 +76,8 @@ export {
   resolveUrlPort
 } from "./dev-port-processes.mjs";
 export {
-  normalizeDockerHost
+  normalizeDockerHost,
+  resolveDockerSocketHost
 };
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -270,6 +271,7 @@ async function main() {
 
   const fileConfig = await readLocalConfig();
   const config = await ensureLocalConfig(fileConfig, options);
+  console.log(`Sandbox runtime: ${describeSandboxRuntime(config)}`);
 
   if (!options.skipInstall) {
     await restoreDependencies();
@@ -331,6 +333,7 @@ async function runDoctor() {
   console.log(`.NET SDK: ${dotnetCommand ? `OK (${dotnetCommand})` : "missing"}`);
   console.log(`Root npm dependencies: ${shouldRunNpmCi(repoRoot) ? "need restore on next npm run dev" : "ready for current package-lock.json"}`);
   console.log(`Local database: ${describeDatabaseConfig(effectiveConfig)}`);
+  console.log(`Sandbox runtime: ${describeSandboxRuntime(effectiveConfig)}`);
   console.log(`Seed admin email: ${describeSeedAdminConfig(effectiveConfig.SeedAdmin__Email, "email")}`);
   console.log(`Seed admin password: ${describeSeedAdminConfig(effectiveConfig.SeedAdmin__Password, "password")}`);
   console.log(`DeepSeek API key: ${describeAiConfig(effectiveConfig)}`);
@@ -393,6 +396,18 @@ function describeAiConfig(config) {
   return isAcceptableDeepseekApiKey(config.Deepseek__ApiKey)
     ? "configured"
     : "invalid; rerun npm run dev to repair";
+}
+
+function describeSandboxRuntime(config) {
+  const dockerHost = resolveDockerSocketHost(
+    config.DOCKER_HOST || process.env.DOCKER_HOST,
+    os.homedir(),
+    fs.existsSync,
+    process.platform);
+
+  return dockerHost
+    ? `detected (${dockerHost})`
+    : "not detected; workspace Run and Submit stay disabled until a Docker-compatible runtime is available";
 }
 
 async function ensureLocalConfig(fileConfig, options) {
@@ -629,12 +644,7 @@ function detectDockerHostFromContext() {
     return result.stdout.trim();
   }
 
-  const colimaSocket = path.join(os.homedir(), ".colima", "default", "docker.sock");
-  if (fs.existsSync(colimaSocket)) {
-    return `unix://${colimaSocket}`;
-  }
-
-  return "";
+  return resolveDockerSocketHost("", os.homedir(), fs.existsSync, process.platform);
 }
 
 function normalizeDockerHost(value) {
@@ -644,6 +654,26 @@ function normalizeDockerHost(value) {
   }
 
   return trimmed.replace(/^npipe:\/+(?:\.\/)?pipe\//i, "npipe://./pipe/");
+}
+
+function resolveDockerSocketHost(value, homeDirectory, exists, platform) {
+  const normalized = normalizeDockerHost(value);
+  if (normalized) {
+    return normalized;
+  }
+
+  if (platform === "win32") {
+    return "";
+  }
+
+  const candidates = [
+    "/var/run/docker.sock",
+    path.join(homeDirectory, ".docker", "run", "docker.sock"),
+    path.join(homeDirectory, ".docker", "desktop", "docker.sock"),
+    path.join(homeDirectory, ".colima", "default", "docker.sock")
+  ];
+  const socketPath = candidates.find((candidate) => exists(candidate));
+  return socketPath ? `unix://${socketPath}` : "";
 }
 
 async function restoreDependencies() {

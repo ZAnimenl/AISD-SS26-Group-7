@@ -98,7 +98,7 @@ Things users may configure:
 - `BackendUrls` - backend listen URL, defaulting to `http://localhost:5140`.
 - `Database__Provider` - `Sqlite` for normal local startup, `PostgreSql` for deployment or explicit external database use.
 - `ConnectionStrings__DefaultConnection` - local startup writes a SQLite `Data Source=...` connection string automatically. Deployment/external database users may provide a real PostgreSQL connection string.
-- `DOCKER_HOST` - optional Docker socket for run/submit verification when the sandbox runtime is not available at `/var/run/docker.sock`, for example `unix://$HOME/.colima/default/docker.sock`.
+- `DOCKER_HOST` - optional Docker socket for run/submit verification when the sandbox runtime is not available at `/var/run/docker.sock`. Local startup also detects common Docker Desktop and Colima sockets such as `unix://$HOME/.docker/run/docker.sock`, `unix://$HOME/.docker/desktop/docker.sock`, and `unix://$HOME/.colima/default/docker.sock`.
 - `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run. Local startup uses `admin@example.com` / `Admin123!` when values are missing.
 
 AI provider keys:

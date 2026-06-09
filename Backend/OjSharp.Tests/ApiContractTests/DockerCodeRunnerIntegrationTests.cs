@@ -9,22 +9,36 @@ namespace OjSharp.Tests.ApiContractTests;
 
 public sealed class DockerCodeRunnerIntegrationTests
 {
+    private const string SeedDatabaseConnectionString = "Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password";
+
     private static bool IsDockerAvailable()
     {
         try
         {
-            var endpoint = Environment.GetEnvironmentVariable("DOCKER_HOST");
-            if (string.IsNullOrWhiteSpace(endpoint))
-            {
-                endpoint = OperatingSystem.IsWindows()
-                    ? "npipe://./pipe/docker_engine"
-                    : "unix:///var/run/docker.sock";
-            }
-            
+            var endpoint = DockerGraderContainer.ResolveDockerEndpoint(
+                Environment.GetEnvironmentVariable("DOCKER_HOST"),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                OperatingSystem.IsWindows(),
+                Path.Exists);
+
             using var client = new DockerClientConfiguration(new Uri(endpoint)).CreateClient();
             var task = client.System.PingAsync();
             task.Wait(1500);
             return task.IsCompletedSuccessfully;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> IsSeedDatabaseAvailable()
+    {
+        try
+        {
+            await using var connection = new Npgsql.NpgsqlConnection(SeedDatabaseConnectionString);
+            await connection.OpenAsync();
+            return true;
         }
         catch
         {
@@ -306,8 +320,13 @@ public sealed class DockerCodeRunnerIntegrationTests
     [Fact]
     public async Task RunDatabaseSeeding()
     {
+        if (!await IsSeedDatabaseAvailable())
+        {
+            return;
+        }
+
         var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Backend.Persistence.OjSharpDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost:5433;Database=ai_coding;Username=ai_coding;password=password");
+        optionsBuilder.UseNpgsql(SeedDatabaseConnectionString);
         using var dbContext = new Backend.Persistence.OjSharpDbContext(optionsBuilder.Options);
         await new Backend.Persistence.SchemaCompatibilityService(dbContext).EnsureAsync(CancellationToken.None);
 
