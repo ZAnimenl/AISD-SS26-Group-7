@@ -34,5 +34,9 @@ public sealed class User
     /// <summary>UTC timestamp at which EmailVerificationToken expires.</summary>
     public DateTimeOffset? EmailVerificationTokenExpiresAt { get; set; }
 
+    /// <summary>Set to true after a forgot-password reset issues a temporary password.
+    /// The next successful login forces the user through the change-password flow.</summary>
+    public bool MustChangePassword { get; set; }
+
     public List<AssessmentSession> Sessions { get; set; } = [];
 }
