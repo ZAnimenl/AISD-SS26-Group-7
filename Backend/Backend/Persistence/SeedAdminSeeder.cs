@@ -28,7 +28,9 @@ public sealed class SeedAdminSeeder(
                 PasswordHash = passwordHasher.Hash(options.Password),
                 Role = UserRoles.Administrator,
                 Status = UserStatuses.Active,
-                CreatedAt = now
+                CreatedAt = now,
+                AuthProvider = "email",
+                EmailVerified = true
             });
             await dbContext.SaveChangesAsync(cancellationToken);
             return;
@@ -38,6 +40,7 @@ public sealed class SeedAdminSeeder(
         admin.PasswordHash = passwordHasher.Hash(options.Password);
         admin.Role = UserRoles.Administrator;
         admin.Status = UserStatuses.Active;
+        admin.EmailVerified = true;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

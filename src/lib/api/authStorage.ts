@@ -2,21 +2,34 @@ import type { AuthUser, Role } from "@/lib/types";
 
 const TOKEN_KEY = "ojsharp.auth.token";
 const USER_KEY = "ojsharp.auth.user";
+const REMEMBER_KEY = "ojsharp.auth.remember";
 
-export function getStoredToken() {
+function readStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
   }
+  // Prefer the storage that currently holds the token.
+  if (window.localStorage.getItem(TOKEN_KEY)) {
+    return window.localStorage;
+  }
+  if (window.sessionStorage.getItem(TOKEN_KEY)) {
+    return window.sessionStorage;
+  }
+  return null;
+}
 
-  return window.localStorage.getItem(TOKEN_KEY);
+export function getStoredToken() {
+  const store = readStorage();
+  return store ? store.getItem(TOKEN_KEY) : null;
 }
 
 export function getStoredUser() {
-  if (typeof window === "undefined") {
+  const store = readStorage();
+  if (!store) {
     return null;
   }
 
-  const value = window.localStorage.getItem(USER_KEY);
+  const value = store.getItem(USER_KEY);
   if (!value) {
     return null;
   }
@@ -36,20 +49,46 @@ export function getStoredUser() {
   }
 }
 
-export function storeAuth(token: string, user: AuthUser) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+export function storeAuth(token: string, user: AuthUser, options?: { rememberMe?: boolean }) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const rememberMe = options?.rememberMe ?? true;
+  // Always clean both before writing to avoid stale entries.
+  clearStoredAuthSilent();
+  const store = rememberMe ? window.localStorage : window.sessionStorage;
+  store.setItem(TOKEN_KEY, token);
+  store.setItem(USER_KEY, JSON.stringify(user));
+  // The remember flag itself goes to localStorage so we can prefill the checkbox later.
+  if (rememberMe) {
+    window.localStorage.setItem(REMEMBER_KEY, "1");
+  } else {
+    window.localStorage.removeItem(REMEMBER_KEY);
+  }
   notifyAuthSubscribers();
 }
 
 export function clearStoredAuth() {
+  clearStoredAuthSilent();
+  notifyAuthSubscribers();
+}
+
+function clearStoredAuthSilent() {
   if (typeof window === "undefined") {
     return;
   }
-
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
-  notifyAuthSubscribers();
+  window.sessionStorage.removeItem(TOKEN_KEY);
+  window.sessionStorage.removeItem(USER_KEY);
+}
+
+export function getRememberMePreference() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  // Default to true so users get the friendlier behavior on first visit.
+  return window.localStorage.getItem(REMEMBER_KEY) !== "0";
 }
 
 export function hasStoredAuth(expectedRole?: Role) {

@@ -36,7 +36,8 @@ import {
 export {
   clearStoredAuth,
   getStoredUser,
-  hasStoredAuth
+  hasStoredAuth,
+  getRememberMePreference
 } from "@/lib/api/authStorage";
 
 const DEFAULT_API_BASE_URL = "http://localhost:5140/api/v1";
@@ -79,8 +80,18 @@ export class ApiRequestError extends Error {
 
 interface LoginResponse {
   token: string;
+  expires_at?: string;
+  remember_me?: boolean;
   user: BackendUser;
 }
+
+interface RegisterResponse extends BackendUser {}
+
+interface GoogleStartResponse {
+  authorization_url: string;
+  state: string;
+}
+
 
 interface BackendUser {
   user_id: string;
@@ -213,14 +224,49 @@ function getPlainTextError(bodyText: string) {
   return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
-export async function login(email: string, password: string) {
+export async function login(email: string, password: string, rememberMe: boolean = true) {
   const result = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, remember_me: rememberMe })
   });
   const user = normalizeUser(result.user);
-  storeAuth(result.token, user);
+  storeAuth(result.token, user, { rememberMe });
   return user;
+}
+
+export async function startGoogleLogin(rememberMe: boolean = true) {
+  const result = await apiRequest<GoogleStartResponse>(
+    `/auth/google/start?remember=${rememberMe ? "true" : "false"}`
+  );
+  // Remember the preference locally so the callback page can persist it correctly.
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem("ojsharp.auth.googleRememberMe", rememberMe ? "1" : "0");
+  }
+  window.location.assign(result.authorization_url);
+}
+
+/** Finish the Google OAuth flow on the frontend.
+ *  The backend redirects the browser back with ?token=... after a successful exchange. */
+export async function consumeGoogleCallback(token: string, rememberMe: boolean) {
+  // The token is already valid server-side; just fetch /me and persist locally.
+  const previousToken = getStoredToken();
+  if (typeof window !== "undefined") {
+    // Temporarily store the token so apiRequest can use it.
+    const store = rememberMe ? window.localStorage : window.sessionStorage;
+    store.setItem("ojsharp.auth.token", token);
+  }
+  try {
+    const me = await getCurrentUser();
+    storeAuth(token, me, { rememberMe });
+    return me;
+  } catch (error) {
+    // Rollback the partial write so we don't leave a stale token behind.
+    if (typeof window !== "undefined" && previousToken === null) {
+      window.localStorage.removeItem("ojsharp.auth.token");
+      window.sessionStorage.removeItem("ojsharp.auth.token");
+    }
+    throw error;
+  }
 }
 
 export async function logout() {
@@ -235,11 +281,67 @@ export async function getCurrentUser() {
   return normalizeUser(await apiRequest<BackendUser>("/auth/me"));
 }
 
-export async function registerStudent(input: { full_name: string; email: string; password: string }) {
-  return normalizeUser(await apiRequest<BackendUser>("/auth/register", {
+/** Step 1 of 3-step registration. Triggers a 6-digit code email. */
+export async function registerStart(input: { full_name: string; email: string }) {
+  const raw = await apiRequest<{
+    sent: boolean;
+    expires_at?: string;
+    dev_code?: string | null;
+  }>("/auth/register/start", {
     method: "POST",
     body: JSON.stringify(input)
-  }));
+  });
+  return {
+    sent: raw.sent,
+    expiresAt: raw.expires_at ?? null,
+    devCode: raw.dev_code ?? null
+  };
+}
+
+/** Step 2: check that the code the user typed is correct (without consuming it). */
+export async function registerVerifyCode(input: { email: string; code: string }) {
+  return apiRequest<{ verified: boolean }>("/auth/register/verify-code", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+/** Step 3: create the account and sign in. */
+export async function registerComplete(input: {
+  email: string;
+  code: string;
+  password: string;
+  rememberMe?: boolean;
+}) {
+  const result = await apiRequest<LoginResponse>("/auth/register/complete", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      code: input.code,
+      password: input.password,
+      remember_me: input.rememberMe ?? true
+    })
+  });
+  const user = normalizeUser(result.user);
+  storeAuth(result.token, user, { rememberMe: input.rememberMe ?? true });
+  return user;
+}
+
+/** Re-send the 6-digit code. */
+export async function registerResendCode(email: string) {
+  const raw = await apiRequest<{
+    sent: boolean;
+    expires_at?: string;
+    dev_code?: string | null;
+  }>("/auth/register/resend-code", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+  return {
+    sent: raw.sent,
+    expiresAt: raw.expires_at ?? null,
+    devCode: raw.dev_code ?? null
+  };
 }
 
 export async function getSystemConfig() {

@@ -17,6 +17,13 @@ public static class UserConfiguration
             entity.Property(user => user.Role).HasMaxLength(64).IsRequired();
             entity.Property(user => user.Status).HasMaxLength(64).IsRequired();
             entity.HasIndex(user => user.Email).IsUnique();
+
+            entity.Property(user => user.AuthProvider).HasMaxLength(32).IsRequired().HasDefaultValue("email");
+            entity.Property(user => user.GoogleId).HasMaxLength(64);
+            entity.Property(user => user.EmailVerified).HasDefaultValue(false);
+            entity.Property(user => user.EmailVerificationToken).HasMaxLength(128);
+            entity.HasIndex(user => user.GoogleId);
+            entity.HasIndex(user => user.EmailVerificationToken);
         });
     }
 }

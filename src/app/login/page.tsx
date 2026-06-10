@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Code2, KeyRound, LogIn, UserPlus } from "lucide-react";
-import { getStoredUser, login, registerStudent } from "@/lib/api";
+import {
+  getRememberMePreference,
+  getStoredUser,
+  login,
+  startGoogleLogin
+} from "@/lib/api";
 
-type AuthAction = "login" | "register";
+type AuthAction = "login" | "google";
 const localDemoAdmin = {
   email: "admin@example.com",
   password: "Admin123!"
@@ -13,20 +19,28 @@ const localDemoAdmin = {
 const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
+    setRememberMe(getRememberMePreference());
     const user = getStoredUser();
     if (user) {
       router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
+      return;
     }
-  }, [router]);
+    const prefillEmail = searchParams.get("email");
+    if (prefillEmail) {
+      setEmail(prefillEmail);
+      setNotice(`You already have an account with ${prefillEmail}. Sign in to continue.`);
+    }
+  }, [router, searchParams]);
 
   async function handleSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +48,7 @@ export default function LoginPage() {
     setNotice(null);
     setSubmittingAction("login");
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, rememberMe);
       router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Authentication failed.");
@@ -43,22 +57,15 @@ export default function LoginPage() {
     }
   }
 
-  async function handleRegisterStudent() {
+  async function handleGoogleSignIn() {
     setError(null);
     setNotice(null);
-    setSubmittingAction("register");
-    if (!fullName.trim()) {
-      setError("Full name is required to register a student account.");
-      setSubmittingAction(null);
-      return;
-    }
-
+    setSubmittingAction("google");
     try {
-      await registerStudent({ full_name: fullName.trim(), email, password });
-      setNotice("Student account registered. You can sign in now.");
+      await startGoogleLogin(rememberMe);
+      // Browser will navigate away; nothing else to do.
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Registration failed.");
-    } finally {
+      setError(exception instanceof Error ? exception.message : "Google sign-in is unavailable.");
       setSubmittingAction(null);
     }
   }
@@ -66,7 +73,6 @@ export default function LoginPage() {
   function fillLocalAdminAccount() {
     setEmail(localDemoAdmin.email);
     setPassword(localDemoAdmin.password);
-    setFullName("");
     setError(null);
     setNotice("Local administrator account filled.");
   }
@@ -86,13 +92,26 @@ export default function LoginPage() {
           </div>
           <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
-            Sign in with a backend account, or register a student account. Administrator accounts are created by an administrator.
+            Sign in with your account, continue with Google, or register a new student account. Administrator accounts are created by an administrator.
           </p>
-          <form className="mt-10 grid max-w-xl gap-4" onSubmit={handleSignIn}>
-            <label className="grid gap-2 text-sm text-white/60">
-              Full name
-              <input className="field" type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" />
-            </label>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={submittingAction !== null}
+            className="mt-8 flex w-full max-w-xl items-center justify-center gap-3 rounded-xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {submittingAction === "google" ? "Redirecting to Google..." : "Continue with Google"}
+          </button>
+
+          <div className="mt-6 flex max-w-xl items-center gap-3 text-xs uppercase tracking-wider text-white/35">
+            <span className="h-px flex-1 bg-white/10" />
+            or with email
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <form className="mt-6 grid max-w-xl gap-4" onSubmit={handleSignIn}>
             <label className="grid gap-2 text-sm text-white/60">
               Email
               <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
@@ -100,6 +119,15 @@ export default function LoginPage() {
             <label className="grid gap-2 text-sm text-white/60">
               Password
               <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" />
+            </label>
+            <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
+              />
+              Remember me on this device
             </label>
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="btn-primary" type="submit" disabled={submittingAction !== null}>
@@ -112,10 +140,10 @@ export default function LoginPage() {
                   Use local admin
                 </button>
               ) : null}
-              <button className="btn-secondary" type="button" onClick={handleRegisterStudent} disabled={submittingAction !== null}>
+              <Link className="btn-secondary" href="/register">
                 <UserPlus size={18} />
-                {submittingAction === "register" ? "Creating..." : "Register Student"}
-              </button>
+                Register Student
+              </Link>
             </div>
           </form>
           {notice ? <p className="mt-4 text-sm text-cyanGlow">{notice}</p> : null}
@@ -130,7 +158,11 @@ export default function LoginPage() {
             </div>
             <pre className="whitespace-pre-wrap leading-7">
 {`POST /api/v1/auth/login
-POST /api/v1/auth/register
+POST /api/v1/auth/register/start
+POST /api/v1/auth/register/verify-code
+POST /api/v1/auth/register/complete
+GET  /api/v1/auth/google/start
+GET  /api/v1/auth/google/callback
 GET  /api/v1/auth/me
 POST /api/v1/auth/logout
 
@@ -143,11 +175,23 @@ admin_users = "/api/v1/admin/users";`}
                 Local admin: <span className="text-white">admin@example.com</span> / <span className="text-white">Admin123!</span>
               </p>
             ) : null}
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Self registration always creates a student account.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Administrator accounts are created from configured backend credentials or by existing administrators.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Email signup requires verification before the first sign-in.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Google sign-in skips verification because Google has already confirmed the address.</p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">&quot;Remember me&quot; keeps you signed in on this device for 30 days. Unchecked, the session ends when you close the browser.</p>
           </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
+      <path fill="#FBBC05" d="M5.84 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.12-1.44.34-2.11V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.65l3.15-3.15A11 11 0 0 0 12 1 11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
+    </svg>
   );
 }
