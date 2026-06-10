@@ -73,8 +73,8 @@ export default function StudentDashboardPage() {
           <section className="panel">
             <h2 className="relative text-lg font-semibold">Recent activity</h2>
             <div className="relative mt-4 space-y-3">
-              {dashboard.recent_activity.map((item) => (
-                <div key={item.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              {dashboard.recent_activity.map((item, index) => (
+                <div key={`${item.timestamp}-${item.label}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="text-sm text-white">{item.label}</p>
                   <p className="text-xs text-white/45">{item.detail}</p>
                   <p className="mt-2 text-xs text-cyanGlow/70">{formatDateTime(item.timestamp)}</p>
