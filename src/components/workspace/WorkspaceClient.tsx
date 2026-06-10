@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen } from "lucide-react";
 import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
@@ -1177,13 +1177,18 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             )}
           </button>
           <button
-            className="ml-2 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
-            title={ideLayout.isOutputCollapsed ? "Expand output" : "Collapse output"}
-            aria-label={ideLayout.isOutputCollapsed ? "Expand output panel" : "Collapse output panel"}
+            className={`ml-2 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${
+              ideLayout.isOutputCollapsed
+                ? "border-cyanGlow/35 bg-cyanGlow/10 text-cyanGlow hover:border-cyanGlow/70"
+                : "border-white/15 bg-white/5 text-white/70 hover:border-cyanGlow/50 hover:text-cyanGlow"
+            }`}
+            title={ideLayout.isOutputCollapsed ? "Show output" : "Hide output"}
+            aria-label={ideLayout.isOutputCollapsed ? "Show output panel" : "Hide output panel"}
             type="button"
             onClick={ideLayout.toggleOutputCollapsed}
           >
-            <SemanticIcon name={ideLayout.isOutputCollapsed ? "expand" : "collapse"} size={14} />
+            {ideLayout.isOutputCollapsed ? <PanelBottomOpen size={15} /> : <PanelBottomClose size={15} />}
+            <span className="hidden sm:inline">{ideLayout.isOutputCollapsed ? "Show" : "Hide"}</span>
           </button>
           <button
             className="ml-1 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
