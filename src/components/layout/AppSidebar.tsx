@@ -32,7 +32,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
   const compact = pathname.includes("/workspace");
 
   return (
-    <aside className={`liquid-glass sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 py-5 lg:flex ${compact ? "w-16 px-2" : "w-64 px-4"}`}>
+    <aside className={`liquid-glass sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 py-5 lg:flex ${compact ? "w-20 px-2" : "w-64 px-4"}`}>
       <Link href={role === "student" ? "/student/dashboard" : "/admin/dashboard"} className={`relative flex items-center ${compact ? "justify-center" : "gap-3"}`}>
         <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/25 bg-[linear-gradient(145deg,rgba(0,229,255,0.16),rgba(168,85,247,0.12))] text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.24)]">
           <SemanticIcon name="platform" size={22} />
@@ -58,13 +58,17 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
               key={item.href}
               href={item.href}
               title={compact ? item.label : undefined}
-              className={`relative flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm transition ${
+              className={`relative rounded-xl border text-sm transition ${
                 active ? "border-cyanGlow/30 bg-white/8 text-cyanGlow shadow-[0_0_22px_rgba(0,229,255,0.10)]" : "border-transparent text-white/55 hover:bg-white/5 hover:text-white"
-              } ${compact ? "justify-center px-0" : ""}`}
+              } ${compact ? "flex flex-col items-center gap-1 px-1 py-2" : "flex items-center gap-3 px-4 py-2.5"}`}
             >
-              {active ? <span className="absolute left-0 top-2 h-6 w-0.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.8)]" /> : null}
+              {active && !compact ? <span className="absolute left-0 top-2 h-6 w-0.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.8)]" /> : null}
               <SemanticIcon name={item.icon} size={18} />
-              <span className={compact ? "sr-only" : ""}>{item.label}</span>
+              {compact ? (
+                <span className="text-[10px] font-medium leading-tight tracking-tight">{item.label}</span>
+              ) : (
+                <span>{item.label}</span>
+              )}
             </Link>
           );
         })}
@@ -75,7 +79,9 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
           Role: <span className="text-white/75">{role === "student" ? "Student" : "Administrator"}</span>
         </div>
         <button
-          className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-white/45 transition hover:bg-white/5 hover:text-white ${compact ? "justify-center px-0" : ""}`}
+          className={`w-full rounded-xl text-sm text-white/45 transition hover:bg-white/5 hover:text-white ${
+            compact ? "flex flex-col items-center gap-1 px-1 py-2" : "flex items-center gap-3 px-4 py-2.5"
+          }`}
           title={compact ? "Logout" : undefined}
           onClick={async () => {
             await logout();
@@ -83,7 +89,11 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
           }}
         >
           <SemanticIcon name="logout" size={17} />
-          <span className={compact ? "sr-only" : ""}>Logout</span>
+          {compact ? (
+            <span className="text-[10px] font-medium leading-tight">Logout</span>
+          ) : (
+            <span>Logout</span>
+          )}
         </button>
         <div className={`flex items-center gap-3 px-4 py-2.5 text-xs text-white/35 ${compact ? "hidden" : ""}`}>
           <SemanticIcon name="settings" size={16} />
