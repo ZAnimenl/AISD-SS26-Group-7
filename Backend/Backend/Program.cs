@@ -73,6 +73,7 @@ builder.Services.AddSingleton<AiAssistantService>();
 builder.Services.AddSingleton<AssessmentDraftGenerationService>();
 builder.Services.AddScoped<SeedAdminSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();
+builder.Services.AddScoped<SqliteAuthSchemaMigrator>();
 builder.Services.Configure<SeedAdminOptions>(builder.Configuration.GetSection(SeedAdminOptions.SectionName));
 
 // New auth additions
@@ -158,6 +159,9 @@ static async Task SeedDatabaseAsync(WebApplication app)
 
         await dbContext.Database.EnsureCreatedAsync();
         await scope.ServiceProvider.GetRequiredService<SchemaCompatibilityService>().EnsureAsync(CancellationToken.None);
+        // SQLite-only patch: add new auth columns to existing local databases so teammates
+        // who already had a DB file from before the auth refactor do not need to delete it.
+        await scope.ServiceProvider.GetRequiredService<SqliteAuthSchemaMigrator>().EnsureAsync(CancellationToken.None);
         await scope.ServiceProvider.GetRequiredService<SeedAdminSeeder>().SeedAsync(CancellationToken.None);
     }
     catch (Exception exception)
