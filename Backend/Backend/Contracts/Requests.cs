@@ -22,7 +22,7 @@ public sealed record RegisterResendCodeRequest(string Email);
 // === Forgot password ===
 public sealed record ForgotPasswordRequest(string Email);
 
-public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public sealed record ChangePasswordRequest(string? CurrentPassword, string NewPassword);
 
 public sealed record UserRequest(string FullName, string Email, string Password, string Role, string Status);
 

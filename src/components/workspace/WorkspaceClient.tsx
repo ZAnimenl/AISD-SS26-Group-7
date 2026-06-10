@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
@@ -833,14 +833,14 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           <>
             <button
               type="button"
-              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/25 bg-[#0e1726] text-cyanGlow transition hover:border-cyanGlow/60"
-              title="Expand tasks panel"
-              aria-label="Expand tasks panel"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/35 bg-cyanGlow/10 text-cyanGlow transition hover:border-cyanGlow/70 hover:bg-cyanGlow/15"
+              title="Show tasks panel"
+              aria-label="Show tasks panel"
               onClick={ideLayout.toggleTasksCollapsed}
             >
-              <SemanticIcon name="assessments" size={17} />
+              <PanelLeftOpen size={18} />
             </button>
-            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/45 [writing-mode:vertical-rl]">
+            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/55 [writing-mode:vertical-rl]">
               Tasks
             </span>
           </>
@@ -854,12 +854,13 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             </div>
             <button
               type="button"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-[#0e1726] text-white/50 transition hover:border-cyanGlow/35 hover:text-cyanGlow"
-              title="Collapse tasks panel"
-              aria-label="Collapse tasks panel"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-[#0e1726] px-2.5 text-xs text-white/70 transition hover:border-cyanGlow/50 hover:text-cyanGlow"
+              title="Hide tasks panel"
+              aria-label="Hide tasks panel"
               onClick={ideLayout.toggleTasksCollapsed}
             >
-              <SemanticIcon name="collapse" size={14} className="rotate-90" />
+              <PanelLeftClose size={15} />
+              <span className="hidden sm:inline">Hide</span>
             </button>
           </div>
           <span className="badge mt-3 hidden w-fit shrink-0 xl:inline-flex">Active attempt</span>
@@ -1022,14 +1023,14 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           <>
             <button
               type="button"
-              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/25 bg-[#0e1726] text-cyanGlow transition hover:border-cyanGlow/60"
-              title="Expand AI panel"
-              aria-label="Expand AI panel"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-cyanGlow/35 bg-cyanGlow/10 text-cyanGlow transition hover:border-cyanGlow/70 hover:bg-cyanGlow/15"
+              title="Show AI panel"
+              aria-label="Show AI panel"
               onClick={ideLayout.toggleAgentCollapsed}
             >
-              <SemanticIcon name="ai" size={18} />
+              <PanelRightOpen size={18} />
             </button>
-            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/45 [writing-mode:vertical-rl]">
+            <span className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/55 [writing-mode:vertical-rl]">
               AI Agent
             </span>
           </>
@@ -1045,12 +1046,13 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </div>
           <button
             type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-[#0e1726] text-white/50 transition hover:border-cyanGlow/35 hover:text-cyanGlow"
-            title="Collapse AI panel"
-            aria-label="Collapse AI panel"
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-[#0e1726] px-2.5 text-xs text-white/70 transition hover:border-cyanGlow/50 hover:text-cyanGlow"
+            title="Hide AI panel"
+            aria-label="Hide AI panel"
             onClick={ideLayout.toggleAgentCollapsed}
           >
-            <SemanticIcon name="collapse" size={14} className="-rotate-90" />
+            <PanelRightClose size={15} />
+            <span className="hidden sm:inline">Hide</span>
           </button>
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">

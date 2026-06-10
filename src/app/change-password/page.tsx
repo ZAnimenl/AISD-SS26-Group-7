@@ -9,7 +9,6 @@ import type { AuthUser } from "@/lib/types";
 export default function ChangePasswordPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,13 +36,12 @@ export default function ChangePasswordPage() {
       setError("New password and confirmation do not match.");
       return;
     }
-    if (newPassword === currentPassword) {
-      setError("Please choose a different password than the temporary one.");
-      return;
-    }
     setSubmitting(true);
     try {
-      await changePassword(currentPassword, newPassword);
+      // The user just signed in with their temporary password, so the backend
+      // accepts a change-password request without re-asking for it. We still
+      // pass an empty string so the request body shape stays the same.
+      await changePassword("", newPassword);
       setNotice("Password updated. Redirecting...");
       setTimeout(() => {
         router.replace(user?.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
@@ -68,21 +66,10 @@ export default function ChangePasswordPage() {
         </span>
         <h1 className="mt-6 font-heading text-3xl italic text-white">Set a new password</h1>
         <p className="mt-3 text-sm text-white/60">
-          You signed in with a temporary password. Choose a new one to continue.
+          You signed in with a temporary password. Pick a new one to continue.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 grid gap-4">
-          <label className="grid gap-2 text-sm text-white/60">
-            Temporary password (from your email)
-            <input
-              className="field"
-              type="password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </label>
           <label className="grid gap-2 text-sm text-white/60">
             New password
             <input
@@ -93,6 +80,7 @@ export default function ChangePasswordPage() {
               required
               minLength={6}
               autoComplete="new-password"
+              autoFocus
             />
           </label>
           <label className="grid gap-2 text-sm text-white/60">
