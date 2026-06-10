@@ -140,11 +140,23 @@ public static class AuthEndpoints
         {
             return ApiResults.Error("VALIDATION_ERROR", "New password must be at least 6 characters.", StatusCodes.Status400BadRequest);
         }
-        if (!passwordHasher.Verify(request.CurrentPassword, user!.PasswordHash))
+
+        // When the user is here because of a forgot-password reset, the token they
+        // are calling with was just issued in exchange for the temporary password —
+        // re-asking for that temp password is friction with no security upside.
+        // For voluntary password changes we still verify the current password.
+        if (!user!.MustChangePassword)
         {
-            return ApiResults.Error("INVALID_PASSWORD", "Current password is incorrect.", StatusCodes.Status400BadRequest);
+            if (!passwordHasher.Verify(request.CurrentPassword ?? string.Empty, user.PasswordHash))
+            {
+                return ApiResults.Error("INVALID_PASSWORD", "Current password is incorrect.", StatusCodes.Status400BadRequest);
+            }
+            if (request.NewPassword == request.CurrentPassword)
+            {
+                return ApiResults.Error("SAME_PASSWORD", "Please choose a different password than the current one.", StatusCodes.Status400BadRequest);
+            }
         }
-        if (request.NewPassword == request.CurrentPassword)
+        else if (passwordHasher.Verify(request.NewPassword, user.PasswordHash))
         {
             return ApiResults.Error("SAME_PASSWORD", "Please choose a different password than the temporary one.", StatusCodes.Status400BadRequest);
         }
