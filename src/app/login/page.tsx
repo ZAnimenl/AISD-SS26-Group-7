@@ -48,7 +48,11 @@ export default function LoginPage() {
     setNotice(null);
     setSubmittingAction("login");
     try {
-      const user = await login(email, password, rememberMe);
+      const { user, mustChangePassword } = await login(email, password, rememberMe);
+      if (mustChangePassword) {
+        router.push("/change-password");
+        return;
+      }
       router.push(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Authentication failed.");
@@ -120,15 +124,23 @@ export default function LoginPage() {
               Password
               <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" />
             </label>
-            <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
-              />
-              Remember me on this device
-            </label>
+            <div className="mt-1 flex items-center justify-between">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
+                />
+                Remember me on this device
+              </label>
+              <Link
+                href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
+                className="text-sm text-cyanGlow hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="btn-primary" type="submit" disabled={submittingAction !== null}>
                 <LogIn size={18} />

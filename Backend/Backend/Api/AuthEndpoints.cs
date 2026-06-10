@@ -29,6 +29,8 @@ public static class AuthEndpoints
         group.MapPost("/login", LoginAsync);
         group.MapGet("/me", MeAsync);
         group.MapPost("/logout", Logout);
+        group.MapPost("/forgot-password", ForgotPasswordAsync);
+        group.MapPost("/change-password", ChangePasswordAsync);
 
         // Code-based 3-step registration
         group.MapPost("/register/start", RegisterStartAsync);
@@ -72,8 +74,86 @@ public static class AuthEndpoints
             token = issued.Token,
             expires_at = issued.ExpiresAt,
             remember_me = request.RememberMe,
+            must_change_password = user.MustChangePassword,
             user = ToUserDto(user)
         });
+    }
+
+    private static async Task<IResult> ForgotPasswordAsync(
+        ForgotPasswordRequest request,
+        OjSharpDbContext dbContext,
+        PasswordHasher passwordHasher,
+        EmailService emailService,
+        ILogger<EmailService> logger,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Email is required.", StatusCodes.Status400BadRequest);
+        }
+
+        var lookup = request.Email.Trim().ToLowerInvariant();
+        var user = await dbContext.Users.FirstOrDefaultAsync(
+            u => u.Email.ToLower() == lookup && u.Status == UserStatuses.Active,
+            cancellationToken);
+
+        // Always reply success to avoid email enumeration. Only act when a valid email user is found.
+        if (user is null || user.AuthProvider != "email")
+        {
+            return ApiResults.Success(new { sent = true });
+        }
+
+        var tempPassword = GenerateTemporaryPassword();
+        user.PasswordHash = passwordHasher.Hash(tempPassword);
+        user.MustChangePassword = true;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var emailSent = await emailService.SendTemporaryPasswordAsync(
+            user.Email, user.FullName, tempPassword, cancellationToken);
+        if (!emailSent)
+        {
+            logger.LogWarning("Temporary password email failed for {Email}. Temp password (dev): {Pwd}", user.Email, tempPassword);
+        }
+
+        return ApiResults.Success(new
+        {
+            sent = emailSent,
+            // dev fallback when SMTP is offline so manual testing still works
+            dev_temporary_password = emailSent ? null : tempPassword
+        });
+    }
+
+    private static async Task<IResult> ChangePasswordAsync(
+        HttpContext httpContext,
+        ChangePasswordRequest request,
+        OjSharpDbContext dbContext,
+        PasswordHasher passwordHasher,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (user, error) = await currentUserAccessor.RequireUserAsync(httpContext, dbContext, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+        if (string.IsNullOrEmpty(request.NewPassword) || request.NewPassword.Length < 6)
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "New password must be at least 6 characters.", StatusCodes.Status400BadRequest);
+        }
+        if (!passwordHasher.Verify(request.CurrentPassword, user!.PasswordHash))
+        {
+            return ApiResults.Error("INVALID_PASSWORD", "Current password is incorrect.", StatusCodes.Status400BadRequest);
+        }
+        if (request.NewPassword == request.CurrentPassword)
+        {
+            return ApiResults.Error("SAME_PASSWORD", "Please choose a different password than the temporary one.", StatusCodes.Status400BadRequest);
+        }
+
+        user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+        user.MustChangePassword = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return ApiResults.Success(new { changed = true });
     }
 
     private static async Task<IResult> MeAsync(
@@ -395,7 +475,8 @@ public static class AuthEndpoints
             role = user.Role,
             status = user.Status,
             auth_provider = user.AuthProvider,
-            email_verified = user.EmailVerified
+            email_verified = user.EmailVerified,
+            must_change_password = user.MustChangePassword
         };
     }
 
@@ -444,6 +525,18 @@ public static class AuthEndpoints
     {
         var number = RandomNumberGenerator.GetInt32((int)Math.Pow(10, digits));
         return number.ToString("D" + digits);
+    }
+
+    /// <summary>12 chars: easy to read in an email, no ambiguous I/l/0/O.</summary>
+    private static string GenerateTemporaryPassword()
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        Span<char> output = stackalloc char[12];
+        for (var index = 0; index < output.Length; index++)
+        {
+            output[index] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
+        }
+        return new string(output);
     }
 
     private static bool FixedTimeEquals(string a, string b)

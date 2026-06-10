@@ -82,6 +82,7 @@ interface LoginResponse {
   token: string;
   expires_at?: string;
   remember_me?: boolean;
+  must_change_password?: boolean;
   user: BackendUser;
 }
 
@@ -231,7 +232,31 @@ export async function login(email: string, password: string, rememberMe: boolean
   });
   const user = normalizeUser(result.user);
   storeAuth(result.token, user, { rememberMe });
-  return user;
+  return { user, mustChangePassword: Boolean(result.must_change_password) };
+}
+
+export async function forgotPassword(email: string) {
+  const raw = await apiRequest<{
+    sent: boolean;
+    dev_temporary_password?: string | null;
+  }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+  return {
+    sent: raw.sent,
+    devTemporaryPassword: raw.dev_temporary_password ?? null
+  };
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  return apiRequest<{ changed: boolean }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword
+    })
+  });
 }
 
 export async function startGoogleLogin(rememberMe: boolean = true) {

@@ -22,6 +22,7 @@ public static class UserConfiguration
             entity.Property(user => user.GoogleId).HasMaxLength(64);
             entity.Property(user => user.EmailVerified).HasDefaultValue(false);
             entity.Property(user => user.EmailVerificationToken).HasMaxLength(128);
+            entity.Property(user => user.MustChangePassword).HasDefaultValue(false);
             entity.HasIndex(user => user.GoogleId);
             entity.HasIndex(user => user.EmailVerificationToken);
         });

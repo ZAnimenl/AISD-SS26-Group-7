@@ -48,7 +48,8 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
             ("GoogleId", "ALTER TABLE users ADD COLUMN GoogleId TEXT NULL;"),
             ("EmailVerified", "ALTER TABLE users ADD COLUMN EmailVerified INTEGER NOT NULL DEFAULT 0;"),
             ("EmailVerificationToken", "ALTER TABLE users ADD COLUMN EmailVerificationToken TEXT NULL;"),
-            ("EmailVerificationTokenExpiresAt", "ALTER TABLE users ADD COLUMN EmailVerificationTokenExpiresAt TEXT NULL;")
+            ("EmailVerificationTokenExpiresAt", "ALTER TABLE users ADD COLUMN EmailVerificationTokenExpiresAt TEXT NULL;"),
+            ("MustChangePassword", "ALTER TABLE users ADD COLUMN MustChangePassword INTEGER NOT NULL DEFAULT 0;")
         };
 
         foreach (var (name, sql) in pending)

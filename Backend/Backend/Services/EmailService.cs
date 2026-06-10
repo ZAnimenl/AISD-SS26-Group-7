@@ -37,6 +37,19 @@ public sealed class EmailService(
         return await SendAsync(toAddress, toName, subject, html, plain, cancellationToken);
     }
 
+    public async Task<bool> SendTemporaryPasswordAsync(
+        string toAddress,
+        string toName,
+        string temporaryPassword,
+        CancellationToken cancellationToken)
+    {
+        var subject = "Your temporary password — AI-Coding Assessment Platform";
+        var html = BuildTemporaryPasswordHtml(toName, temporaryPassword);
+        var plain = BuildTemporaryPasswordPlain(toName, temporaryPassword);
+
+        return await SendAsync(toAddress, toName, subject, html, plain, cancellationToken);
+    }
+
     private async Task<bool> SendAsync(
         string toAddress,
         string toName,
@@ -159,6 +172,44 @@ public sealed class EmailService(
             {code}
 
         This code expires in 15 minutes. If you did not request it, ignore this email.
+        """;
+    }
+
+    private static string BuildTemporaryPasswordHtml(string name, string tempPassword)
+    {
+        var safeName = WebUtility.HtmlEncode(name);
+        var safeTemp = WebUtility.HtmlEncode(tempPassword);
+        return $$"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: -apple-system, system-ui, sans-serif; background: #0a0f1a; color: #e5e7eb; padding: 24px;">
+          <div style="max-width: 520px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 32px;">
+            <h1 style="color: #06b6d4; margin: 0 0 16px;">Temporary password</h1>
+            <p>Hi {{safeName}},</p>
+            <p>You requested a password reset. Sign in with the temporary password below — you will be asked to choose a new password right after.</p>
+            <p style="text-align: center; margin: 32px 0;">
+              <span style="display: inline-block; background: #06b6d4; color: #0a0f1a; padding: 14px 28px; border-radius: 12px; font-size: 18px; letter-spacing: 2px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, monospace;">{{safeTemp}}</span>
+            </p>
+            <p style="font-size: 13px; color: #6b7280;">This password expires in 30 minutes. If you did not request a reset, sign in with your old password and the temporary one will be discarded — ignore this email.</p>
+          </div>
+        </body>
+        </html>
+        """;
+    }
+
+    private static string BuildTemporaryPasswordPlain(string name, string tempPassword)
+    {
+        return $"""
+        Hi {name},
+
+        You requested a password reset. Sign in with this temporary password:
+
+            {tempPassword}
+
+        You will be asked to choose a new password right after signing in.
+        This password expires in 30 minutes.
+
+        If you did not request a reset, ignore this email — your old password still works.
         """;
     }
 }
