@@ -167,6 +167,39 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task JavaScript_tests_can_import_jsdom_directly()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "",
+            """
+            const { JSDOM } = require('jsdom');
+
+            test('direct jsdom import works', () => {
+              const dom = new JSDOM('<button>Clear All</button>');
+              expect(dom.window.document.querySelector('button').textContent).toBe('Clear All');
+            });
+            """
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string> { ["app.js"] = "" },
+            "javascript",
+            testCase,
+            CancellationToken.None
+        );
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+        Assert.Null(result.Stderr);
+    }
+
+    [Fact]
     public async Task Snake_case_python_starter_file_can_satisfy_legacy_pascal_case_import()
     {
         if (!IsDockerAvailable())
@@ -257,7 +290,7 @@ public sealed class DockerCodeRunnerIntegrationTests
             CancellationToken.None
         );
 
-        // The timeout in GraderCommandFactory is set to 3s
+        // The timeout in GraderCommandFactory should still terminate runaway code.
         Assert.True(result.TimedOut || result.ExitCode != 0);
         Assert.NotNull(result.Stderr);
     }

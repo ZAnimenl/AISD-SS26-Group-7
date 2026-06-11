@@ -9,7 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip nodejs npm \
     && python3 -m pip install --break-system-packages \
         pytest flask flask-cors requests beautifulsoup4 \
-    && npm install -g jest jest-environment-jsdom typescript supertest express \
+    && npm install -g jest jest-environment-jsdom jsdom@22.1.0 typescript supertest express \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash sandbox \
@@ -17,6 +17,7 @@ RUN useradd -m -s /bin/bash sandbox \
     && chown -R sandbox:sandbox /workspace
 
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV NODE_PATH=/usr/local/lib/node_modules
 WORKDIR /workspace
 USER sandbox
 CMD ["sleep", "infinity"]
