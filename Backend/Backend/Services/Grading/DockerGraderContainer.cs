@@ -5,8 +5,8 @@ namespace Backend.Services.Grading;
 
 internal sealed class DockerGraderContainer
 {
-    private const string ImageTag = "ojsharp-grader:python-js-ts-v4";
-    private const string ContainerName = "ojsharp-grader-python-js-ts-v4";
+    private const string ImageTag = "ojsharp-grader:python-js-ts-v6";
+    private const string ContainerName = "ojsharp-grader-python-js-ts-v6";
     private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";
     private const string DefaultWindowsEndpoint = "npipe://./pipe/docker_engine";
     private readonly DockerClient dockerClient;

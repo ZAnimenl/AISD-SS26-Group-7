@@ -2,16 +2,18 @@ namespace Backend.Services.Grading;
 
 internal sealed class GraderCommandFactory
 {
+    private const string ExecutionTimeout = "8s";
+
     public string[] Create(GradingLanguage language)
     {
         return language switch
         {
             GradingLanguage.Python =>
-                ["timeout", "3s", "pytest", "-q", "test_solution.py", "--tb=short", "--disable-warnings", "-p", "no:cacheprovider"],
+                ["timeout", ExecutionTimeout, "pytest", "-q", "test_solution.py", "--tb=short", "--disable-warnings", "-p", "no:cacheprovider"],
             GradingLanguage.TypeScript =>
-                ["timeout", "3s", "sh", "-c", "tsc solution.ts --target ES2020 --module commonjs --esModuleInterop --skipLibCheck && jest --env=jsdom --config={} --runInBand solution.test.js --silent=false --no-cache"],
+                ["timeout", ExecutionTimeout, "sh", "-c", "tsc solution.ts --target ES2020 --module commonjs --esModuleInterop --skipLibCheck && jest --env=jsdom --config={} --setupFiles ./jest.setup.js --runInBand solution.test.js --silent=false --no-cache"],
             _ =>
-                ["timeout", "3s", "jest", "--env=jsdom", "--config={}", "--runInBand", "solution.test.js", "--silent=false", "--no-cache"]
+                ["timeout", ExecutionTimeout, "jest", "--env=jsdom", "--config={}", "--setupFiles", "./jest.setup.js", "--runInBand", "solution.test.js", "--silent=false", "--no-cache"]
         };
     }
 }

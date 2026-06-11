@@ -12,11 +12,24 @@ internal sealed class GradingTestFileFactory
 
         if (language == GradingLanguage.JavaScript || language == GradingLanguage.TypeScript)
         {
+            WriteJestSetup(directory);
             File.WriteAllText(Path.Combine(directory, "solution.test.js"), testCode);
             return;
         }
 
         File.WriteAllText(Path.Combine(directory, "test_solution.py"), testCode);
+    }
+
+    private static void WriteJestSetup(string directory)
+    {
+        File.WriteAllText(
+            Path.Combine(directory, "jest.setup.js"),
+            """
+            const { TextDecoder, TextEncoder } = require('util');
+
+            global.TextDecoder ??= TextDecoder;
+            global.TextEncoder ??= TextEncoder;
+            """);
     }
 
     private static void WriteLegacyImportAlias(string directory, string fileName, string content)
