@@ -44,6 +44,7 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
 
         var pending = new List<(string Name, string Sql)>
         {
+            ("Username", "ALTER TABLE users ADD COLUMN Username TEXT NOT NULL DEFAULT '';"),
             ("AuthProvider", "ALTER TABLE users ADD COLUMN AuthProvider TEXT NOT NULL DEFAULT 'email';"),
             ("GoogleId", "ALTER TABLE users ADD COLUMN GoogleId TEXT NULL;"),
             ("EmailVerified", "ALTER TABLE users ADD COLUMN EmailVerified INTEGER NOT NULL DEFAULT 0;"),
@@ -77,6 +78,13 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
         {
             await dbContext.Database.ExecuteSqlRawAsync(
                 "UPDATE users SET EmailVerified = 1 WHERE EmailVerified = 0;",
+                cancellationToken);
+        }
+
+        if (!existing.Contains("Username"))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE users SET Username = FullName WHERE Username = '';",
                 cancellationToken);
         }
     }

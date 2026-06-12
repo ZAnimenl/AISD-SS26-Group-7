@@ -5,6 +5,7 @@ namespace Backend.Services;
 public static class AssessmentPolicy
 {
     private static readonly string[] DefaultStudentLanguages = ["python", "javascript"];
+    private static readonly string[] SupportedStudentLanguages = ["python", "javascript", "typescript", "html", "sql"];
 
     public static bool IsAssessmentActive(Assessment? assessment)
     {
@@ -16,18 +17,44 @@ public static class AssessmentPolicy
         var configuredLanguages = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>());
         var supportedLanguages = configuredLanguages
             .Select(NormalizeLanguage)
-            .Where(language => language is "python" or "javascript")
+            .Where(IsSupportedStudentLanguage)
             .Distinct()
             .ToArray();
 
-        return supportedLanguages.Length > 0 ? supportedLanguages : DefaultStudentLanguages;
+        var effectiveLanguages = supportedLanguages.Length > 0
+            ? supportedLanguages
+            : GetDefaultStudentLanguages(question.TaskType);
+
+        if (question.TaskType == TaskTypes.FrontendUiExtension && !effectiveLanguages.Contains("html"))
+        {
+            return ["html"];
+        }
+
+        if (question.TaskType == TaskTypes.DatabaseQuerySchema && !effectiveLanguages.Contains("sql"))
+        {
+            return ["sql"];
+        }
+
+        return effectiveLanguages;
     }
 
     public static bool IsStudentLanguageAllowed(Question question, string? language)
     {
         var normalizedLanguage = NormalizeLanguage(language);
-        return normalizedLanguage is "python" or "javascript"
-            && GetSupportedStudentLanguages(question).Contains(normalizedLanguage);
+        return IsSupportedStudentLanguage(normalizedLanguage)
+               && GetSupportedStudentLanguages(question).Contains(normalizedLanguage);
+    }
+
+    public static string GetDefaultFileName(string language)
+    {
+        return NormalizeLanguage(language) switch
+        {
+            "javascript" => "main.js",
+            "typescript" => "main.ts",
+            "html" => "index.html",
+            "sql" => "solution.sql",
+            _ => "main.py"
+        };
     }
 
     public static bool TryFindUnsupportedWorkspaceLanguage(
@@ -57,6 +84,29 @@ public static class AssessmentPolicy
 
     public static string NormalizeLanguage(string? language)
     {
-        return string.IsNullOrWhiteSpace(language) ? string.Empty : language.Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(language)
+            ? string.Empty
+            : language.Trim().ToLowerInvariant() switch
+            {
+                "js" => "javascript",
+                "ts" => "typescript",
+                "py" => "python",
+                _ => language.Trim().ToLowerInvariant()
+            };
+    }
+
+    private static string[] GetDefaultStudentLanguages(string? taskType)
+    {
+        return taskType switch
+        {
+            TaskTypes.FrontendUiExtension => ["html"],
+            TaskTypes.DatabaseQuerySchema => ["sql"],
+            _ => DefaultStudentLanguages
+        };
+    }
+
+    private static bool IsSupportedStudentLanguage(string language)
+    {
+        return SupportedStudentLanguages.Contains(language);
     }
 }

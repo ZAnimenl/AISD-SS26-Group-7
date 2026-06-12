@@ -1,8 +1,8 @@
 namespace Backend.Contracts;
 
-public sealed record LoginRequest(string Email, string Password, bool RememberMe = false);
+public sealed record LoginRequest(string? Email, string Password, bool RememberMe = false, string? Username = null);
 
-public sealed record RegisterRequest(string FullName, string Email, string Password);
+public sealed record RegisterRequest(string FullName, string Username, string Email, string Password);
 
 public sealed record VerifyEmailRequest(string Token);
 
@@ -11,7 +11,7 @@ public sealed record ResendVerificationRequest(string Email);
 public sealed record GoogleLoginStartRequest(bool RememberMe = false);
 
 // === Code-based registration ===
-public sealed record RegisterStartRequest(string FullName, string Email);
+public sealed record RegisterStartRequest(string FullName, string Username, string Email);
 
 public sealed record RegisterVerifyCodeRequest(string Email, string Code);
 
@@ -24,9 +24,9 @@ public sealed record ForgotPasswordRequest(string Email);
 
 public sealed record ChangePasswordRequest(string? CurrentPassword, string NewPassword);
 
-public sealed record UserRequest(string FullName, string Email, string Password, string Role, string Status);
+public sealed record UserRequest(string FullName, string Username, string Email, string Password, string Role, string Status);
 
-public sealed record UpdateUserRequest(string? FullName, string? Role, string? Status);
+public sealed record UpdateUserRequest(string? FullName, string? Username, string? Role, string? Status);
 
 public sealed record AssessmentRequest(
     string Title,

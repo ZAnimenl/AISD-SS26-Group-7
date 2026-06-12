@@ -26,7 +26,13 @@ import type {
   WorkspaceQuestionState,
   WorkspaceState
 } from "@/lib/types";
-import { normalizeTestCode } from "@/lib/languages";
+import {
+  defaultStarterCode,
+  getDefaultFileNameForLanguage,
+  normalizeLanguageValue,
+  normalizeStudentLanguageConstraints,
+  normalizeTestCode
+} from "@/lib/languages";
 import {
   clearStoredAuth,
   getStoredToken,
@@ -97,6 +103,7 @@ interface GoogleStartResponse {
 interface BackendUser {
   user_id: string;
   full_name: string;
+  username?: string;
   email: string;
   role: Role;
   status?: "active" | "inactive";
@@ -225,10 +232,10 @@ function getPlainTextError(bodyText: string) {
   return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
-export async function login(email: string, password: string, rememberMe: boolean = true) {
+export async function login(username: string, password: string, rememberMe: boolean = true) {
   const result = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password, remember_me: rememberMe })
+    body: JSON.stringify({ username, email: username, password, remember_me: rememberMe })
   });
   const user = normalizeUser(result.user);
   storeAuth(result.token, user, { rememberMe });
@@ -307,7 +314,7 @@ export async function getCurrentUser() {
 }
 
 /** Step 1 of 3-step registration. Triggers a 6-digit code email. */
-export async function registerStart(input: { full_name: string; email: string }) {
+export async function registerStart(input: { full_name: string; username: string; email: string }) {
   const raw = await apiRequest<{
     sent: boolean;
     expires_at?: string;
@@ -380,6 +387,7 @@ export async function getAdminUsers() {
 
 export async function createAdminUser(input: {
   full_name: string;
+  username: string;
   email: string;
   password: string;
   role: Role;
@@ -748,12 +756,14 @@ function normalizeUser(user: BackendUser): AuthUser {
     Status?: "active" | "inactive";
     Email?: string;
     FullName?: string;
+    Username?: string;
   };
 
   return {
     user_id: user.user_id,
     name: user.full_name ?? rawUser.FullName,
     full_name: user.full_name ?? rawUser.FullName,
+    username: user.username ?? rawUser.Username,
     email: user.email ?? rawUser.Email,
     role: normalizeRole(user.role ?? rawUser.Role),
     status: user.status ?? rawUser.Status,
@@ -767,11 +777,13 @@ function normalizeUserAccount(user: BackendUser): UserAccount {
     Status?: "active" | "inactive";
     Email?: string;
     FullName?: string;
+    Username?: string;
   };
 
   return {
     user_id: user.user_id,
     full_name: user.full_name ?? rawUser.FullName ?? "",
+    username: user.username ?? rawUser.Username ?? "",
     email: user.email ?? rawUser.Email ?? "",
     role: normalizeRole(user.role ?? rawUser.Role),
     status: user.status ?? rawUser.Status ?? "active",
@@ -820,12 +832,8 @@ function normalizeQuestion(question: any): Question {
     sort_order: question.sort_order ?? 0,
     max_score: question.max_score ?? 100,
     constraints: question.constraints ?? [],
-    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints),
-    starter_code: {
-      python: question.starter_code?.python ?? {},
-      javascript: question.starter_code?.javascript ?? {},
-      typescript: question.starter_code?.typescript ?? {}
-    },
+    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints, normalizeTaskType(question.task_type)),
+    starter_code: normalizeStarterCode(question.starter_code),
     starter_files_metadata: normalizeNestedMetadata(question.starter_files_metadata),
     verification_metadata: normalizeMetadata(question.verification_metadata),
     grading_configuration: normalizeMetadata(question.grading_configuration),
@@ -847,7 +855,7 @@ function normalizeWorkspace(raw: any, assessmentId: string): WorkspaceState {
       const selectedLanguage = normalizeWorkspaceLanguage(state?.selected_language);
       const activeFile = typeof state?.active_file === "string" && state.active_file.trim()
         ? state.active_file
-        : Object.keys(files)[0] ?? (selectedLanguage === "javascript" ? "main.js" : "main.py");
+        : Object.keys(files)[0] ?? getDefaultFileNameForLanguage(selectedLanguage);
 
       return [
         questionId,
@@ -887,7 +895,7 @@ function normalizeWorkspaceFiles(value: unknown): Record<string, WorkspaceFile> 
 }
 
 function normalizeWorkspaceLanguage(value: string | undefined): Language {
-  return value === "javascript" ? "javascript" : "python";
+  return normalizeLanguageValue(value);
 }
 
 function normalizeAdminTestCase(testCase: any): AdminTestCase {
@@ -936,12 +944,8 @@ function toQuestionRequest(question: Question) {
     verification_mode: normalizeVerificationMode(question.verification_mode, question.task_type),
     starter_prototype_reference: question.starter_prototype_reference ?? null,
     problem_description_markdown: question.problem_description_markdown,
-    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints),
-    starter_code: {
-      python: question.starter_code.python ?? {},
-      javascript: question.starter_code.javascript ?? {},
-      typescript: question.starter_code.typescript ?? {}
-    },
+    language_constraints: normalizeStudentLanguageConstraints(question.language_constraints, question.task_type),
+    starter_code: normalizeStarterCode(question.starter_code),
     starter_files_metadata: question.starter_files_metadata ?? {},
     verification_metadata: question.verification_metadata ?? {},
     grading_configuration: question.grading_configuration ?? {},
@@ -971,15 +975,6 @@ function normalizeAttemptStatus(value: string | undefined): AttemptStatus {
   }
 
   return "not_started";
-}
-
-function normalizeStudentLanguageConstraints(value: unknown): Language[] {
-  if (!Array.isArray(value)) {
-    return ["python", "javascript"];
-  }
-
-  const languages = value.filter((item): item is Language => item === "python" || item === "javascript");
-  return languages.length ? languages : ["python", "javascript"];
 }
 
 function normalizeTaskType(value: string | undefined): TaskType {
@@ -1075,4 +1070,18 @@ function normalizeNestedMetadata(value: unknown): Record<string, Record<string, 
       normalizeMetadata(metadataValue)
     ])
   );
+}
+
+function normalizeStarterCode(value: unknown) {
+  const rawStarterCode = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Partial<Record<Language, Record<string, string>>>
+    : {};
+
+  return {
+    python: rawStarterCode.python ?? defaultStarterCode.python,
+    javascript: rawStarterCode.javascript ?? defaultStarterCode.javascript,
+    typescript: rawStarterCode.typescript ?? defaultStarterCode.typescript,
+    html: rawStarterCode.html ?? rawStarterCode.javascript ?? defaultStarterCode.html,
+    sql: rawStarterCode.sql ?? defaultStarterCode.sql
+  };
 }

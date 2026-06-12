@@ -11,19 +11,22 @@ import {
   updateQuestion,
   updateTestCase
 } from "@/lib/api";
-import { defaultTestCode, normalizeTestCode } from "@/lib/languages";
+import {
+  defaultStarterCode,
+  defaultTestCode,
+  getDefaultFileNameForLanguage,
+  getDefaultLanguagesForTaskType,
+  getLanguageLabel,
+  normalizeStudentLanguageConstraints,
+  normalizeTestCode,
+  STUDENT_LANGUAGE_OPTIONS
+} from "@/lib/languages";
 import type { AdminTestCase, Assessment, AuthoringSource, Difficulty, Language, Question, TaskType, VerificationMode } from "@/lib/types";
 
 interface QuestionTestCaseEditorProps {
   assessment: Assessment;
   onAssessmentChange: (assessment: Assessment) => void;
 }
-
-const defaultStarterCode = {
-  python: { "solution.py": "def solve():\n    pass\n" },
-  javascript: { "solution.js": "function solve() {\n}\n\nmodule.exports = { solve };\n" },
-  typescript: { "solution.ts": "function solve(): unknown {\n  return null;\n}\n" }
-};
 
 const taskTypes: Array<{ value: TaskType; label: string }> = [
   { value: "frontend_ui_extension", label: "Frontend UI extension" },
@@ -43,7 +46,7 @@ const verificationModes: Array<{ value: VerificationMode; label: string }> = [
 ];
 
 const authoringSources: AuthoringSource[] = ["manual", "llm_generated", "admin_edited"];
-const studentLanguages: Language[] = ["python", "javascript"];
+const studentLanguages = STUDENT_LANGUAGE_OPTIONS;
 
 interface PendingEditorAction {
   key: string;
@@ -56,7 +59,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
   const [draftTaskType, setDraftTaskType] = useState<TaskType>("frontend_ui_extension");
   const [draftDifficulty, setDraftDifficulty] = useState<Difficulty>("medium");
-  const [draftLanguages, setDraftLanguages] = useState<Language[]>(["python", "javascript"]);
+  const [draftLanguages, setDraftLanguages] = useState<Language[]>(getDefaultLanguagesForTaskType("frontend_ui_extension"));
 
   async function runEditorAction(action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) {
     if (pendingAction !== null) {
@@ -115,7 +118,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       return;
     }
 
-    const current = question.language_constraints.filter((item) => item === "python" || item === "javascript");
+    const current = normalizeStudentLanguageConstraints(question.language_constraints, question.task_type);
     const nextLanguages = checked
       ? Array.from(new Set([...current, language]))
       : current.filter((item) => item !== language);
@@ -146,14 +149,34 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     }
 
     const currentFiles = question.starter_code[language] ?? {};
-    const firstFileName = Object.keys(currentFiles)[0] ?? (language === "javascript" ? "solution.js" : language === "typescript" ? "solution.ts" : "solution.py");
+    const firstFileName = Object.keys(currentFiles)[0] ?? getDefaultFileNameForLanguage(language);
+
+    const starterFiles = Object.keys(currentFiles).length ? currentFiles : defaultStarterCode[language];
+    const starterFileName = Object.keys(starterFiles)[0] ?? firstFileName;
 
     updateQuestionState(questionId, {
       starter_code: {
         ...question.starter_code,
-        [language]: { ...currentFiles, [firstFileName]: value }
+        [language]: { ...starterFiles, [starterFileName]: value }
       }
     });
+  }
+
+  function updateQuestionTaskType(questionId: string, taskType: TaskType) {
+    const question = assessment.questions.find((item) => item.question_id === questionId);
+    if (!question) {
+      return;
+    }
+
+    updateQuestionState(questionId, {
+      task_type: taskType,
+      language_constraints: getDefaultLanguagesForTaskType(taskType)
+    });
+  }
+
+  function updateDraftTaskType(taskType: TaskType) {
+    setDraftTaskType(taskType);
+    setDraftLanguages(getDefaultLanguagesForTaskType(taskType));
   }
 
   function updateTestCaseState(questionId: string, testCaseId: string, update: Partial<AdminTestCase>) {
@@ -198,7 +221,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       sort_order: sortOrder,
       max_score: 100,
       constraints: [],
-      language_constraints: ["python", "javascript"],
+      language_constraints: getDefaultLanguagesForTaskType("rest_api_development"),
       starter_code: defaultStarterCode,
       starter_files_metadata: {},
       verification_metadata: { primary_view: "api_response_check" },
@@ -311,7 +334,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
           <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_1fr_auto]">
             <label className="grid gap-2 text-sm text-white/60">
               Generated draft task type
-              <select className="field w-full" value={draftTaskType} onChange={(event) => setDraftTaskType(event.target.value as TaskType)}>
+              <select className="field w-full" value={draftTaskType} onChange={(event) => updateDraftTaskType(event.target.value as TaskType)}>
                 {taskTypes.map((taskType) => (
                   <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
                 ))}
@@ -329,9 +352,9 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
               Supported languages
               <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                 {studentLanguages.map((language) => (
-                  <label key={language} className="flex items-center gap-2 text-xs text-white/60">
-                    <input type="checkbox" checked={draftLanguages.includes(language)} onChange={(event) => toggleDraftLanguage(language, event.target.checked)} />
-                    {language}
+                  <label key={language.value} className="flex items-center gap-2 text-xs text-white/60">
+                    <input type="checkbox" checked={draftLanguages.includes(language.value)} onChange={(event) => toggleDraftLanguage(language.value, event.target.checked)} />
+                    {language.label}
                   </label>
                 ))}
               </div>
@@ -389,7 +412,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
                   <label className="grid gap-2 text-sm text-white/60">
                     Task type
-                    <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionState(question.question_id, { task_type: event.target.value as TaskType })}>
+                    <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionTaskType(question.question_id, event.target.value as TaskType)}>
                       {taskTypes.map((taskType) => (
                         <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
                       ))}
@@ -429,9 +452,9 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     Supported student languages
                     <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                       {studentLanguages.map((language) => (
-                        <label key={language} className="flex items-center gap-2 text-xs text-white/60">
-                          <input type="checkbox" checked={question.language_constraints.includes(language)} onChange={(event) => updateQuestionLanguage(question.question_id, language, event.target.checked)} />
-                          {language}
+                        <label key={language.value} className="flex items-center gap-2 text-xs text-white/60">
+                          <input type="checkbox" checked={question.language_constraints.includes(language.value)} onChange={(event) => updateQuestionLanguage(question.question_id, language.value, event.target.checked)} />
+                          {language.label}
                         </label>
                       ))}
                     </div>
@@ -479,14 +502,12 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   <textarea className="field min-h-20" value={question.admin_notes ?? ""} onChange={(event) => updateQuestionState(question.question_id, { admin_notes: event.target.value })} />
                 </label>
                 <div className="grid gap-3 lg:grid-cols-2">
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Python starter code
-                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.python)} onChange={(event) => updateStarterCode(question.question_id, "python", event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-white/60">
-                    JavaScript starter code
-                    <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code.javascript)} onChange={(event) => updateStarterCode(question.question_id, "javascript", event.target.value)} />
-                  </label>
+                  {normalizeStudentLanguageConstraints(question.language_constraints, question.task_type).map((language) => (
+                    <label key={language} className="grid gap-2 text-sm text-white/60">
+                      {getLanguageLabel(language)} starter code
+                      <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code[language])} onChange={(event) => updateStarterCode(question.question_id, language, event.target.value)} />
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -550,14 +571,12 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                               />
                             </label>
                             <div className="mt-3 grid gap-3">
-                              <label className="grid gap-2 text-sm text-white/60">
-                                Python pytest code
-                                <textarea className="field min-h-40 font-mono" value={testCode.python} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "python", event.target.value)} />
-                              </label>
-                              <label className="grid gap-2 text-sm text-white/60">
-                                JavaScript Jest code
-                                <textarea className="field min-h-40 font-mono" value={testCode.javascript} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, "javascript", event.target.value)} />
-                              </label>
+                              {normalizeStudentLanguageConstraints(question.language_constraints, question.task_type).map((language) => (
+                                <label key={language} className="grid gap-2 text-sm text-white/60">
+                                  {getLanguageLabel(language)} test code
+                                  <textarea className="field min-h-40 font-mono" value={testCode[language]} onChange={(event) => updateTestCode(question.question_id, testCase.test_case_id, language, event.target.value)} />
+                                </label>
+                              ))}
                             </div>
                           </>
                         );

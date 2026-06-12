@@ -10,7 +10,7 @@ internal sealed class GradingTestFileFactory
             WriteLegacyImportAlias(directory, fileName, content);
         }
 
-        if (language == GradingLanguage.JavaScript || language == GradingLanguage.TypeScript)
+        if (language == GradingLanguage.JavaScript || language == GradingLanguage.TypeScript || language == GradingLanguage.Sql)
         {
             WriteJestSetup(directory);
             File.WriteAllText(Path.Combine(directory, "solution.test.js"), testCode);

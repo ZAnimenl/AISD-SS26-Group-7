@@ -50,14 +50,22 @@ public static class AuthEndpoints
         AuthTokenService tokenService,
         CancellationToken cancellationToken)
     {
-        var lowerEmail = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var loginIdentifier = (request.Username ?? request.Email ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(loginIdentifier))
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Username is required.", StatusCodes.Status400BadRequest);
+        }
+
+        var normalizedIdentifier = loginIdentifier.ToLowerInvariant();
         var user = await dbContext.Users.FirstOrDefaultAsync(
-            candidate => candidate.Email.ToLower() == lowerEmail && candidate.Status == UserStatuses.Active,
+            candidate => candidate.Status == UserStatuses.Active
+                         && (candidate.Email.ToLower() == normalizedIdentifier
+                             || candidate.Username.ToLower() == normalizedIdentifier),
             cancellationToken);
 
         if (user is null || string.IsNullOrEmpty(user.PasswordHash) || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
-            return ApiResults.Error("UNAUTHENTICATED", "Invalid email or password.", StatusCodes.Status401Unauthorized);
+            return ApiResults.Error("UNAUTHENTICATED", "Invalid username or password.", StatusCodes.Status401Unauthorized);
         }
 
         if (user.AuthProvider == "email" && !user.EmailVerified)
@@ -193,9 +201,15 @@ public static class AuthEndpoints
         ILogger<EmailService> logger,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Email))
+        if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Email))
         {
-            return ApiResults.Error("VALIDATION_ERROR", "Full name and email are required.", StatusCodes.Status400BadRequest);
+            return ApiResults.Error("VALIDATION_ERROR", "Full name, username, and email are required.", StatusCodes.Status400BadRequest);
+        }
+
+        var normalizedUsername = NormalizeUsername(request.Username);
+        if (normalizedUsername.Length < 3)
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Username must be at least 3 characters.", StatusCodes.Status400BadRequest);
         }
 
         if (!LooksLikeEmail(request.Email))
@@ -207,6 +221,7 @@ public static class AuthEndpoints
 
         var normalizedEmail = request.Email.Trim();
         var lowerEmail = normalizedEmail.ToLowerInvariant();
+        var lowerUsername = normalizedUsername.ToLowerInvariant();
         if (await dbContext.Users.AnyAsync(user => user.Email.ToLower() == lowerEmail, cancellationToken))
         {
             return ApiResults.Error(
@@ -215,9 +230,21 @@ public static class AuthEndpoints
                 StatusCodes.Status409Conflict);
         }
 
+        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == lowerUsername, cancellationToken)
+            || PendingRegistrations.Any(pending =>
+                !pending.Key.Equals(lowerEmail, StringComparison.OrdinalIgnoreCase)
+                && pending.Value.Username.Equals(normalizedUsername, StringComparison.OrdinalIgnoreCase)))
+        {
+            return ApiResults.Error(
+                "USERNAME_TAKEN",
+                "This username is already taken. Please choose a different username.",
+                StatusCodes.Status409Conflict);
+        }
+
         var code = GenerateNumericCode(6);
         var pending = new PendingRegistration(
             request.FullName.Trim(),
+            normalizedUsername,
             normalizedEmail,
             code,
             DateTimeOffset.UtcNow.Add(CodeLifetime),
@@ -311,10 +338,21 @@ public static class AuthEndpoints
                 StatusCodes.Status409Conflict);
         }
 
+        var pendingLowerUsername = pending.Username.ToLowerInvariant();
+        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == pendingLowerUsername, cancellationToken))
+        {
+            PendingRegistrations.TryRemove(pendingLowerEmail, out _);
+            return ApiResults.Error(
+                "USERNAME_TAKEN",
+                "This username is already taken. Please choose a different username.",
+                StatusCodes.Status409Conflict);
+        }
+
         var user = new User
         {
             Id = Guid.NewGuid(),
             FullName = pending.FullName,
+            Username = pending.Username,
             Email = pending.Email,
             PasswordHash = passwordHasher.Hash(request.Password),
             Role = UserRoles.Student,
@@ -435,10 +473,12 @@ public static class AuthEndpoints
 
         if (user is null)
         {
+            var displayName = string.IsNullOrWhiteSpace(profile.Name) ? profile.Email : profile.Name;
             user = new User
             {
                 Id = Guid.NewGuid(),
-                FullName = string.IsNullOrWhiteSpace(profile.Name) ? profile.Email : profile.Name,
+                FullName = displayName,
+                Username = await CreateUniqueUsernameAsync(dbContext, GetPreferredUsername(displayName, profile.Email), null, cancellationToken),
                 Email = profile.Email,
                 PasswordHash = string.Empty,
                 Role = UserRoles.Student,
@@ -459,6 +499,14 @@ public static class AuthEndpoints
             if (profile.EmailVerified && !user.EmailVerified)
             {
                 user.EmailVerified = true;
+            }
+            if (string.IsNullOrWhiteSpace(user.Username))
+            {
+                user.Username = await CreateUniqueUsernameAsync(
+                    dbContext,
+                    GetPreferredUsername(user.FullName, user.Email),
+                    user.Id,
+                    cancellationToken);
             }
         }
 
@@ -483,6 +531,7 @@ public static class AuthEndpoints
         {
             user_id = user.Id,
             full_name = user.FullName,
+            username = user.Username,
             email = user.Email,
             role = user.Role,
             status = user.Status,
@@ -568,8 +617,61 @@ public static class AuthEndpoints
         return atIndex > 0 && atIndex < value.Length - 1 && value.IndexOf('.', atIndex) > atIndex;
     }
 
+    private static string NormalizeUsername(string value)
+    {
+        return string.Join(
+            " ",
+            value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    private static string GetPreferredUsername(string fullName, string email)
+    {
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var atIndex = email.IndexOf('@');
+            if (atIndex > 0)
+            {
+                return email[..atIndex];
+            }
+        }
+
+        return fullName;
+    }
+
+    private static async Task<string> CreateUniqueUsernameAsync(
+        OjSharpDbContext dbContext,
+        string preferredUsername,
+        Guid? existingUserId,
+        CancellationToken cancellationToken)
+    {
+        var baseUsername = NormalizeUsername(preferredUsername);
+        if (baseUsername.Length < 3)
+        {
+            baseUsername = "student";
+        }
+        if (baseUsername.Length > 64)
+        {
+            baseUsername = baseUsername[..64];
+        }
+
+        var candidate = baseUsername;
+        var suffix = 2;
+        var candidateLower = candidate.ToLowerInvariant();
+        while (await dbContext.Users.AnyAsync(
+            user => (!existingUserId.HasValue || user.Id != existingUserId.Value) && user.Username.ToLower() == candidateLower,
+            cancellationToken))
+        {
+            candidate = $"{baseUsername}{suffix}";
+            candidateLower = candidate.ToLowerInvariant();
+            suffix++;
+        }
+
+        return candidate;
+    }
+
     private sealed record PendingRegistration(
         string FullName,
+        string Username,
         string Email,
         string Code,
         DateTimeOffset ExpiresAt,

@@ -570,10 +570,11 @@ public sealed class AiAssistantService
             return true;
         }
 
-        if (context.SelectedLanguage == "javascript")
+        if (context.SelectedLanguage is "javascript" or "html")
         {
             var extension = Path.GetExtension(targetFile);
             return extension.Equals(".html", StringComparison.OrdinalIgnoreCase) && language.Equals("html", StringComparison.OrdinalIgnoreCase)
+                   || extension.Equals(".js", StringComparison.OrdinalIgnoreCase) && language.Equals("javascript", StringComparison.OrdinalIgnoreCase)
                    || extension.Equals(".css", StringComparison.OrdinalIgnoreCase) && language.Equals("css", StringComparison.OrdinalIgnoreCase)
                    || extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && language.Equals("json", StringComparison.OrdinalIgnoreCase);
         }

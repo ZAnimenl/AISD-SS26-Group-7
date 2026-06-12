@@ -163,7 +163,13 @@ export function extractSuggestedCode(markdown: string, language: Language) {
     return null;
   }
 
-  const preferredLanguages = language === "python" ? ["python", "py"] : ["javascript", "js"];
+  const preferredLanguages = {
+    python: ["python", "py"],
+    javascript: ["javascript", "js"],
+    typescript: ["typescript", "ts"],
+    html: ["html"],
+    sql: ["sql"]
+  }[language];
   const matchingBlock = codeBlocks.find((block) => preferredLanguages.includes((block[1] ?? "").toLowerCase())) ?? codeBlocks[0];
   const code = matchingBlock[2]?.trim();
   return code ? code : null;

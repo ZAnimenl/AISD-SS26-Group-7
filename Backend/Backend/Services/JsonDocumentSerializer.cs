@@ -66,6 +66,8 @@ public static class JsonDocumentSerializer
         {
             "javascript" => "main.js",
             "typescript" => "main.ts",
+            "html" => "index.html",
+            "sql" => "solution.sql",
             _ => "main.py"
         };
     }
