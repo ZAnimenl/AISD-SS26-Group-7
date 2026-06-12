@@ -189,12 +189,13 @@ public static class ExecutionEndpoints
         var metadata = JsonDocumentSerializer.Deserialize(question.VerificationMetadataJson, new Dictionary<string, string>());
         var normalizedLanguage = AssessmentPolicy.NormalizeLanguage(selectedLanguage);
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
-        var languageStarterFiles = starterCode.GetValueOrDefault(normalizedLanguage, new Dictionary<string, string>());
+        var languageStarterFiles = GetStarterFilesForLanguage(starterCode, normalizedLanguage);
         var configuredPreviewEntry = metadata.GetValueOrDefault("preview_entry");
-        var htmlPreviewEntry = normalizedLanguage == "javascript"
+        var usesJavaScriptPreviewHarness = normalizedLanguage is "javascript" or "html";
+        var htmlPreviewEntry = usesJavaScriptPreviewHarness
             ? GetJavaScriptHtmlPreviewEntry(languageStarterFiles, configuredPreviewEntry)
             : null;
-        var defaultEntry = normalizedLanguage == "javascript"
+        var defaultEntry = usesJavaScriptPreviewHarness
             ? "TodoSummaryPanel.js"
             : "TodoSummaryPanel.py";
         var languageStarterEntry = starterCode
@@ -248,7 +249,8 @@ public static class ExecutionEndpoints
                     assert "Todo Summary" in html
                     assert "<" in html and ">" in html
                 """,
-                ["javascript"] = javascriptTestCode
+                ["javascript"] = javascriptTestCode,
+                ["html"] = javascriptTestCode
             }),
             AuthoringSource = question.AuthoringSource,
             PublicMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
@@ -320,9 +322,27 @@ public static class ExecutionEndpoints
         }
 
         var extension = Path.GetExtension(previewEntry);
-        return selectedLanguage == "javascript"
+        return selectedLanguage is "javascript" or "html"
             ? extension.Equals(".js", StringComparison.OrdinalIgnoreCase)
+              || extension.Equals(".html", StringComparison.OrdinalIgnoreCase)
             : extension.Equals(".py", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<string, string> GetStarterFilesForLanguage(
+        IReadOnlyDictionary<string, Dictionary<string, string>> starterCode,
+        string language)
+    {
+        if (starterCode.TryGetValue(language, out var files) && files.Count > 0)
+        {
+            return files;
+        }
+
+        if (language == "html" && starterCode.TryGetValue("javascript", out var javascriptFiles))
+        {
+            return javascriptFiles;
+        }
+
+        return new Dictionary<string, string>();
     }
 
     private static string GetSafePythonModuleName(string previewEntry, string fallback)

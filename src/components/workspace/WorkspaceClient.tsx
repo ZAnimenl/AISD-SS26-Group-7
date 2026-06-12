@@ -10,6 +10,7 @@ import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass }
 import { renderMarkdown } from "@/components/workspace/workspaceMarkdown";
 import { useWorkspaceIdeLayout } from "@/components/workspace/useWorkspaceIdeLayout";
 import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
+import { getDefaultFileNameForLanguage, normalizeStudentLanguageConstraints, STUDENT_LANGUAGE_OPTIONS } from "@/lib/languages";
 import type { AiInteractionType, AiWorkspaceAction, Assessment, Language, Question, RunResult, TaskType, VerificationMode, WorkspaceQuestionState, WorkspaceState } from "@/lib/types";
 
 interface WorkspaceClientProps {
@@ -65,10 +66,6 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
   debugging: "debugging"
 };
 
-const STUDENT_LANGUAGES: Array<{ value: Language; label: string }> = [
-  { value: "python", label: "Python" },
-  { value: "javascript", label: "JavaScript" }
-];
 const SANDBOX_UNAVAILABLE_MESSAGE = "Run environment unavailable. The sandbox grader is not reachable from the backend right now.";
 
 function getMessageReplaceFileActions(message: AiChatMessage, fallbackFile: string, fallbackLanguage: Language): AiWorkspaceAction[] {
@@ -156,12 +153,11 @@ function AiMessageActionButtons({
 }
 
 function getDefaultFileName(language: Language) {
-  return language === "javascript" ? "main.js" : language === "typescript" ? "main.ts" : "main.py";
+  return getDefaultFileNameForLanguage(language);
 }
 
 function getVisibleLanguages(question: Question | undefined) {
-  const constraints = question?.language_constraints?.filter((item): item is Language => item === "python" || item === "javascript") ?? [];
-  return constraints.length ? constraints : STUDENT_LANGUAGES.map((item) => item.value);
+  return normalizeStudentLanguageConstraints(question?.language_constraints, question?.task_type);
 }
 
 function resolveAllowedLanguage(question: Question | undefined, language?: Language) {
@@ -170,7 +166,16 @@ function resolveAllowedLanguage(question: Question | undefined, language?: Langu
 }
 
 function getStarterFiles(question: Question | undefined, language: Language): Record<string, string> {
-  return question?.starter_code[language] ?? {};
+  const starterFiles = question?.starter_code[language] ?? {};
+  if (Object.keys(starterFiles).length > 0) {
+    return starterFiles;
+  }
+
+  if (language === "html") {
+    return question?.starter_code.javascript ?? {};
+  }
+
+  return {};
 }
 
 function getFileNames(question: Question | undefined, language: Language, state?: WorkspaceQuestionState): string[] {
@@ -257,6 +262,26 @@ function getFilesFromQuestionState(question: Question | undefined, state: Worksp
     result[state.active_file] = getCodeFromState(state, question, state.selected_language, state.active_file);
   }
   return result;
+}
+
+function isAiActionLanguageAllowed(question: Question | undefined, selectedLanguage: Language, targetFile?: string | null, actionLanguage?: string | null) {
+  if (!actionLanguage) {
+    return true;
+  }
+
+  if (getVisibleLanguages(question).includes(actionLanguage as Language)) {
+    return true;
+  }
+
+  if (selectedLanguage !== "html") {
+    return false;
+  }
+
+  const extension = targetFile?.split(".").pop()?.toLowerCase();
+  return extension === "js" && actionLanguage === "javascript"
+    || extension === "css" && actionLanguage === "css"
+    || extension === "json" && actionLanguage === "json"
+    || extension === "html" && actionLanguage === "html";
 }
 
 function mergeQuestionStates(current: WorkspaceState["questions"], saved: WorkspaceState["questions"]) {
@@ -656,7 +681,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       return null;
     }
 
-    const unsupportedAction = actions.find((action) => action.language && !getVisibleLanguages(activeQuestion).includes(action.language));
+    const unsupportedAction = actions.find((action) => !isAiActionLanguageAllowed(activeQuestion, language, action.target_file, action.language));
     if (unsupportedAction) {
       setError("AI action language is not allowed for this task.");
       return null;
@@ -984,7 +1009,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </div>
           <label className="ml-auto hidden text-xs text-white/40 xl:inline" htmlFor="language">Language</label>
           <select id="language" className="field py-2" value={language} onChange={(event) => switchLanguage(event.target.value as Language)}>
-            {STUDENT_LANGUAGES.filter((option) => visibleLanguages.includes(option.value)).map((option) => (
+            {STUDENT_LANGUAGE_OPTIONS.filter((option) => visibleLanguages.includes(option.value)).map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>

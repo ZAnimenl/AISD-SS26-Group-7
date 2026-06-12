@@ -19,7 +19,7 @@ const localDemoAdmin = {
 const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function LoginPage() {
     }
     const prefillEmail = searchParams.get("email");
     if (prefillEmail) {
-      setEmail(prefillEmail);
+      setUsername(prefillEmail);
       setNotice(`You already have an account with ${prefillEmail}. Sign in to continue.`);
     }
   }, [router, searchParams]);
@@ -48,7 +48,7 @@ export default function LoginPage() {
     setNotice(null);
     setSubmittingAction("login");
     try {
-      const { user, mustChangePassword } = await login(email, password, rememberMe);
+      const { user, mustChangePassword } = await login(username, password, rememberMe);
       if (mustChangePassword) {
         router.push("/change-password");
         return;
@@ -75,7 +75,7 @@ export default function LoginPage() {
   }
 
   function fillLocalAdminAccount() {
-    setEmail(localDemoAdmin.email);
+    setUsername(localDemoAdmin.email);
     setPassword(localDemoAdmin.password);
     setError(null);
     setNotice("Local administrator account filled.");
@@ -111,14 +111,14 @@ export default function LoginPage() {
 
           <div className="mt-6 flex max-w-xl items-center gap-3 text-xs uppercase tracking-wider text-white/35">
             <span className="h-px flex-1 bg-white/10" />
-            or with email
+            or with username
             <span className="h-px flex-1 bg-white/10" />
           </div>
 
           <form className="mt-6 grid max-w-xl gap-4" onSubmit={handleSignIn}>
             <label className="grid gap-2 text-sm text-white/60">
-              Email
-              <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
+              Username
+              <input className="field" type="text" value={username} onChange={(event) => setUsername(event.target.value)} required autoComplete="username" />
             </label>
             <label className="grid gap-2 text-sm text-white/60">
               Password
@@ -135,7 +135,7 @@ export default function LoginPage() {
                 Remember me on this device
               </label>
               <Link
-                href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
+                href={username.includes("@") ? `/forgot-password?email=${encodeURIComponent(username)}` : "/forgot-password"}
                 className="text-sm text-cyanGlow hover:underline"
               >
                 Forgot password?

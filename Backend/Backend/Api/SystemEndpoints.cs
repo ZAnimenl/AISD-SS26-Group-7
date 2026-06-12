@@ -30,7 +30,7 @@ public static class SystemEndpoints
                     multi_file_workspace_enabled = true,
                     real_sandbox_enabled = sandboxStatus.IsAvailable
                 },
-                supported_languages = new[] { "python", "javascript" },
+                supported_languages = new[] { "python", "javascript", "typescript", "html", "sql" },
                 auth_method = "bearer_token",
                 roles = new[] { "student", "administrator" }
             });

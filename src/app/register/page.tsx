@@ -20,6 +20,7 @@ export default function RegisterPage() {
 
   // Step 1: details
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
 
   // Step 2: code
@@ -37,6 +38,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [emailTakenFor, setEmailTakenFor] = useState<string | null>(null);
+  const [usernameTakenFor, setUsernameTakenFor] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const codeInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -51,8 +53,13 @@ export default function RegisterPage() {
     setError(null);
     setNotice(null);
     setEmailTakenFor(null);
+    setUsernameTakenFor(null);
     if (!fullName.trim()) {
       setError("Please enter your full name.");
+      return;
+    }
+    if (username.trim().length < 3) {
+      setError("Please enter a username with at least 3 characters.");
       return;
     }
     if (!email.includes("@")) {
@@ -61,7 +68,11 @@ export default function RegisterPage() {
     }
     setSubmitting(true);
     try {
-      const result = await registerStart({ full_name: fullName.trim(), email: email.trim() });
+      const result = await registerStart({
+        full_name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim()
+      });
       setCodeExpiresAt(result.expiresAt);
       setDevCode(result.devCode);
       setNotice(result.sent
@@ -73,6 +84,9 @@ export default function RegisterPage() {
     } catch (exception) {
       if (exception instanceof ApiRequestError && exception.code === "EMAIL_TAKEN") {
         setEmailTakenFor(email.trim());
+        setError(null);
+      } else if (exception instanceof ApiRequestError && exception.code === "USERNAME_TAKEN") {
+        setUsernameTakenFor(username.trim());
         setError(null);
       } else {
         setError(exception instanceof Error ? exception.message : "Could not send the verification code.");
@@ -193,6 +207,23 @@ export default function RegisterPage() {
               />
             </label>
             <label className="grid gap-2 text-sm text-white/60">
+              Username
+              <input
+                className="field"
+                type="text"
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  if (usernameTakenFor && event.target.value !== usernameTakenFor) {
+                    setUsernameTakenFor(null);
+                  }
+                }}
+                autoComplete="username"
+                required
+                minLength={3}
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-white/60">
               Email
               <input
                 className="field"
@@ -246,6 +277,24 @@ export default function RegisterPage() {
                 </div>
               </div>
             ) : null}
+            {usernameTakenFor ? (
+              <div className="mt-6 grid gap-4 rounded-2xl border border-pinkGlow/40 bg-pinkGlow/10 p-5 text-sm text-white">
+                <p className="text-base font-semibold text-pinkGlow">This username is already taken.</p>
+                <p className="text-white/75">
+                  <span className="font-mono text-white">{usernameTakenFor}</span> is already used by another account. Choose a different username to continue.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary w-fit"
+                  onClick={() => {
+                    setUsernameTakenFor(null);
+                    setUsername("");
+                  }}
+                >
+                  Choose another username
+                </button>
+              </div>
+            ) : null}
           </form>
         ) : null}
 
@@ -292,7 +341,7 @@ export default function RegisterPage() {
         {step === "password" ? (
           <form onSubmit={handleCreateAccount} className="mt-8 grid gap-4">
             <p className="text-sm text-white/70">
-              Email <span className="text-white">{email}</span> confirmed. Create a password to finish signing up.
+              Username <span className="text-white">{username}</span> and email <span className="text-white">{email}</span> confirmed. Create a password to finish signing up.
             </p>
             <label className="grid gap-2 text-sm text-white/60">
               Create password

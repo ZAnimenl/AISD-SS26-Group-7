@@ -30,6 +30,7 @@ public sealed class SessionQueryTests
             Id = userId,
             Email = "student@example.com",
             FullName = "Student",
+            Username = "student",
             PasswordHash = "hash",
             Role = UserRoles.Student,
             Status = "active",

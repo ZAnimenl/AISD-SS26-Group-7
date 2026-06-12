@@ -1,5 +1,5 @@
 export type Role = "student" | "administrator";
-export type Language = "python" | "javascript" | "typescript";
+export type Language = "python" | "javascript" | "typescript" | "html" | "sql";
 export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type ExecutionStatus = "queued" | "running" | "passed" | "failed" | "runtime_error" | "time_limit_exceeded" | "memory_limit_exceeded" | "internal_error";
@@ -16,13 +16,14 @@ export interface AuthUser {
   user_id: string;
   name?: string;
   full_name?: string;
+  username?: string;
   email: string;
   role: Role;
   status?: "active" | "inactive";
   created_at?: string;
 }
 
-export type UserAccount = Required<Pick<AuthUser, "user_id" | "full_name" | "email" | "role" | "status" | "created_at">>;
+export type UserAccount = Required<Pick<AuthUser, "user_id" | "full_name" | "username" | "email" | "role" | "status" | "created_at">>;
 
 export type StarterCode = Record<Language, Record<string, string>>;
 

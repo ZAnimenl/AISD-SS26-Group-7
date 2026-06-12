@@ -138,6 +138,68 @@ public sealed class SessionStartConcurrencyTests
         Assert.Equal(string.Empty, files["main.js"].Content);
     }
 
+    [Fact]
+    public void Frontend_workspace_uses_html_language_with_legacy_javascript_starter_files()
+    {
+        var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333336");
+        var now = new DateTimeOffset(2026, 6, 5, 12, 0, 0, TimeSpan.Zero);
+        var question = new Question
+        {
+            Id = Guid.Parse("44444444-4444-4444-4444-444444444446"),
+            SortOrder = 1,
+            TaskType = TaskTypes.FrontendUiExtension,
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "javascript" }),
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+            {
+                ["javascript"] = new()
+                {
+                    ["index.html"] = "<main id=\"app\"></main>",
+                    ["app.js"] = "document.querySelector('#app');"
+                }
+            })
+        };
+
+        var state = Assert.Single(SessionEndpoints.CreateMissingWorkspaceStates(
+            sessionId,
+            [question],
+            new HashSet<Guid>(),
+            now));
+
+        Assert.Equal("html", state.SelectedLanguage);
+        Assert.Equal("index.html", state.ActiveFile);
+        var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+        Assert.Equal("html", files["index.html"].Language);
+        Assert.Equal("html", files["app.js"].Language);
+        Assert.Contains("app", files["index.html"].Content);
+    }
+
+    [Fact]
+    public void Database_workspace_defaults_to_sql_language()
+    {
+        var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333337");
+        var now = new DateTimeOffset(2026, 6, 5, 12, 0, 0, TimeSpan.Zero);
+        var question = new Question
+        {
+            Id = Guid.Parse("44444444-4444-4444-4444-444444444447"),
+            SortOrder = 1,
+            TaskType = TaskTypes.DatabaseQuerySchema,
+            LanguageConstraintsJson = JsonDocumentSerializer.Serialize(new[] { "python", "javascript" }),
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>())
+        };
+
+        var state = Assert.Single(SessionEndpoints.CreateMissingWorkspaceStates(
+            sessionId,
+            [question],
+            new HashSet<Guid>(),
+            now));
+
+        Assert.Equal("sql", state.SelectedLanguage);
+        Assert.Equal("solution.sql", state.ActiveFile);
+        var files = JsonDocumentSerializer.Deserialize(state.FilesJson, new Dictionary<string, WorkspaceFileDto>());
+        Assert.Single(files);
+        Assert.Equal("sql", files["solution.sql"].Language);
+    }
+
     private static Question Question(Guid id, int sortOrder, string language, string fileName, string content)
     {
         return new Question

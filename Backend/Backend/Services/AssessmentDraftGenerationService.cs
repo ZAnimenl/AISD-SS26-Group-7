@@ -73,7 +73,7 @@ public sealed class AssessmentDraftGenerationService
         var draft = tasks.Single();
         draft.SortOrder = sortOrder;
         draft.Difficulty = NormalizeDifficulty(request.Difficulty);
-        draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages));
+        draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages, taskType));
         draft.StarterPrototypeReference = NormalizeOptionalText(request.StarterPrototypeReference)
             ?? NormalizeOptionalText(sharedPrototypeReference);
         return draft;
@@ -88,7 +88,8 @@ public sealed class AssessmentDraftGenerationService
             "The administrator must review every generated task and test before publication.",
             "Do not include provider secrets, hidden grading explanations, or any student-specific data.",
             "Generated tasks must be practical browser-workspace tasks, not algorithm puzzle tasks.",
-            "Supported student languages are python and javascript.",
+            "Supported student languages are python, javascript, typescript, html, and sql.",
+            "Use html for frontend_ui_extension tasks and sql for database_query_schema tasks unless the administrator explicitly asks for another supported language.",
             "",
             "JSON shape:",
             "{",
@@ -100,9 +101,9 @@ public sealed class AssessmentDraftGenerationService
             "      \"verification_mode\": \"browser_ui_preview|api_response_check|database_result_check|automated_test|regression_test\",",
             "      \"starter_prototype_reference\": \"string or null\",",
             "      \"problem_description_markdown\": \"string\",",
-            "      \"language_constraints\": [\"python\", \"javascript\"],",
-            "      \"starter_code\": { \"python\": {\"file.py\":\"code\"}, \"javascript\": {\"file.js\":\"code\"} },",
-            "      \"starter_files_metadata\": { \"python\": {\"file.py\":\"editable\"}, \"javascript\": {\"file.js\":\"editable\"} },",
+            "      \"language_constraints\": [\"python\", \"javascript\", \"typescript\", \"html\", \"sql\"],",
+            "      \"starter_code\": { \"python\": {\"file.py\":\"code\"}, \"javascript\": {\"file.js\":\"code\"}, \"typescript\": {\"file.ts\":\"code\"}, \"html\": {\"index.html\":\"code\"}, \"sql\": {\"solution.sql\":\"code\"} },",
+            "      \"starter_files_metadata\": { \"python\": {\"file.py\":\"editable\"}, \"javascript\": {\"file.js\":\"editable\"}, \"typescript\": {\"file.ts\":\"editable\"}, \"html\": {\"index.html\":\"editable\"}, \"sql\": {\"solution.sql\":\"editable\"} },",
             "      \"verification_metadata\": {\"primary_view\":\"string\"},",
             "      \"grading_configuration\": {\"runner\":\"automated_tests\", \"requires_student_install\":\"false\"},",
             "      \"traceability_metadata\": {\"requirements\":\"REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j\"},",
@@ -111,7 +112,7 @@ public sealed class AssessmentDraftGenerationService
             "        {",
             "          \"name\": \"string\",",
             "          \"visibility\": \"public|hidden\",",
-            "          \"test_code\": {\"python\":\"pytest code\", \"javascript\":\"jest code\"},",
+            "          \"test_code\": {\"python\":\"pytest code\", \"javascript\":\"jest code\", \"typescript\":\"jest code\", \"html\":\"jest code that checks HTML files\", \"sql\":\"jest code that checks SQL files\"},",
             "          \"traceability_metadata\": {\"requirements\":\"REQ-52,REQ-53\"}",
             "        }",
             "      ]",
@@ -154,7 +155,7 @@ public sealed class AssessmentDraftGenerationService
         string taskType,
         string? sharedPrototypeReference)
     {
-        var languages = NormalizeStudentLanguages(request.SupportedLanguages);
+        var languages = NormalizeStudentLanguages(request.SupportedLanguages, taskType);
         return string.Join("\n",
         [
             "Generate exactly one draft task.",
@@ -205,7 +206,7 @@ public sealed class AssessmentDraftGenerationService
         var taskType = NormalizeTaskType(RequiredString(element, "task_type"));
         var verificationMode = NormalizeVerificationMode(OptionalString(element, "verification_mode"), taskType);
         var starterCode = RequiredNestedStringDictionary(element, "starter_code");
-        var languageConstraints = NormalizeStudentLanguages(ReadStringArray(element, "language_constraints"));
+        var languageConstraints = NormalizeStudentLanguages(ReadStringArray(element, "language_constraints"), taskType);
         var questionId = Guid.NewGuid();
         var testCases = RequiredArray(element, "test_cases")
             .Select(ParseTestCase)
@@ -435,15 +436,34 @@ public sealed class AssessmentDraftGenerationService
         };
     }
 
-    private static string[] NormalizeStudentLanguages(string[]? languages)
+    private static string[] NormalizeStudentLanguages(string[]? languages, string? taskType = null)
     {
         var normalizedLanguages = (languages ?? [])
             .Select(NormalizeLanguage)
-            .Where(language => language is "python" or "javascript")
+            .Where(language => language is "python" or "javascript" or "typescript" or "html" or "sql")
             .Distinct()
             .ToArray();
 
-        return normalizedLanguages.Length > 0 ? normalizedLanguages : ["python", "javascript"];
+        var effectiveLanguages = normalizedLanguages.Length > 0
+            ? normalizedLanguages
+            : taskType switch
+            {
+                TaskTypes.FrontendUiExtension => ["html"],
+                TaskTypes.DatabaseQuerySchema => ["sql"],
+                _ => ["python", "javascript"]
+            };
+
+        if (taskType == TaskTypes.FrontendUiExtension && !effectiveLanguages.Contains("html"))
+        {
+            return ["html"];
+        }
+
+        if (taskType == TaskTypes.DatabaseQuerySchema && !effectiveLanguages.Contains("sql"))
+        {
+            return ["sql"];
+        }
+
+        return effectiveLanguages;
     }
 
     private static string NormalizeLanguage(string language)
@@ -452,6 +472,12 @@ public sealed class AssessmentDraftGenerationService
         {
             "js" => "javascript",
             "javascript" => "javascript",
+            "ts" => "typescript",
+            "typescript" => "typescript",
+            "html" => "html",
+            "sql" => "sql",
+            "py" => "python",
+            "python" => "python",
             _ => "python"
         };
     }

@@ -36,6 +36,7 @@ public static class UserManagementEndpoints
             {
                 user_id = user.Id,
                 full_name = user.FullName,
+                username = user.Username,
                 user.Email,
                 user.Role,
                 user.Status,
@@ -60,20 +61,41 @@ public static class UserManagementEndpoints
             return error;
         }
 
-        if (await dbContext.Users.AnyAsync(user => user.Email == request.Email, cancellationToken))
+        var normalizedUsername = NormalizeUsername(request.Username);
+        if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(normalizedUsername) || string.IsNullOrWhiteSpace(request.Email))
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Full name, username, and email are required.", StatusCodes.Status400BadRequest);
+        }
+
+        if (normalizedUsername.Length < 3)
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Username must be at least 3 characters.", StatusCodes.Status400BadRequest);
+        }
+
+        var lowerEmail = request.Email.Trim().ToLowerInvariant();
+        var lowerUsername = normalizedUsername.ToLowerInvariant();
+        if (await dbContext.Users.AnyAsync(user => user.Email.ToLower() == lowerEmail, cancellationToken))
         {
             return ApiResults.Error("VALIDATION_ERROR", "Email is already registered.", StatusCodes.Status400BadRequest);
+        }
+
+        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == lowerUsername, cancellationToken))
+        {
+            return ApiResults.Error("VALIDATION_ERROR", "Username is already taken.", StatusCodes.Status400BadRequest);
         }
 
         var user = new User
         {
             Id = Guid.NewGuid(),
-            FullName = request.FullName,
-            Email = request.Email,
+            FullName = request.FullName.Trim(),
+            Username = normalizedUsername,
+            Email = request.Email.Trim(),
             PasswordHash = passwordHasher.Hash(request.Password),
             Role = NormalizeRole(request.Role),
             Status = string.IsNullOrWhiteSpace(request.Status) ? UserStatuses.Active : request.Status,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            AuthProvider = "email",
+            EmailVerified = true
         };
 
         dbContext.Users.Add(user);
@@ -102,6 +124,22 @@ public static class UserManagementEndpoints
         }
 
         user.FullName = string.IsNullOrWhiteSpace(request.FullName) ? user.FullName : request.FullName;
+        if (!string.IsNullOrWhiteSpace(request.Username))
+        {
+            var normalizedUsername = NormalizeUsername(request.Username);
+            if (normalizedUsername.Length < 3)
+            {
+                return ApiResults.Error("VALIDATION_ERROR", "Username must be at least 3 characters.", StatusCodes.Status400BadRequest);
+            }
+
+            var lowerUsername = normalizedUsername.ToLowerInvariant();
+            if (await dbContext.Users.AnyAsync(candidate => candidate.Id != user.Id && candidate.Username.ToLower() == lowerUsername, cancellationToken))
+            {
+                return ApiResults.Error("VALIDATION_ERROR", "Username is already taken.", StatusCodes.Status400BadRequest);
+            }
+
+            user.Username = normalizedUsername;
+        }
         user.Role = string.IsNullOrWhiteSpace(request.Role) ? user.Role : NormalizeRole(request.Role);
         user.Status = string.IsNullOrWhiteSpace(request.Status) ? user.Status : request.Status;
 
@@ -136,5 +174,12 @@ public static class UserManagementEndpoints
     private static string NormalizeRole(string role)
     {
         return role == UserRoles.Administrator ? UserRoles.Administrator : UserRoles.Student;
+    }
+
+    private static string NormalizeUsername(string? value)
+    {
+        return string.Join(
+            " ",
+            (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 }

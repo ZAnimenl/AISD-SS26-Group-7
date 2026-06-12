@@ -81,6 +81,9 @@ internal sealed class DockerCodeRunner : ICodeRunner
         var testCode = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>());
         return testCode.GetValueOrDefault(language)
                ?? testCode.GetValueOrDefault(language.ToLowerInvariant())
+               ?? (language.Equals("html", StringComparison.OrdinalIgnoreCase)
+                   ? testCode.GetValueOrDefault("javascript")
+                   : null)
                ?? string.Empty;
     }
 

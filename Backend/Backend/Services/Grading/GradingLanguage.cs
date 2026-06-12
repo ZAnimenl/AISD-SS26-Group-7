@@ -4,7 +4,8 @@ internal enum GradingLanguage
 {
     Python,
     JavaScript,
-    TypeScript
+    TypeScript,
+    Sql
 }
 
 internal static class GradingLanguageParser
@@ -12,9 +13,16 @@ internal static class GradingLanguageParser
     public static bool TryParse(string value, out GradingLanguage language)
     {
         if (value.Equals("javascript", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("js", StringComparison.OrdinalIgnoreCase))
+            || value.Equals("js", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("html", StringComparison.OrdinalIgnoreCase))
         {
             language = GradingLanguage.JavaScript;
+            return true;
+        }
+
+        if (value.Equals("sql", StringComparison.OrdinalIgnoreCase))
+        {
+            language = GradingLanguage.Sql;
             return true;
         }
 

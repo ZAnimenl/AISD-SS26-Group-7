@@ -6,14 +6,13 @@ import { Clock, Loader2, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAssessment, getWorkspace, isAuthenticationError, startAssessment } from "@/lib/api";
+import { getLanguageLabel, normalizeStudentLanguageConstraints } from "@/lib/languages";
 import type { Assessment } from "@/lib/types";
 
 function formatQuestionLanguages(question: Assessment["questions"][number]) {
-  const languages = question.language_constraints
-    .filter((language) => language === "python" || language === "javascript")
-    .map((language) => language === "javascript" ? "JavaScript" : "Python");
-
-  return languages.length ? languages.join(", ") : "Python, JavaScript";
+  return normalizeStudentLanguageConstraints(question.language_constraints, question.task_type)
+    .map(getLanguageLabel)
+    .join(", ");
 }
 
 export default function AssessmentStartPage() {

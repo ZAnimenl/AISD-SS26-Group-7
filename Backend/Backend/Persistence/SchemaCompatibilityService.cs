@@ -66,6 +66,7 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "TraceabilityMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "PublicMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "AdminMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS "Username" character varying(80) NOT NULL DEFAULT '';
 
                 IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='test_cases' AND column_name='Input') THEN
                     ALTER TABLE test_cases ALTER COLUMN "Input" DROP NOT NULL;
@@ -130,6 +131,10 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
 
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_workspace_question_states_SessionId_QuestionId"
             ON workspace_question_states ("SessionId", "QuestionId");
+
+            UPDATE users
+            SET "Username" = "FullName"
+            WHERE "Username" IS NULL OR "Username" = '';
             """,
             cancellationToken);
 

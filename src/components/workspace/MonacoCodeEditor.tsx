@@ -26,8 +26,34 @@ interface MonacoCodeEditorProps {
 const MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE: Record<Language, string> = {
   python: "python",
   javascript: "javascript",
-  typescript: "typescript"
+  typescript: "typescript",
+  html: "html",
+  sql: "sql"
 };
+
+function getMonacoLanguage(fileName: string, language: Language) {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  switch (extension) {
+    case "html":
+      return "html";
+    case "css":
+      return "css";
+    case "js":
+    case "jsx":
+      return "javascript";
+    case "ts":
+    case "tsx":
+      return "typescript";
+    case "sql":
+      return "sql";
+    case "py":
+      return "python";
+    case "json":
+      return "json";
+    default:
+      return MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE[language];
+  }
+}
 
 function encodeUriPathSegment(value: string) {
   return encodeURIComponent(value).replace(/%2F/gi, "/");
@@ -71,7 +97,7 @@ export function MonacoCodeEditor({ assessmentId, questionId, fileName, language,
       <Editor
         height="100%"
         path={modelPath}
-        language={MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE[language]}
+        language={getMonacoLanguage(fileName, language)}
         theme="vs-dark"
         value={value}
         onChange={handleEditorChange}

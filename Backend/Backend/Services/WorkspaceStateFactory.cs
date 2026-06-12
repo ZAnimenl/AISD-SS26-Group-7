@@ -8,8 +8,8 @@ public static class WorkspaceStateFactory
     {
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
         var language = SelectInitialLanguage(question, starterCode);
-        var languageFiles = starterCode.GetValueOrDefault(language, new Dictionary<string, string>());
-        var firstFile = languageFiles.Keys.FirstOrDefault() ?? GetActiveFile(language);
+        var languageFiles = GetStarterFilesForLanguage(starterCode, language);
+        var firstFile = languageFiles.Keys.FirstOrDefault() ?? AssessmentPolicy.GetDefaultFileName(language);
         var workspaceFiles = languageFiles.ToDictionary(
             entry => entry.Key,
             entry => new WorkspaceFileDto(language, entry.Value));
@@ -47,17 +47,24 @@ public static class WorkspaceStateFactory
 
         return allowedLanguages.FirstOrDefault()
                ?? starterCode.Keys.Select(AssessmentPolicy.NormalizeLanguage)
-                   .FirstOrDefault(language => language is "python" or "javascript")
+                   .FirstOrDefault(language => AssessmentPolicy.GetSupportedStudentLanguages(question).Contains(language))
                ?? "python";
     }
 
-    private static string GetActiveFile(string language)
+    private static Dictionary<string, string> GetStarterFilesForLanguage(
+        IReadOnlyDictionary<string, Dictionary<string, string>> starterCode,
+        string language)
     {
-        return language switch
+        if (starterCode.TryGetValue(language, out var files) && files.Count > 0)
         {
-            "javascript" => "main.js",
-            "typescript" => "main.ts",
-            _ => "main.py"
-        };
+            return files;
+        }
+
+        if (language == "html" && starterCode.TryGetValue("javascript", out var javascriptFiles))
+        {
+            return javascriptFiles;
+        }
+
+        return new Dictionary<string, string>();
     }
 }

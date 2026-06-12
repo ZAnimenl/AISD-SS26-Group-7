@@ -13,6 +13,7 @@ public sealed class UserAccountContractTests
         var properties = typeof(RegisterRequest).GetProperties().Select(property => property.Name).ToArray();
 
         Assert.Contains(nameof(RegisterRequest.FullName), properties);
+        Assert.Contains(nameof(RegisterRequest.Username), properties);
         Assert.Contains(nameof(RegisterRequest.Email), properties);
         Assert.Contains(nameof(RegisterRequest.Password), properties);
         Assert.DoesNotContain("Role", properties);
@@ -24,6 +25,7 @@ public sealed class UserAccountContractTests
     {
         var request = new UserRequest(
             "New Admin",
+            "new-admin",
             "new.admin@example.com",
             "password",
             UserRoles.Administrator,
@@ -40,6 +42,7 @@ public sealed class UserAccountContractTests
         {
             Id = Guid.NewGuid(),
             FullName = "Ada Admin",
+            Username = "ada-admin",
             Email = "admin@example.com",
             Role = UserRoles.Administrator,
             Status = UserStatuses.Active
@@ -49,6 +52,7 @@ public sealed class UserAccountContractTests
 
         Assert.Contains("\"role\":\"administrator\"", json);
         Assert.Contains("\"status\":\"active\"", json);
+        Assert.Contains("\"username\":\"ada-admin\"", json);
         Assert.DoesNotContain("\"Role\"", json);
     }
 }

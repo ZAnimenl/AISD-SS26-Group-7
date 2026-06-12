@@ -24,6 +24,7 @@ public sealed class SeedAdminSeeder(
             {
                 Id = Guid.NewGuid(),
                 FullName = "Seed Administrator",
+                Username = "admin",
                 Email = options.Email,
                 PasswordHash = passwordHasher.Hash(options.Password),
                 Role = UserRoles.Administrator,
@@ -37,6 +38,7 @@ public sealed class SeedAdminSeeder(
         }
 
         admin.FullName = string.IsNullOrWhiteSpace(admin.FullName) ? "Seed Administrator" : admin.FullName;
+        admin.Username = string.IsNullOrWhiteSpace(admin.Username) ? "admin" : admin.Username;
         admin.PasswordHash = passwordHasher.Hash(options.Password);
         admin.Role = UserRoles.Administrator;
         admin.Status = UserStatuses.Active;

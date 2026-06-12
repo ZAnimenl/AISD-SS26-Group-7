@@ -10,6 +10,7 @@ export function UserManagementClient() {
   const router = useRouter();
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("administrator");
@@ -42,6 +43,7 @@ export function UserManagementClient() {
     try {
       const user = await createAdminUser({
         full_name: fullName,
+        username,
         email,
         password,
         role,
@@ -49,6 +51,7 @@ export function UserManagementClient() {
       });
       setUsers((current) => [...current, user].sort((left, right) => left.full_name.localeCompare(right.full_name)));
       setFullName("");
+      setUsername("");
       setEmail("");
       setPassword("");
       setRole("administrator");
@@ -68,6 +71,10 @@ export function UserManagementClient() {
           <label className="grid gap-2 text-sm text-white/60">
             Full name
             <input className="field" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+          </label>
+          <label className="grid gap-2 text-sm text-white/60">
+            Username
+            <input className="field" value={username} onChange={(event) => setUsername(event.target.value)} required minLength={3} autoComplete="username" />
           </label>
           <label className="grid gap-2 text-sm text-white/60">
             Email
@@ -95,10 +102,11 @@ export function UserManagementClient() {
 
       <section className="panel">
         <div className="relative overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="text-xs uppercase tracking-[0.14em] text-white/35">
               <tr>
                 <th className="pb-3">Name</th>
+                <th className="pb-3">Username</th>
                 <th className="pb-3">Email</th>
                 <th className="pb-3">Role</th>
                 <th className="pb-3">Status</th>
@@ -109,6 +117,7 @@ export function UserManagementClient() {
               {users.map((user) => (
                 <tr key={user.user_id}>
                   <td className="py-4 font-semibold text-white">{user.full_name}</td>
+                  <td className="py-4 text-white/60">{user.username}</td>
                   <td className="py-4 text-white/60">{user.email}</td>
                   <td className="py-4 text-white/60">{user.role}</td>
                   <td className="py-4 text-white/60">{user.status}</td>
