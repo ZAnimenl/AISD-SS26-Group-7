@@ -8,7 +8,7 @@ import type { AuthUser } from "@/lib/types";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user] = useState<AuthUser | null>(() => getStoredUser());
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,13 +16,10 @@ export default function ChangePasswordPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (!stored) {
+    if (!user) {
       router.replace("/login");
-      return;
     }
-    setUser(stored);
-  }, [router]);
+  }, [router, user]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

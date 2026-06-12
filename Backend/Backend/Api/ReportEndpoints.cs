@@ -99,7 +99,10 @@ public static class ReportEndpoints
                 participant_count = assessment.Sessions.Count,
                 completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
                 ai_interactions = assessmentAi.Count,
-                total_ai_tokens = assessmentAi.Sum(interaction => interaction.TotalTokens)
+                total_ai_tokens = assessmentAi.Sum(interaction => interaction.TotalTokens),
+                average_ai_tokens_per_interaction = assessmentAi.Count == 0
+                    ? 0
+                    : assessmentAi.Sum(interaction => interaction.TotalTokens) / assessmentAi.Count
             };
         }).ToList();
 

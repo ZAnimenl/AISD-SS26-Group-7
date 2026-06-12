@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen } from "lucide-react";
-import { finalizeSubmission, getAiResponse, runCode, saveWorkspace } from "@/lib/api";
+import { finalizeSubmission, getAiResponse, getAiUsage, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
 import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass } from "@/components/workspace/ConsolePanel";
@@ -36,6 +36,12 @@ type AiChatMessage = {
     output_tokens: number;
     total_tokens: number;
   };
+};
+
+type WorkspaceAiUsageSummary = {
+  total_interactions: number;
+  total_tokens: number;
+  average_tokens_per_interaction: number;
 };
 
 const TASK_LABELS: Record<TaskType, string> = {
@@ -329,6 +335,10 @@ function formatRemainingTime(expiresAt: string, now: number) {
   return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
+function formatTokenCount(value: number) {
+  return value.toLocaleString();
+}
+
 function useRemainingTime(expiresAt: string) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -398,6 +408,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [aiMessage, setAiMessage] = useState("");
   const [aiState, setAiState] = useState<"idle" | "running">("idle");
   const [agentActionState, setAgentActionState] = useState<"idle" | "applying">("idle");
+  const [aiUsageSummary, setAiUsageSummary] = useState<WorkspaceAiUsageSummary | null>(null);
   const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const aiRequestCounterRef = useRef(0);
   const [messages, setMessages] = useState<AiChatMessage[]>([
@@ -428,6 +439,35 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   useEffect(() => {
     aiMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, aiState]);
+
+  useEffect(() => {
+    if (!assessment.ai_enabled) {
+      return;
+    }
+
+    let isMounted = true;
+    getAiUsage(assessment.assessment_id)
+      .then((usage) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setAiUsageSummary({
+          total_interactions: usage.total_interactions,
+          total_tokens: usage.total_tokens,
+          average_tokens_per_interaction: usage.average_tokens_per_interaction
+        });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAiUsageSummary(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assessment.ai_enabled, assessment.assessment_id]);
 
   const persistCurrentCode = useCallback((nextQuestionStates = questionStatesRef.current) => {
     const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
@@ -629,6 +669,15 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
         active_file_name: currentFile,
         visible_files: getAllFiles(),
         last_run_result: runResults[activeQuestionId] ?? null
+      });
+      setAiUsageSummary((current) => {
+        const totalInteractions = (current?.total_interactions ?? 0) + 1;
+        const totalTokens = (current?.total_tokens ?? 0) + response.token_usage.total_tokens;
+        return {
+          total_interactions: totalInteractions,
+          total_tokens: totalTokens,
+          average_tokens_per_interaction: Math.floor(totalTokens / totalInteractions)
+        };
       });
       const suggestion = response.suggestion;
       const workspaceActions = response.workspace_actions?.length
@@ -1061,13 +1110,15 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </>
         ) : (
           <>
-        <div className="relative flex items-center gap-3">
-          <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/20 bg-[linear-gradient(145deg,rgba(0,229,255,0.14),rgba(168,85,247,0.16))] text-cyanGlow">
-            <SemanticIcon name="ai" size={22} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-semibold">AI Agent</h2>
-            <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
+        <div className="relative flex flex-wrap items-start gap-3">
+          <div className="flex min-w-[170px] flex-1 items-center gap-3">
+            <span className="float-soft grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-cyanGlow/20 bg-[linear-gradient(145deg,rgba(0,229,255,0.14),rgba(168,85,247,0.16))] text-cyanGlow">
+              <SemanticIcon name="ai" size={22} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="font-semibold">AI Agent</h2>
+              <p className="text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
+            </div>
           </div>
           <button
             type="button"
@@ -1079,6 +1130,17 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             <PanelRightClose size={15} />
             <span className="hidden sm:inline">Hide</span>
           </button>
+          {assessment.ai_enabled ? (
+            <div className="w-full rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-2 sm:w-auto sm:min-w-[138px] sm:text-right">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/35">Tokens used</p>
+              <p className="font-mono text-sm font-semibold text-cyanGlow">
+                {aiUsageSummary ? formatTokenCount(aiUsageSummary.total_tokens) : "0"}
+              </p>
+              <p className="text-[10px] text-white/35">
+                {aiUsageSummary?.total_interactions ?? 0} interactions
+              </p>
+            </div>
+          ) : null}
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["code_suggestion", "explanation", "debugging"] as AiInteractionType[]).map((type) => (

@@ -1,25 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Code2, Mail, LogIn } from "lucide-react";
 import { forgotPassword } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<ForgotPasswordShell />}>
+      <ForgotPasswordContent />
+    </Suspense>
+  );
+}
+
+function ForgotPasswordContent() {
   const params = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => params.get("email") ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [devTemp, setDevTemp] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const prefill = params.get("email");
-    if (prefill) {
-      setEmail(prefill);
-    }
-  }, [params]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -99,6 +100,20 @@ export default function ForgotPasswordPage() {
         )}
 
         {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
+      </section>
+    </main>
+  );
+}
+
+function ForgotPasswordShell() {
+  return (
+    <main className="page-shell bg-grid grid min-h-screen place-items-center p-4">
+      <section className="liquid-glass-neon mx-auto w-full max-w-md rounded-3xl p-10">
+        <span className="inline-grid h-12 w-12 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow">
+          <Code2 size={22} />
+        </span>
+        <h1 className="mt-6 font-heading text-3xl italic text-white">Forgot your password?</h1>
+        <p className="mt-3 text-sm text-white/60">Loading reset form...</p>
       </section>
     </main>
   );
