@@ -59,7 +59,11 @@ export default function StudentAssessmentReviewPage() {
       question_count: nextResult.question_count || assessment?.question_count || assessment?.questions.length || 0
     };
   }, [assessmentId, assessments, results, submissionId]);
-  const canStartAnotherAttempt = assessments.some((assessment) => assessment.assessment_id === assessmentId);
+  const canStartAnotherAttempt = assessments.some((assessment) =>
+    assessment.assessment_id === assessmentId
+    && assessment.status === "active"
+    && assessment.attempt_status !== "expired"
+  );
 
   if (isLoading) {
     return <SectionHeader eyebrow="Assessment review" title="Loading result..." />;
