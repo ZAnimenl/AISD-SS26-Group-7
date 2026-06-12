@@ -269,6 +269,7 @@ test("isSafeBackendProcessCommand recognizes Backend listeners only", () => {
   assert.equal(isSafeBackendProcessCommand("/repo/Backend/Backend/bin/Debug/net9.0/Backend"), true);
   assert.equal(isSafeBackendProcessCommand("C:\\repo\\Backend\\bin\\Debug\\Backend.exe"), true);
   assert.equal(isSafeBackendProcessCommand("/usr/local/bin/dotnet /repo/Backend/Backend.dll"), true);
+  assert.equal(isSafeBackendProcessCommand('"dotnet" exec "C:\\repo\\Backend\\Backend\\bin\\Debug\\net9.0\\Backend.dll"'), true);
   assert.equal(isSafeBackendProcessCommand("/usr/local/bin/node server.js"), false);
 });
 

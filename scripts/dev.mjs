@@ -39,6 +39,7 @@ import {
 } from "./dev-command-runner.mjs";
 import {
   findListeningProcessIds,
+  findProcessIdsByCommand,
   isSafeBackendProcessCommand,
   isSafeFrontendProcessCommand,
   readProcessCommand,
@@ -71,6 +72,7 @@ export {
   selectPathCommandCandidate
 } from "./dev-command-runner.mjs";
 export {
+  findProcessIdsByCommand,
   isSafeBackendProcessCommand,
   isSafeFrontendProcessCommand,
   resolveUrlPort
@@ -282,6 +284,7 @@ async function main() {
     return;
   }
 
+  await ensureBackendBuildArtifactsAvailable(config);
   await ensureSeedAdmin(config);
   const backend = await ensureBackend(config);
   if (options.backendOnly) {
@@ -708,6 +711,19 @@ async function ensureSeedAdmin(config) {
   });
 }
 
+async function ensureBackendBuildArtifactsAvailable(config) {
+  const backendProcessIds = findRepoBackendProcessIds(config);
+  if (backendProcessIds.length === 0) {
+    return;
+  }
+
+  console.log("Stopping old local backend process before rebuilding ...");
+  stopProcessIds(backendProcessIds);
+
+  const port = resolveBackendPort(config.BackendUrls);
+  await waitForPortToClose(port, 10);
+}
+
 async function writeNpmInstallMarker() {
   const markerPath = path.join(repoRoot, "node_modules", npmInstallMarkerFileName);
   await fsp.mkdir(path.dirname(markerPath), { recursive: true });
@@ -858,8 +874,31 @@ function findSafeBackendProcessIds(config) {
   const processIds = findListeningProcessIds(port);
   return processIds.filter((processId) => {
     const command = readProcessCommand(processId);
-    return isSafeBackendProcessCommand(command);
+    return isRepoBackendProcessCommand(command);
   });
+}
+
+function findRepoBackendProcessIds(config) {
+  const port = resolveBackendPort(config.BackendUrls);
+  const listeningProcessIds = new Set(findListeningProcessIds(port));
+  const processIds = findProcessIdsByCommand(isRepoBackendProcessCommand);
+
+  return [...new Set([...listeningProcessIds, ...processIds])]
+    .filter((processId) => processId !== process.pid)
+    .filter((processId) => {
+      const command = readProcessCommand(processId);
+      return isRepoBackendProcessCommand(command);
+    });
+}
+
+function isRepoBackendProcessCommand(command) {
+  const normalizedCommand = normalizePathText(command);
+  return isSafeBackendProcessCommand(command)
+    && normalizedCommand.includes(normalizePathText(repoRoot));
+}
+
+function normalizePathText(value) {
+  return String(value ?? "").replace(/\\/g, "/").toLowerCase();
 }
 
 async function waitForBackendToStop(healthUrl, seconds) {
