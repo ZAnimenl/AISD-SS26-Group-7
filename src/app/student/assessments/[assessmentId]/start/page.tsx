@@ -64,7 +64,8 @@ export default function AssessmentStartPage() {
     return <SectionHeader eyebrow="Start assessment" title="Connecting to backend..." />;
   }
 
-  const canStartAttempt = assessment.status === "active";
+  const attemptExpired = assessment.attempt_status === "expired";
+  const canStartAttempt = assessment.status === "active" && !attemptExpired;
   const startButtonLabel = assessment.attempt_status === "submitted" ? "Start another attempt" : "Start attempt";
 
   return (
@@ -86,7 +87,9 @@ export default function AssessmentStartPage() {
                 {isStarting ? "Opening workspace..." : startButtonLabel}
               </button>
             ) : (
-              <p className="mt-8 text-sm text-white/50">This assessment is not open for new attempts.</p>
+              <p className="mt-8 text-sm text-white/50">
+                {attemptExpired ? "This assessment attempt has expired and cannot be started again." : "This assessment is not open for new attempts."}
+              </p>
             )}
             {isStarting ? <p className="mt-3 text-sm text-white/55" aria-live="polite">Backend is resolving your real active attempt and workspace before opening the IDE.</p> : null}
             {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}

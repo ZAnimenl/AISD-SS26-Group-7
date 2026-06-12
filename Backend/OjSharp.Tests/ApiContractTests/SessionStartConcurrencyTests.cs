@@ -26,6 +26,20 @@ public sealed class SessionStartConcurrencyTests
     }
 
     [Fact]
+    public void Expired_attempt_blocks_starting_another_attempt()
+    {
+        Assert.True(SessionEndpoints.HasExpiredAttempt([
+            SessionStatuses.Submitted,
+            SessionStatuses.Expired
+        ]));
+
+        Assert.False(SessionEndpoints.HasExpiredAttempt([
+            SessionStatuses.Submitted,
+            SessionStatuses.Closed
+        ]));
+    }
+
+    [Fact]
     public void Missing_workspace_states_are_created_in_deterministic_question_order()
     {
         var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333333");

@@ -62,10 +62,11 @@ public static class SessionEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
-        var studentActiveSessions = dbContext.AssessmentSessions
+        var studentSessions = dbContext.AssessmentSessions
             .Where(item => item.AssessmentId == assessmentId
-                           && item.UserId == student.Id
-                           && item.Status == SessionStatuses.Active);
+                           && item.UserId == student.Id);
+        var studentActiveSessions = studentSessions
+            .Where(item => item.Status == SessionStatuses.Active);
         var expiredSessions = await SessionQueries.ToExpiredListAsync(
             studentActiveSessions,
             dbContext,
@@ -79,6 +80,18 @@ public static class SessionEndpoints
         if (expiredSessions.Count > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var sessionStatuses = await studentSessions
+            .Select(item => item.Status)
+            .ToListAsync(cancellationToken);
+        var hasExpiredAttempt = HasExpiredAttempt(sessionStatuses);
+        if (hasExpiredAttempt)
+        {
+            return ApiResults.Error(
+                "ATTEMPT_EXPIRED",
+                "This assessment attempt has expired and cannot be started again.",
+                StatusCodes.Status409Conflict);
         }
 
         var session = await SessionQueries.FirstUnexpiredAsync(
@@ -188,6 +201,11 @@ public static class SessionEndpoints
         }
 
         return workspaceStates;
+    }
+
+    internal static bool HasExpiredAttempt(IEnumerable<string> sessionStatuses)
+    {
+        return sessionStatuses.Any(status => status == SessionStatuses.Expired);
     }
 
     private static object ToAttemptDto(AssessmentSession session, DateTimeOffset now)

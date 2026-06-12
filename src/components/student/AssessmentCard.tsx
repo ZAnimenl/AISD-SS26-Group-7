@@ -4,7 +4,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
-  const canStartAttempt = assessment.status === "active" && assessment.attempt_status !== "active";
+  const attemptExpired = assessment.attempt_status === "expired";
+  const canStartAttempt = assessment.status === "active" && assessment.attempt_status !== "active" && !attemptExpired;
   const hasSubmittedResult = assessment.attempt_status === "submitted";
   const actionHref =
     assessment.attempt_status === "active"
