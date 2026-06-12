@@ -97,6 +97,69 @@ public sealed class AiCompletionServiceTests
         Assert.Equal("length", result.FinishReason);
     }
 
+    [Fact]
+    public async Task Generate_async_reports_provider_http_error_body()
+    {
+        var handler = new CapturingHandler(
+            """
+            {"error":{"message":"invalid model"}}
+            """,
+            HttpStatusCode.BadRequest);
+        var service = CreateLocalLlmService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiProviderUnavailableException>(() =>
+            service.GenerateAsync(
+                "system prompt",
+                "student prompt",
+                AiResponseFormat.Json,
+                CancellationToken.None));
+
+        Assert.Contains("Local LLM request failed with status 400 BadRequest.", exception.Message);
+        Assert.Contains("invalid model", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_async_reports_provider_network_failure()
+    {
+        var service = CreateLocalLlmService(new CapturingHandler(exception: new HttpRequestException("synthetic network failure")));
+
+        var exception = await Assert.ThrowsAsync<AiProviderUnavailableException>(() =>
+            service.GenerateAsync(
+                "system prompt",
+                "student prompt",
+                AiResponseFormat.Json,
+                CancellationToken.None));
+
+        Assert.Equal("Local LLM request failed: synthetic network failure", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_async_reports_missing_token_usage_specifically()
+    {
+        var handler = new CapturingHandler(
+            """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"tasks\":[]}"
+                  }
+                }
+              ]
+            }
+            """);
+        var service = CreateLocalLlmService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiProviderUnavailableException>(() =>
+            service.GenerateAsync(
+                "system prompt",
+                "student prompt",
+                AiResponseFormat.Json,
+                CancellationToken.None));
+
+        Assert.Equal("Local LLM returned content without token usage.", exception.Message);
+    }
+
     private static AiCompletionService CreateLocalLlmService(CapturingHandler handler)
     {
         return new AiCompletionService(
@@ -137,8 +200,13 @@ public sealed class AiCompletionServiceTests
     private sealed class CapturingHandler : HttpMessageHandler
     {
         private readonly string responseBody;
+        private readonly HttpStatusCode statusCode;
+        private readonly Exception? exception;
 
-        public CapturingHandler(string? responseBody = null)
+        public CapturingHandler(
+            string? responseBody = null,
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            Exception? exception = null)
         {
             this.responseBody = responseBody ??
                 """
@@ -156,6 +224,8 @@ public sealed class AiCompletionServiceTests
                   }
                 }
                 """;
+            this.statusCode = statusCode;
+            this.exception = exception;
         }
 
         public string CapturedBody { get; private set; } = "";
@@ -164,11 +234,16 @@ public sealed class AiCompletionServiceTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            if (exception is not null)
+            {
+                throw exception;
+            }
+
             CapturedBody = request.Content is null
                 ? ""
                 : await request.Content.ReadAsStringAsync(cancellationToken);
 
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
             };

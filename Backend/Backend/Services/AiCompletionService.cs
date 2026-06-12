@@ -25,6 +25,8 @@ public sealed class AiProviderUnavailableException : Exception
     }
 }
 
+internal sealed record AiCompletionAttempt(AiCompletionResult? Result, string? FailureMessage);
+
 public sealed class AiCompletionService
 {
     private readonly IHttpClientFactory httpClientFactory;
@@ -61,26 +63,26 @@ public sealed class AiCompletionService
             }
             else
             {
-                var result = await TryGenerateDeepseekAsync(deepseek, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
-                if (result is not null)
+                var attempt = await TryGenerateDeepseekAsync(deepseek, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
+                if (attempt.Result is not null)
                 {
-                    return result;
+                    return attempt.Result;
                 }
 
-                failures.Add("DeepSeek did not return a usable completion with token usage.");
+                failures.Add(attempt.FailureMessage ?? "DeepSeek did not return a usable completion with token usage.");
             }
         }
 
         var local = localLlmOptions.CurrentValue;
         if (local.Enabled)
         {
-            var result = await TryGenerateLocalLlmAsync(local, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
-            if (result is not null)
+            var attempt = await TryGenerateLocalLlmAsync(local, systemPrompt, userPrompt, responseFormat, maxTokens, cancellationToken);
+            if (attempt.Result is not null)
             {
-                return result;
+                return attempt.Result;
             }
 
-            failures.Add("Local LLM did not return a usable completion with token usage.");
+            failures.Add(attempt.FailureMessage ?? "Local LLM did not return a usable completion with token usage.");
         }
 
         var message = failures.Count == 0
@@ -89,7 +91,7 @@ public sealed class AiCompletionService
         throw new AiProviderUnavailableException(message);
     }
 
-    private Task<AiCompletionResult?> TryGenerateDeepseekAsync(
+    private Task<AiCompletionAttempt> TryGenerateDeepseekAsync(
         DeepseekOptions options,
         string systemPrompt,
         string userPrompt,
@@ -128,7 +130,7 @@ public sealed class AiCompletionService
             cancellationToken);
     }
 
-    private Task<AiCompletionResult?> TryGenerateLocalLlmAsync(
+    private Task<AiCompletionAttempt> TryGenerateLocalLlmAsync(
         LocalLlmOptions options,
         string systemPrompt,
         string userPrompt,
@@ -139,7 +141,7 @@ public sealed class AiCompletionService
         if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.Model))
         {
             logger.LogWarning("Local LLM is enabled but BaseUrl or Model is missing.");
-            return Task.FromResult<AiCompletionResult?>(null);
+            return Task.FromResult(new AiCompletionAttempt(null, "Local LLM is enabled but BaseUrl or Model is missing."));
         }
 
         var requestBody = new Dictionary<string, object?>
@@ -169,7 +171,7 @@ public sealed class AiCompletionService
             cancellationToken);
     }
 
-    private async Task<AiCompletionResult?> SendChatCompletionAsync(
+    private async Task<AiCompletionAttempt> SendChatCompletionAsync(
         string providerName,
         string clientName,
         string baseUrl,
@@ -199,11 +201,17 @@ public sealed class AiCompletionService
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                var failureMessage = $"{providerName} request failed with status {(int)response.StatusCode} {response.StatusCode}.";
+                var responseMessage = ToShortPlainText(errorBody);
                 logger.LogWarning("{Provider} request failed with status {StatusCode}: {Body}",
                     providerName,
                     response.StatusCode,
                     errorBody.Length > 200 ? errorBody[..200] : errorBody);
-                return null;
+                return new AiCompletionAttempt(
+                    null,
+                    string.IsNullOrWhiteSpace(responseMessage)
+                        ? failureMessage
+                        : $"{failureMessage} Provider response: {responseMessage}");
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -213,16 +221,18 @@ public sealed class AiCompletionService
             if (string.IsNullOrWhiteSpace(content))
             {
                 logger.LogWarning("{Provider} returned no assistant content.", providerName);
-                return null;
+                return new AiCompletionAttempt(null, $"{providerName} returned no assistant content.");
             }
 
             if (!TryExtractUsage(document.RootElement, out var inputTokens, out var outputTokens))
             {
                 logger.LogWarning("{Provider} returned content without token usage.", providerName);
-                return null;
+                return new AiCompletionAttempt(null, $"{providerName} returned content without token usage.");
             }
 
-            return new AiCompletionResult(content.Trim(), inputTokens, outputTokens, ExtractFinishReason(document.RootElement));
+            return new AiCompletionAttempt(
+                new AiCompletionResult(content.Trim(), inputTokens, outputTokens, ExtractFinishReason(document.RootElement)),
+                null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -231,7 +241,7 @@ public sealed class AiCompletionService
         catch (Exception exception)
         {
             logger.LogWarning(exception, "{Provider} provider failed.", providerName);
-            return null;
+            return new AiCompletionAttempt(null, $"{providerName} request failed: {exception.GetBaseException().Message}");
         }
     }
 
@@ -289,5 +299,11 @@ public sealed class AiCompletionService
     private static int ResolveMaxTokens(int? requestedMaxTokens, int defaultMaxTokens)
     {
         return requestedMaxTokens is > 0 ? requestedMaxTokens.Value : defaultMaxTokens;
+    }
+
+    private static string ToShortPlainText(string value)
+    {
+        var message = value.Trim();
+        return message.Length > 240 ? $"{message[..240]}..." : message;
     }
 }

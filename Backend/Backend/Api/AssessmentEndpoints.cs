@@ -311,10 +311,27 @@ public static class AssessmentEndpoints
             return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
         }
 
-        assessment.Status = AssessmentStatuses.Archived;
-        assessment.ArchivedAt = DateTimeOffset.UtcNow;
+        var sessionIds = await dbContext.AssessmentSessions
+            .Where(session => session.AssessmentId == assessmentId)
+            .Select(session => session.Id)
+            .ToListAsync(cancellationToken);
+        var questionIds = await dbContext.Questions
+            .Where(question => question.AssessmentId == assessmentId)
+            .Select(question => question.Id)
+            .ToListAsync(cancellationToken);
+
+        var aiInteractions = await dbContext.AiInteractions
+            .Where(interaction => interaction.AssessmentId == assessmentId)
+            .ToListAsync(cancellationToken);
+        var executionRecords = await dbContext.ExecutionRecords
+            .Where(record => sessionIds.Contains(record.SessionId) || questionIds.Contains(record.QuestionId))
+            .ToListAsync(cancellationToken);
+
+        dbContext.AiInteractions.RemoveRange(aiInteractions);
+        dbContext.ExecutionRecords.RemoveRange(executionRecords);
+        dbContext.Assessments.Remove(assessment);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return ApiResults.Success(new { assessment_id = assessment.Id, deleted = false, archived = true });
+        return ApiResults.Success(new { assessment_id = assessment.Id, deleted = true });
     }
 
     private static async Task<IResult> ContextAsync(

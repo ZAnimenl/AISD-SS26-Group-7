@@ -502,6 +502,12 @@ export async function updateAssessment(input: Assessment) {
   });
 }
 
+export async function deleteAssessment(assessmentId: string) {
+  return apiRequest<{ assessment_id: string; deleted: boolean }>(`/admin/assessments/${assessmentId}`, {
+    method: "DELETE"
+  });
+}
+
 export async function createQuestion(assessmentId: string, input: Question) {
   const raw = await apiRequest<any>(`/admin/assessments/${assessmentId}/questions`, {
     method: "POST",
@@ -516,8 +522,24 @@ export async function generateQuestionDraft(assessmentId: string, input: {
   difficulty: Difficulty;
   supported_languages: Language[];
   starter_prototype_reference?: string | null;
+  problem_description_markdown?: string | null;
 }) {
   const raw = await apiRequest<any>(`/admin/assessments/${assessmentId}/questions/generate`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+
+  return normalizeQuestion(raw);
+}
+
+export async function regenerateQuestionDraft(questionId: string, input: {
+  task_type: TaskType;
+  difficulty: Difficulty;
+  supported_languages: Language[];
+  starter_prototype_reference?: string | null;
+  problem_description_markdown?: string | null;
+}) {
+  const raw = await apiRequest<any>(`/admin/questions/${questionId}/regenerate`, {
     method: "POST",
     body: JSON.stringify(input)
   });
