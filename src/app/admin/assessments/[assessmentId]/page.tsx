@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
+import { deleteAssessment, getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage() {
@@ -18,6 +18,7 @@ export default function EditAssessmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     getAdminAssessment(assessmentId)
@@ -50,8 +51,8 @@ export default function EditAssessmentPage() {
       duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
       status: String(form.get("status") ?? assessment.status) as AssessmentStatus,
       ai_enabled: form.get("ai_enabled") === "enabled",
-      shared_prototype_reference: String(form.get("shared_prototype_reference") ?? assessment.shared_prototype_reference ?? "").trim() || null,
-      shared_prototype_version: String(form.get("shared_prototype_version") ?? assessment.shared_prototype_version ?? "").trim() || null,
+      shared_prototype_reference: assessment.shared_prototype_reference ?? null,
+      shared_prototype_version: assessment.shared_prototype_version ?? null,
       shared_prototype_metadata: {
         ...(assessment.shared_prototype_metadata ?? {}),
         student_setup: "platform_native",
@@ -77,6 +78,32 @@ export default function EditAssessmentPage() {
     }
   }
 
+  async function handleDeleteAssessment() {
+    if (!assessment) {
+      return;
+    }
+
+    if (!window.confirm(`Delete "${assessment.title}" and all of its questions, attempts, submissions, and AI usage records?`)) {
+      return;
+    }
+
+    setError(null);
+    setSaved(false);
+    setIsDeleting(true);
+    try {
+      await deleteAssessment(assessment.assessment_id);
+      router.push("/admin/assessments");
+    } catch (exception) {
+      if (isAuthenticationError(exception)) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(exception instanceof Error ? exception.message : "Unable to delete assessment.");
+      setIsDeleting(false);
+    }
+  }
+
   if (isLoading) {
     return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
   }
@@ -99,14 +126,16 @@ export default function EditAssessmentPage() {
               <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
             </div>
             <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype reference<input className="field" name="shared_prototype_reference" defaultValue={assessment.shared_prototype_reference ?? ""} /></label>
-              <label className="grid gap-2 text-sm text-white/60">Shared prototype version<input className="field" name="shared_prototype_version" defaultValue={assessment.shared_prototype_version ?? ""} /></label>
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-primary" disabled={isSaving || isDeleting}>
+                {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
+                {isSaving ? "Saving in backend..." : "Save changes"}
+              </button>
+              <button className="btn-secondary text-pinkGlow" type="button" disabled={isSaving || isDeleting} onClick={handleDeleteAssessment}>
+                {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                {isDeleting ? "Deleting..." : "Delete assessment"}
+              </button>
             </div>
-            <button className="btn-primary w-fit" disabled={isSaving}>
-              {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
-              {isSaving ? "Saving in backend..." : "Save changes"}
-            </button>
             {isSaving ? <p className="text-sm text-white/55" aria-live="polite">Waiting for backend confirmation before marking this assessment saved.</p> : null}
             {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}
             {error ? <p className="text-sm text-pinkGlow">{error}</p> : null}

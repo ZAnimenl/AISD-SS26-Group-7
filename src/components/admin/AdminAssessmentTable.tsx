@@ -1,9 +1,21 @@
+"use client";
+
 import Link from "next/link";
-import { Edit3 } from "lucide-react";
+import { Edit3, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Assessment } from "@/lib/types";
 
-export function AdminAssessmentTable({ assessments }: { assessments: Assessment[] }) {
+interface AdminAssessmentTableProps {
+  assessments: Assessment[];
+  deletingAssessmentId?: string | null;
+  onDeleteAssessment?: (assessment: Assessment) => void;
+}
+
+export function AdminAssessmentTable({
+  assessments,
+  deletingAssessmentId = null,
+  onDeleteAssessment
+}: AdminAssessmentTableProps) {
   return (
     <section className="panel">
       <div className="relative overflow-x-auto">
@@ -30,10 +42,23 @@ export function AdminAssessmentTable({ assessments }: { assessments: Assessment[
                 <td className="py-4 text-white/60">{assessment.question_count}</td>
                 <td className="py-4 text-white/60">{assessment.ai_enabled ? "Enabled" : "Disabled"}</td>
                 <td className="py-4">
-                  <Link className="btn-secondary px-3 py-2" href={`/admin/assessments/${assessment.assessment_id}`}>
-                    <Edit3 size={15} />
-                    Edit
-                  </Link>
+                  <div className="flex flex-wrap gap-2">
+                    <Link className="btn-secondary px-3 py-2" href={`/admin/assessments/${assessment.assessment_id}`}>
+                      <Edit3 size={15} />
+                      Edit
+                    </Link>
+                    {onDeleteAssessment ? (
+                      <button
+                        className="btn-secondary px-3 py-2 text-pinkGlow"
+                        type="button"
+                        disabled={deletingAssessmentId !== null}
+                        onClick={() => onDeleteAssessment(assessment)}
+                      >
+                        {deletingAssessmentId === assessment.assessment_id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
+                        {deletingAssessmentId === assessment.assessment_id ? "Deleting..." : "Delete"}
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}

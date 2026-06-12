@@ -1,13 +1,14 @@
 "use client";
 
 import { Loader2, Plus, Save, Trash2, Wand2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createQuestion,
   createTestCase,
   deleteQuestion,
   deleteTestCase,
   generateQuestionDraft,
+  regenerateQuestionDraft,
   updateQuestion,
   updateTestCase
 } from "@/lib/api";
@@ -57,6 +58,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
+  const [hasSeededFirstQuestion, setHasSeededFirstQuestion] = useState(false);
   const [draftTaskType, setDraftTaskType] = useState<TaskType>("frontend_ui_extension");
   const [draftDifficulty, setDraftDifficulty] = useState<Difficulty>("medium");
   const [draftLanguages, setDraftLanguages] = useState<Language[]>(getDefaultLanguagesForTaskType("frontend_ui_extension"));
@@ -84,6 +86,25 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     return pendingAction?.key === key;
   }
 
+  function isGeneratedQuestion(question: Question) {
+    return question.authoring_source === "llm_generated";
+  }
+
+  function getGenerationCopy(question: Question) {
+    const generated = isGeneratedQuestion(question);
+    return {
+      action: generated ? "Regenerate" : "Generate",
+      pending: generated ? "Regenerating..." : "Generating...",
+      success: generated ? "Question regenerated for review." : "Question generated for review.",
+      title: generated
+        ? "Regenerate this task from the current problem description"
+        : "Generate this task from the current problem description",
+      pendingLabel: generated
+        ? "Regenerating this task from the current problem description..."
+        : "Generating this task from the current problem description..."
+    };
+  }
+
   function updateQuestionState(questionId: string, update: Partial<Question>) {
     onAssessmentChange({
       ...assessment,
@@ -91,25 +112,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
         question.question_id === questionId ? { ...question, ...update } : question
       )
     });
-  }
-
-  function updateQuestionMetadata(
-    questionId: string,
-    metadataField: "verification_metadata" | "grading_configuration" | "traceability_metadata",
-    metadataKey: string,
-    value: string
-  ) {
-    const question = assessment.questions.find((item) => item.question_id === questionId);
-    if (!question) {
-      return;
-    }
-
-    updateQuestionState(questionId, {
-      [metadataField]: {
-        ...(question[metadataField] ?? {}),
-        [metadataKey]: value
-      }
-    } as Partial<Question>);
   }
 
   function updateQuestionLanguage(questionId: string, language: Language, checked: boolean) {
@@ -215,7 +217,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       task_type: "rest_api_development",
       difficulty: "medium",
       verification_mode: "api_response_check",
-      starter_prototype_reference: assessment.shared_prototype_reference ?? null,
+      starter_prototype_reference: null,
       problem_description_markdown: "Describe the task.",
       admin_notes: "",
       sort_order: sortOrder,
@@ -244,7 +246,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       task_type: draftTaskType,
       difficulty: draftDifficulty,
       supported_languages: draftLanguages,
-      starter_prototype_reference: assessment.shared_prototype_reference ?? null
+      starter_prototype_reference: null
     });
 
     onAssessmentChange({
@@ -261,6 +263,30 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       questions: assessment.questions.map((item) =>
         item.question_id === savedQuestion.question_id
           ? { ...savedQuestion, admin_test_cases: question.admin_test_cases ?? [] }
+          : item
+      )
+    });
+  }
+
+  async function regenerateQuestion(question: Question) {
+    const regeneratedQuestion = await regenerateQuestionDraft(question.question_id, {
+      task_type: question.task_type ?? "rest_api_development",
+      difficulty: question.difficulty ?? "medium",
+      supported_languages: normalizeStudentLanguageConstraints(question.language_constraints, question.task_type),
+      starter_prototype_reference: null,
+      problem_description_markdown: question.problem_description_markdown
+    });
+
+    onAssessmentChange({
+      ...assessment,
+      questions: assessment.questions.map((item) =>
+        item.question_id === question.question_id
+          ? {
+              ...regeneratedQuestion,
+              question_id: question.question_id,
+              sort_order: question.sort_order,
+              max_score: regeneratedQuestion.max_score ?? question.max_score
+            }
           : item
       )
     });
@@ -304,6 +330,41 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     });
   }
 
+  useEffect(() => {
+    const firstQuestionSeedKey = `admin-assessment-${assessment.assessment_id}-seeded-first-question`;
+
+    if (assessment.questions.length > 0) {
+      setHasSeededFirstQuestion(false);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(firstQuestionSeedKey);
+      }
+      return;
+    }
+
+    if (hasSeededFirstQuestion || pendingAction !== null) {
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(firstQuestionSeedKey) === "true") {
+      setHasSeededFirstQuestion(true);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(firstQuestionSeedKey, "true");
+    }
+
+    setHasSeededFirstQuestion(true);
+    void runEditorAction(addQuestion, "Question 1 added.", {
+      key: "seed-question-1",
+      label: "Creating question 1 in backend..."
+    }).finally(() => {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(firstQuestionSeedKey);
+      }
+    });
+  }, [assessment.assessment_id, assessment.questions.length, hasSeededFirstQuestion, pendingAction]);
+
   async function saveTestCase(testCase: AdminTestCase) {
     await updateTestCase(testCase);
   }
@@ -321,7 +382,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   }
 
   return (
-    <section className="panel">
+    <section id="questions" className="panel scroll-mt-6">
       <div className="relative">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Questions and test cases</h2>
@@ -389,6 +450,23 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                       {isActionPending(`save-question-${question.question_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
                       {isActionPending(`save-question-${question.question_id}`) ? "Saving..." : "Save question"}
                     </button>
+                    {(() => {
+                      const generationCopy = getGenerationCopy(question);
+                      const actionKey = `regenerate-question-${question.question_id}`;
+                      return (
+                        <button
+                          className="btn-secondary px-3 py-2"
+                          type="button"
+                          title={generationCopy.title}
+                          aria-label={generationCopy.title}
+                          disabled={pendingAction !== null}
+                          onClick={() => runEditorAction(() => regenerateQuestion(question), generationCopy.success, { key: actionKey, label: generationCopy.pendingLabel })}
+                        >
+                          {isActionPending(actionKey) ? <Loader2 className="animate-spin" size={15} /> : <Wand2 size={15} />}
+                          {isActionPending(actionKey) ? generationCopy.pending : generationCopy.action}
+                        </button>
+                      );
+                    })()}
                     <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => removeQuestion(question.question_id), "Question deleted.", { key: `delete-question-${question.question_id}`, label: "Deleting question in backend..." })}>
                       {isActionPending(`delete-question-${question.question_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
                       {isActionPending(`delete-question-${question.question_id}`) ? "Deleting..." : "Delete"}
@@ -409,6 +487,10 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     <input className="field w-full" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
                   </label>
                 </div>
+                <label className="grid gap-2 text-sm text-white/60">
+                  Problem description
+                  <textarea className="field min-h-32" value={question.problem_description_markdown} onChange={(event) => updateQuestionState(question.question_id, { problem_description_markdown: event.target.value })} />
+                </label>
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
                   <label className="grid gap-2 text-sm text-white/60">
                     Task type
@@ -443,11 +525,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     </select>
                   </label>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr]">
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Starter prototype reference
-                    <input className="field w-full" value={question.starter_prototype_reference ?? ""} onChange={(event) => updateQuestionState(question.question_id, { starter_prototype_reference: event.target.value })} />
-                  </label>
+                <div className="grid gap-3 lg:grid-cols-1">
                   <div className="grid gap-2 text-sm text-white/60">
                     Supported student languages
                     <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
@@ -459,44 +537,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                       ))}
                     </div>
                   </div>
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Requirement IDs
-                    <input className="field w-full" value={question.traceability_metadata?.requirements ?? ""} onChange={(event) => updateQuestionMetadata(question.question_id, "traceability_metadata", "requirements", event.target.value)} placeholder="REQ-17,REQ-18d" />
-                  </label>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Preview entry / endpoint / result key
-                    <input
-                      className="field w-full"
-                      value={question.verification_metadata?.preview_entry ?? question.verification_metadata?.endpoint ?? question.verification_metadata?.result_shape ?? question.verification_metadata?.focus ?? ""}
-                      onChange={(event) => {
-                        const metadataKey = question.verification_mode === "browser_ui_preview"
-                          ? "preview_entry"
-                          : question.verification_mode === "api_response_check"
-                            ? "endpoint"
-                            : question.verification_mode === "database_result_check"
-                              ? "result_shape"
-                              : "focus";
-                        updateQuestionMetadata(question.question_id, "verification_metadata", metadataKey, event.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Grading runner
-                    <input className="field w-full" value={question.grading_configuration?.runner ?? "automated_tests"} onChange={(event) => updateQuestionMetadata(question.question_id, "grading_configuration", "runner", event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-white/60">
-                    Requires student install
-                    <select className="field w-full" value={question.grading_configuration?.requires_student_install ?? "false"} onChange={(event) => updateQuestionMetadata(question.question_id, "grading_configuration", "requires_student_install", event.target.value)}>
-                      <option value="false">false</option>
-                    </select>
-                  </label>
-                </div>
-                <label className="grid gap-2 text-sm text-white/60">
-                  Problem description
-                  <textarea className="field min-h-28" value={question.problem_description_markdown} onChange={(event) => updateQuestionState(question.question_id, { problem_description_markdown: event.target.value })} />
-                </label>
                 <label className="grid gap-2 text-sm text-white/60">
                   Admin notes
                   <textarea className="field min-h-20" value={question.admin_notes ?? ""} onChange={(event) => updateQuestionState(question.question_id, { admin_notes: event.target.value })} />
@@ -556,20 +597,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                                 </button>
                               </div>
                             </div>
-                            <label className="mt-3 grid gap-2 text-sm text-white/60">
-                              Test traceability requirement IDs
-                              <input
-                                className="field w-full"
-                                value={testCase.traceability_metadata?.requirements ?? ""}
-                                onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, {
-                                  traceability_metadata: {
-                                    ...(testCase.traceability_metadata ?? {}),
-                                    requirements: event.target.value
-                                  }
-                                })}
-                                placeholder="REQ-15,REQ-52,REQ-53"
-                              />
-                            </label>
                             <div className="mt-3 grid gap-3">
                               {normalizeStudentLanguageConstraints(question.language_constraints, question.task_type).map((language) => (
                                 <label key={language} className="grid gap-2 text-sm text-white/60">

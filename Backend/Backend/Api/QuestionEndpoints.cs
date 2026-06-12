@@ -11,6 +11,7 @@ public static class QuestionEndpoints
     public static void Map(RouteGroupBuilder api)
     {
         api.MapPost("/admin/assessments/{assessmentId:guid}/questions", CreateQuestionAsync);
+        api.MapPost("/admin/questions/{questionId:guid}/regenerate", RegenerateQuestionAsync);
         api.MapPut("/admin/questions/{questionId:guid}", UpdateQuestionAsync);
         api.MapDelete("/admin/questions/{questionId:guid}", DeleteQuestionAsync);
         api.MapGet("/admin/questions/{questionId:guid}/test-cases", ListTestCasesAsync);
@@ -110,6 +111,88 @@ public static class QuestionEndpoints
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return ApiResults.Success(ToQuestionDto(question));
+    }
+
+    private static async Task<IResult> RegenerateQuestionAsync(
+        Guid questionId,
+        GenerateQuestionDraftRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
+        AssessmentDraftGenerationService draftGenerationService,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
+
+        var question = await dbContext.Questions
+            .Include(item => item.Assessment)
+            .Include(item => item.TestCases)
+            .FirstOrDefaultAsync(item => item.Id == questionId, cancellationToken);
+        if (question is null)
+        {
+            return ApiResults.Error("QUESTION_NOT_FOUND", "Question was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (question.Assessment?.Status != AssessmentStatuses.Draft)
+        {
+            return ApiResults.Error(
+                "DRAFT_REQUIRED",
+                "Generated task drafts can only replace questions while the assessment is in draft status.",
+                StatusCodes.Status409Conflict);
+        }
+
+        try
+        {
+            var draft = await draftGenerationService.GenerateQuestionDraftAsync(
+                question.AssessmentId,
+                request,
+                question.Assessment.SharedPrototypeReference,
+                question.SortOrder,
+                cancellationToken);
+
+            question.Title = draft.Title;
+            question.TaskType = draft.TaskType;
+            question.Difficulty = draft.Difficulty;
+            question.VerificationMode = draft.VerificationMode;
+            question.StarterPrototypeReference = draft.StarterPrototypeReference;
+            question.ProblemDescriptionMarkdown = draft.ProblemDescriptionMarkdown;
+            question.LanguageConstraintsJson = draft.LanguageConstraintsJson;
+            question.StarterCodeJson = draft.StarterCodeJson;
+            question.StarterFilesMetadataJson = draft.StarterFilesMetadataJson;
+            question.VerificationMetadataJson = draft.VerificationMetadataJson;
+            question.GradingConfigurationJson = draft.GradingConfigurationJson;
+            question.AuthoringSource = AuthoringSources.LlmGenerated;
+            question.TraceabilityMetadataJson = draft.TraceabilityMetadataJson;
+            question.AdminNotes = draft.AdminNotes;
+            question.MaxScore = draft.MaxScore;
+
+            dbContext.TestCases.RemoveRange(question.TestCases);
+            question.TestCases.Clear();
+            foreach (var testCase in draft.TestCases)
+            {
+                testCase.Id = Guid.NewGuid();
+                testCase.QuestionId = question.Id;
+                question.TestCases.Add(testCase);
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return ApiResults.Success(ToQuestionDto(question));
+        }
+        catch (AiProviderUnavailableException exception)
+        {
+            return ApiResults.Error("AI_PROVIDER_UNAVAILABLE", exception.Message, StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (AiDraftGenerationException exception)
+        {
+            return ApiResults.Error("AI_DRAFT_GENERATION_FAILED", exception.Message, StatusCodes.Status502BadGateway);
+        }
     }
 
     private static async Task<IResult> DeleteQuestionAsync(
@@ -296,7 +379,20 @@ public static class QuestionEndpoints
             traceability_metadata = JsonDocumentSerializer.Deserialize(question.TraceabilityMetadataJson, new Dictionary<string, string>()),
             admin_notes = question.AdminNotes,
             sort_order = question.SortOrder,
-            max_score = question.MaxScore
+            max_score = question.MaxScore,
+            admin_test_cases = question.TestCases
+                .OrderBy(testCase => testCase.Name)
+                .Select(testCase => new
+                {
+                    test_case_id = testCase.Id,
+                    testCase.Name,
+                    testCase.Visibility,
+                    test_code = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>()),
+                    authoring_source = testCase.AuthoringSource,
+                    public_metadata = JsonDocumentSerializer.Deserialize(testCase.PublicMetadataJson, new Dictionary<string, string>()),
+                    admin_metadata = JsonDocumentSerializer.Deserialize(testCase.AdminMetadataJson, new Dictionary<string, string>()),
+                    traceability_metadata = JsonDocumentSerializer.Deserialize(testCase.TraceabilityMetadataJson, new Dictionary<string, string>())
+                })
         };
     }
 

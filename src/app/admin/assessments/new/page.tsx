@@ -10,7 +10,6 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 type CreateMode = "manual" | "generate";
 
 export default function NewAssessmentPage() {
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<CreateMode | null>(null);
   const router = useRouter();
@@ -29,11 +28,10 @@ export default function NewAssessmentPage() {
             const nextMode: CreateMode = submitter?.value === "generate" ? "generate" : "manual";
             const shouldGenerate = nextMode === "generate";
             setError(null);
-            setSaved(false);
             setPendingMode(nextMode);
             try {
               const create = shouldGenerate ? generateAssessment : createAssessment;
-              await create({
+              const createdAssessment = await create({
                 title: String(form.get("title") ?? ""),
                 description: String(form.get("description") ?? ""),
                 duration_minutes: Number(form.get("duration_minutes") ?? 75),
@@ -42,7 +40,7 @@ export default function NewAssessmentPage() {
                 shared_prototype_reference: null,
                 shared_prototype_version: null
               });
-              setSaved(true);
+              router.push(`/admin/assessments/${createdAssessment.assessment_id}#questions`);
             } catch (exception) {
               setError(exception instanceof Error ? exception.message : "Unable to create assessment.");
             } finally {
@@ -59,7 +57,7 @@ export default function NewAssessmentPage() {
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-semibold">Questions will be added after creation</p>
-            <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. LLM draft creation calls the configured backend AI provider and keeps the assessment in draft for review.</p>
+            <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. LLM draft creation generates four review questions and keeps the assessment in draft.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button className="btn-primary" type="submit" name="creation_mode" value="manual" disabled={isPending}>
@@ -68,18 +66,16 @@ export default function NewAssessmentPage() {
             </button>
             <button className="btn-secondary" type="submit" name="creation_mode" value="generate" disabled={isPending}>
               {pendingMode === "generate" ? <Loader2 className="animate-spin" size={16} /> : null}
-              {pendingMode === "generate" ? "Waiting for AI draft..." : "Generate LLM draft"}
+              {pendingMode === "generate" ? "Waiting for AI draft..." : "Generate 4 LLM questions"}
             </button>
-            <Link className={`btn-secondary ${isPending ? "pointer-events-none opacity-45" : ""}`} href="/admin/assessments" aria-disabled={isPending}>Back to list</Link>
-            {saved ? <button className="btn-secondary" type="button" onClick={() => router.push("/admin/assessments")} disabled={isPending}>View list</button> : null}
+            <Link className={`btn-secondary ${isPending ? "pointer-events-none opacity-45" : ""}`} href="/admin/assessments" aria-disabled={isPending}>View list</Link>
             {pendingMode ? (
               <span className="text-sm text-white/55" aria-live="polite">
                 {pendingMode === "generate"
-                  ? "Backend is asking the configured AI provider for a real draft. Nothing is saved until the response is confirmed."
+                  ? "Backend is asking the configured AI provider for four real draft questions. Nothing is saved until the response is confirmed."
                   : "Saving assessment shell in the backend..."}
               </span>
             ) : null}
-            {saved ? <span className="text-sm text-cyanGlow">Saved in backend.</span> : null}
             {error ? <span className="text-sm text-pinkGlow">{error}</span> : null}
           </div>
         </form>

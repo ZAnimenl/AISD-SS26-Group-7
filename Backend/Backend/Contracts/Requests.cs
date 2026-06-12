@@ -42,7 +42,8 @@ public sealed record GenerateQuestionDraftRequest(
     string TaskType,
     string Difficulty,
     string[] SupportedLanguages,
-    string? StarterPrototypeReference = null);
+    string? StarterPrototypeReference = null,
+    string? ProblemDescriptionMarkdown = null);
 
 public sealed record QuestionRequest(
     string Title,
