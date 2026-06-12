@@ -616,6 +616,7 @@ export async function getAggregateReport(assessmentId: string) {
     ai_usage_summary: aiUsageSummary,
     score_distribution: raw.score_distribution ?? [],
     students: (raw.students ?? []).map((student: any) => ({
+      attempt_id: student.attempt_id ?? student.session_id ?? `${student.user_id}-${student.submitted_at ?? "active"}`,
       user_id: student.user_id,
       student_name: student.student_name,
       student_email: student.student_email,

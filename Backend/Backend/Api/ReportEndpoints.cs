@@ -166,6 +166,7 @@ public static class ReportEndpoints
             interactionsBySession.TryGetValue(session.Id, out var sessionInteractions);
             students.Add(new
             {
+                attempt_id = session.Id,
                 user_id = session.UserId,
                 student_name = session.User!.FullName,
                 student_email = session.User.Email,
