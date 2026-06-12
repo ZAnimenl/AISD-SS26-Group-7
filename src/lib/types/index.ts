@@ -209,6 +209,7 @@ export interface ReportListItem {
   participant_count: number;
   ai_interactions: number;
   total_ai_tokens: number;
+  average_ai_tokens_per_interaction: number;
 }
 
 export interface AiTaskTokenTotal {

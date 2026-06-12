@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, Save, Trash2, Wand2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createQuestion,
   createTestCase,
@@ -58,12 +58,12 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
-  const [hasSeededFirstQuestion, setHasSeededFirstQuestion] = useState(false);
+  const hasSeededFirstQuestionRef = useRef(false);
   const [draftTaskType, setDraftTaskType] = useState<TaskType>("frontend_ui_extension");
   const [draftDifficulty, setDraftDifficulty] = useState<Difficulty>("medium");
   const [draftLanguages, setDraftLanguages] = useState<Language[]>(getDefaultLanguagesForTaskType("frontend_ui_extension"));
 
-  async function runEditorAction(action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) {
+  const runEditorAction = useCallback(async (action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) => {
     if (pendingAction !== null) {
       return;
     }
@@ -80,7 +80,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     } finally {
       setPendingAction(null);
     }
-  }
+  }, [pendingAction]);
 
   function isActionPending(key: string) {
     return pendingAction?.key === key;
@@ -209,7 +209,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     });
   }
 
-  async function addQuestion() {
+  const addQuestion = useCallback(async () => {
     const sortOrder = assessment.questions.length + 1;
     const question = await createQuestion(assessment.assessment_id, {
       question_id: "new",
@@ -239,7 +239,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       question_count: assessment.question_count + 1,
       questions: [...assessment.questions, question]
     });
-  }
+  }, [assessment, onAssessmentChange]);
 
   async function addGeneratedDraftQuestion() {
     const question = await generateQuestionDraft(assessment.assessment_id, {
@@ -334,19 +334,19 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     const firstQuestionSeedKey = `admin-assessment-${assessment.assessment_id}-seeded-first-question`;
 
     if (assessment.questions.length > 0) {
-      setHasSeededFirstQuestion(false);
+      hasSeededFirstQuestionRef.current = false;
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(firstQuestionSeedKey);
       }
       return;
     }
 
-    if (hasSeededFirstQuestion || pendingAction !== null) {
+    if (hasSeededFirstQuestionRef.current || pendingAction !== null) {
       return;
     }
 
     if (typeof window !== "undefined" && window.sessionStorage.getItem(firstQuestionSeedKey) === "true") {
-      setHasSeededFirstQuestion(true);
+      hasSeededFirstQuestionRef.current = true;
       return;
     }
 
@@ -354,16 +354,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       window.sessionStorage.setItem(firstQuestionSeedKey, "true");
     }
 
-    setHasSeededFirstQuestion(true);
-    void runEditorAction(addQuestion, "Question 1 added.", {
-      key: "seed-question-1",
-      label: "Creating question 1 in backend..."
-    }).finally(() => {
-      if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(firstQuestionSeedKey);
-      }
-    });
-  }, [assessment.assessment_id, assessment.questions.length, hasSeededFirstQuestion, pendingAction]);
+    hasSeededFirstQuestionRef.current = true;
+    const seedTimer = window.setTimeout(() => {
+      void runEditorAction(addQuestion, "Question 1 added.", {
+        key: "seed-question-1",
+        label: "Creating question 1 in backend..."
+      }).finally(() => {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem(firstQuestionSeedKey);
+        }
+      });
+    }, 0);
+
+    return () => window.clearTimeout(seedTimer);
+  }, [addQuestion, assessment.assessment_id, assessment.questions.length, pendingAction, runEditorAction]);
 
   async function saveTestCase(testCase: AdminTestCase) {
     await updateTestCase(testCase);

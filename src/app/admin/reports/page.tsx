@@ -40,9 +40,11 @@ export default function ReportsPage() {
               <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <p className="rounded-xl border border-white/10 bg-white/5 p-3"><span className="block text-2xl text-cyanGlow">{report.average_score}%</span><span className="text-white/45">Average</span></p>
                 <p className="rounded-xl border border-white/10 bg-white/5 p-3"><span className="block text-2xl text-purpleGlow">{report.completion_count}/{report.participant_count}</span><span className="text-white/45">Completed</span></p>
+                <p className="rounded-xl border border-white/10 bg-white/5 p-3"><span className="block text-2xl text-cyanGlow">{report.total_ai_tokens.toLocaleString()}</span><span className="text-white/45">AI tokens</span></p>
+                <p className="rounded-xl border border-white/10 bg-white/5 p-3"><span className="block text-2xl text-purpleGlow">{report.average_ai_tokens_per_interaction}</span><span className="text-white/45">Avg / interaction</span></p>
               </div>
               <p className="mt-4 text-sm text-white/45">
-                {report.ai_interactions} AI interactions · {report.total_ai_tokens.toLocaleString()} tokens
+                {report.ai_interactions} AI interactions
               </p>
             </div>
           </Link>

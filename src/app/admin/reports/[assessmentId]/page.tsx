@@ -80,9 +80,9 @@ export default function ReportDetailPage() {
         </section>
         <section className="panel">
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="text-xs uppercase tracking-[0.14em] text-white/35">
-                <tr><th className="pb-3">Student</th><th className="pb-3">Status</th><th className="pb-3">Submission</th><th className="pb-3">Score</th><th className="pb-3">AI usage</th><th className="pb-3">Per-task tokens</th></tr>
+                <tr><th className="pb-3">Student</th><th className="pb-3">Status</th><th className="pb-3">Submission</th><th className="pb-3">Score</th><th className="pb-3">AI usage</th><th className="pb-3">Avg tokens</th><th className="pb-3">Per-task tokens</th></tr>
               </thead>
               <tbody className="divide-y divide-white/10">
                 {report.students.map((student) => (
@@ -96,6 +96,7 @@ export default function ReportDetailPage() {
                       <p className="mt-1 text-xs text-cyanGlow">{formatEfficiency(student.ai_usage_summary.token_efficiency_indicator)}</p>
                       <p className="mt-1 text-xs text-white/35">{student.ai_usage_summary.main_semantic_tags.join(", ") || "No semantic tags"}</p>
                     </td>
+                    <td className="py-4 font-mono text-sm text-purpleGlow">{student.ai_usage_summary.average_tokens_per_interaction}</td>
                     <td className="py-4 text-xs text-white/45">
                       <div className="space-y-1">
                         {student.ai_usage_summary.per_task_token_totals.length ? student.ai_usage_summary.per_task_token_totals.map((task) => (

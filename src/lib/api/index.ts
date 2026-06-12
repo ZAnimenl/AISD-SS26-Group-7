@@ -593,7 +593,10 @@ export async function getReportList() {
     completion_count: item.completion_count ?? 0,
     participant_count: item.participant_count ?? 0,
     ai_interactions: item.ai_interactions ?? 0,
-    total_ai_tokens: item.total_ai_tokens ?? item.ai_usage_summary?.total_tokens ?? 0
+    total_ai_tokens: item.total_ai_tokens ?? item.ai_usage_summary?.total_tokens ?? 0,
+    average_ai_tokens_per_interaction: item.average_ai_tokens_per_interaction
+      ?? item.ai_usage_summary?.average_tokens_per_interaction
+      ?? 0
   })) satisfies ReportListItem[];
 }
 
@@ -608,6 +611,8 @@ export async function getAggregateReport(assessmentId: string) {
     participant_count: raw.participant_count ?? 0,
     ai_interactions: raw.ai_interactions ?? 0,
     total_ai_tokens: raw.total_ai_tokens ?? aiUsageSummary.total_tokens,
+    average_ai_tokens_per_interaction: raw.average_ai_tokens_per_interaction
+      ?? aiUsageSummary.average_tokens_per_interaction,
     ai_usage_summary: aiUsageSummary,
     score_distribution: raw.score_distribution ?? [],
     students: (raw.students ?? []).map((student: any) => ({

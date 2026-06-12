@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Code2, KeyRound, LogIn, UserPlus } from "lucide-react";
@@ -19,28 +19,32 @@ const localDemoAdmin = {
 const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
+  return (
+    <Suspense fallback={<LoginShell />}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const prefillEmail = searchParams.get("email") ?? "";
+  const [username, setUsername] = useState(prefillEmail);
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(() => getRememberMePreference());
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    prefillEmail ? `You already have an account with ${prefillEmail}. Sign in to continue.` : null
+  );
+  const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
 
   useEffect(() => {
-    setRememberMe(getRememberMePreference());
     const user = getStoredUser();
     if (user) {
       router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
-      return;
     }
-    const prefillEmail = searchParams.get("email");
-    if (prefillEmail) {
-      setUsername(prefillEmail);
-      setNotice(`You already have an account with ${prefillEmail}. Sign in to continue.`);
-    }
-  }, [router, searchParams]);
+  }, [router]);
 
   async function handleSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -205,5 +209,19 @@ function GoogleIcon() {
       <path fill="#FBBC05" d="M5.84 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.12-1.44.34-2.11V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z" />
       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.65l3.15-3.15A11 11 0 0 0 12 1 11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
     </svg>
+  );
+}
+
+function LoginShell() {
+  return (
+    <main className="page-shell bg-grid grid min-h-screen place-items-center p-4">
+      <section className="liquid-glass-neon w-full max-w-md rounded-3xl p-10">
+        <span className="inline-grid h-12 w-12 place-items-center rounded-2xl bg-cyanGlow/10 text-cyanGlow">
+          <Code2 size={22} />
+        </span>
+        <h1 className="mt-6 font-heading text-3xl italic text-white">Enter the assessment workspace.</h1>
+        <p className="mt-3 text-sm text-white/60">Loading sign-in...</p>
+      </section>
+    </main>
   );
 }

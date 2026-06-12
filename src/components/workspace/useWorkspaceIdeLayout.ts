@@ -7,6 +7,7 @@ type ResizeTarget = "tasks" | "agent" | "output";
 const COLLAPSED_SIDE_WIDTH = 52;
 const COLLAPSED_OUTPUT_HEIGHT = 46;
 const DEFAULT_SIDE_WIDTH = 230;
+const DEFAULT_AGENT_WIDTH = 340;
 const DEFAULT_OUTPUT_HEIGHT = 280;
 const MIN_SIDE_WIDTH = 200;
 const MAX_SIDE_WIDTH = 420;
@@ -26,7 +27,7 @@ function getMaxOutputHeight() {
 
 export function useWorkspaceIdeLayout() {
   const [tasksWidth, setTasksWidth] = useState(DEFAULT_SIDE_WIDTH);
-  const [agentWidth, setAgentWidth] = useState(DEFAULT_SIDE_WIDTH);
+  const [agentWidth, setAgentWidth] = useState(DEFAULT_AGENT_WIDTH);
   const [outputHeight, setOutputHeight] = useState(DEFAULT_OUTPUT_HEIGHT);
   const [isTasksCollapsed, setIsTasksCollapsed] = useState(false);
   const [isAgentCollapsed, setIsAgentCollapsed] = useState(false);
@@ -99,7 +100,7 @@ export function useWorkspaceIdeLayout() {
 
   const resetLayout = useCallback(() => {
     setTasksWidth(DEFAULT_SIDE_WIDTH);
-    setAgentWidth(DEFAULT_SIDE_WIDTH);
+    setAgentWidth(DEFAULT_AGENT_WIDTH);
     setOutputHeight(DEFAULT_OUTPUT_HEIGHT);
     setIsTasksCollapsed(false);
     setIsAgentCollapsed(false);

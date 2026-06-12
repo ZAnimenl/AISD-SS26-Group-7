@@ -1,27 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Code2 } from "lucide-react";
 import { consumeGoogleCallback } from "@/lib/api";
 
 export default function GoogleCallbackPage() {
+  return (
+    <Suspense fallback={<GoogleCallbackShell status="Finishing sign-in..." />}>
+      <GoogleCallbackContent />
+    </Suspense>
+  );
+}
+
+function GoogleCallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("Finishing sign-in...");
+  const token = params.get("token");
+  const errorParam = params.get("error");
+  const initialError = errorParam
+    ? describeError(errorParam)
+    : token
+      ? null
+      : "Google did not return a token. Please try signing in again.";
+  const [asyncError, setAsyncError] = useState<string | null>(null);
+  const error = asyncError ?? initialError;
+  const status = error ? "" : "Finishing sign-in...";
 
   useEffect(() => {
-    const token = params.get("token");
-    const errorParam = params.get("error");
-    if (errorParam) {
-      setError(describeError(errorParam));
-      setStatus("");
-      return;
-    }
-    if (!token) {
-      setError("Google did not return a token. Please try signing in again.");
-      setStatus("");
+    if (initialError || !token) {
       return;
     }
 
@@ -39,11 +46,14 @@ export default function GoogleCallbackPage() {
         router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
       })
       .catch((exception: unknown) => {
-        setError(exception instanceof Error ? exception.message : "Could not complete Google sign-in.");
-        setStatus("");
+        setAsyncError(exception instanceof Error ? exception.message : "Could not complete Google sign-in.");
       });
-  }, [params, router]);
+  }, [initialError, params, router, token]);
 
+  return <GoogleCallbackShell status={status} error={error} onBackToLogin={() => router.replace("/login")} />;
+}
+
+function GoogleCallbackShell({ status, error, onBackToLogin }: { status: string; error?: string | null; onBackToLogin?: () => void }) {
   return (
     <main className="page-shell bg-grid grid min-h-screen place-items-center p-4">
       <section className="liquid-glass-neon mx-auto w-full max-w-md rounded-3xl p-10 text-center">
@@ -59,7 +69,7 @@ export default function GoogleCallbackPage() {
             <p className="mt-4 text-sm text-pinkGlow">{error}</p>
             <button
               type="button"
-              onClick={() => router.replace("/login")}
+              onClick={onBackToLogin}
               className="btn-secondary mt-6"
             >
               Back to sign in
