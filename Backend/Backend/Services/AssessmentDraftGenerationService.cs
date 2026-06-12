@@ -90,6 +90,8 @@ public sealed class AssessmentDraftGenerationService
             "Generated tasks must be practical browser-workspace tasks, not algorithm puzzle tasks.",
             "Supported student languages are python, javascript, typescript, html, and sql.",
             "Use html for frontend_ui_extension tasks and sql for database_query_schema tasks unless the administrator explicitly asks for another supported language.",
+            "Every test case must include non-empty test_code for every language in the task's language_constraints.",
+            "For database_query_schema tasks, every public and hidden test case must include a non-empty sql test_code entry that verifies the student's solution.sql file.",
             "",
             "JSON shape:",
             "{",
@@ -219,6 +221,8 @@ public sealed class AssessmentDraftGenerationService
             throw new AiDraftGenerationException($"Generated task '{title}' must include public and hidden tests.");
         }
 
+        ValidateTestCodeCoverage(title, languageConstraints, testCases);
+
         foreach (var testCase in testCases)
         {
             testCase.QuestionId = questionId;
@@ -279,6 +283,44 @@ public sealed class AssessmentDraftGenerationService
             TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(AddDraftTraceability(
                 ReadStringDictionary(element, "traceability_metadata")))
         };
+    }
+
+    private static void ValidateTestCodeCoverage(
+        string title,
+        IReadOnlyCollection<string> languageConstraints,
+        IReadOnlyCollection<TestCase> testCases)
+    {
+        foreach (var testCase in testCases)
+        {
+            var testCode = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>());
+            foreach (var language in languageConstraints)
+            {
+                if (HasNonEmptyTestCode(testCode, language))
+                {
+                    continue;
+                }
+
+                throw new AiDraftGenerationException(
+                    $"Generated task '{title}' test case '{testCase.Name}' is missing test code for language '{language}'. Regenerate the draft so the LLM provides complete tests.");
+            }
+        }
+    }
+
+    private static bool HasNonEmptyTestCode(Dictionary<string, string> testCode, string language)
+    {
+        if (testCode.TryGetValue(language, out var direct) && !string.IsNullOrWhiteSpace(direct))
+        {
+            return true;
+        }
+
+        if (testCode.TryGetValue(language.ToLowerInvariant(), out var normalized) && !string.IsNullOrWhiteSpace(normalized))
+        {
+            return true;
+        }
+
+        return language == "html"
+            && testCode.TryGetValue("javascript", out var javascript)
+            && !string.IsNullOrWhiteSpace(javascript);
     }
 
     private static Dictionary<string, string> AddDraftTraceability(Dictionary<string, string>? metadata)

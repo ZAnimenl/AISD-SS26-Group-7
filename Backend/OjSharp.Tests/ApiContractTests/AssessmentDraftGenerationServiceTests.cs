@@ -51,6 +51,84 @@ public sealed class AssessmentDraftGenerationServiceTests
         Assert.DoesNotContain("not valid JSON", exception.Message);
     }
 
+    [Fact]
+    public async Task Generate_question_draft_rejects_sql_task_without_sql_test_code()
+    {
+        var handler = new CapturingHandler(OpenAiResponse(
+            """
+            {
+              "tasks": [
+                {
+                  "title": "Write SQL queries for employees",
+                  "task_type": "database_query_schema",
+                  "difficulty": "medium",
+                  "verification_mode": "database_result_check",
+                  "starter_prototype_reference": null,
+                  "problem_description_markdown": "Write SQL queries in solution.sql.",
+                  "language_constraints": ["sql"],
+                  "starter_code": {
+                    "sql": {
+                      "solution.sql": "-- Write your queries here\n"
+                    }
+                  },
+                  "starter_files_metadata": {
+                    "sql": {
+                      "solution.sql": "editable"
+                    }
+                  },
+                  "verification_metadata": {
+                    "primary_view": "database_result_check"
+                  },
+                  "grading_configuration": {
+                    "runner": "automated_tests",
+                    "requires_student_install": "false"
+                  },
+                  "traceability_metadata": {
+                    "requirements": "REQ-18f"
+                  },
+                  "max_score": 25,
+                  "test_cases": [
+                    {
+                      "name": "Query 1 returns employees",
+                      "visibility": "public",
+                      "test_code": {
+                        "javascript": "test('placeholder', () => expect(true).toBe(true));"
+                      },
+                      "traceability_metadata": {
+                        "requirements": "REQ-52"
+                      }
+                    },
+                    {
+                      "name": "Hidden query validation",
+                      "visibility": "hidden",
+                      "test_code": {
+                        "sql": "const fs = require('fs'); test('solution exists', () => expect(fs.readFileSync('solution.sql', 'utf8')).toContain('SELECT'));"
+                      },
+                      "traceability_metadata": {
+                        "requirements": "REQ-53"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "medium",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("missing test code for language 'sql'", exception.Message);
+    }
+
     private static AssessmentDraftGenerationService CreateDraftService(CapturingHandler handler)
     {
         var completionService = new AiCompletionService(
@@ -65,6 +143,29 @@ public sealed class AssessmentDraftGenerationServiceTests
             NullLogger<AiCompletionService>.Instance);
 
         return new AssessmentDraftGenerationService(completionService);
+    }
+
+    private static string OpenAiResponse(string content)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    finish_reason = "stop",
+                    message = new
+                    {
+                        content
+                    }
+                }
+            },
+            usage = new
+            {
+                prompt_tokens = 300,
+                completion_tokens = 1200
+            }
+        });
     }
 
     private sealed class SingleClientFactory : IHttpClientFactory
