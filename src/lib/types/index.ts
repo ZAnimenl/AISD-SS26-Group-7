@@ -237,6 +237,7 @@ export interface AggregateReport extends ReportListItem {
   ai_usage_summary: AiUsageSummary;
   score_distribution: Array<{ range: string; count: number }>;
   students: Array<{
+    attempt_id: string;
     user_id: string;
     student_name: string;
     student_email: string;

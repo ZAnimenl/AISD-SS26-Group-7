@@ -86,7 +86,7 @@ export default function ReportDetailPage() {
               </thead>
               <tbody className="divide-y divide-white/10">
                 {report.students.map((student) => (
-                  <tr key={student.user_id}>
+                  <tr key={student.attempt_id}>
                     <td className="py-4"><p className="font-semibold">{student.student_name}</p><p className="text-xs text-white/40">{student.student_email}</p></td>
                     <td className="py-4"><StatusBadge status={student.attempt_status} /></td>
                     <td className="py-4"><StatusBadge status={student.submission_status} /></td>
