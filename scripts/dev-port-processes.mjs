@@ -13,7 +13,7 @@ export function resolveUrlPort(value) {
 export function isSafeBackendProcessCommand(command) {
   const normalized = String(command ?? "").trim();
   return /(?:^|[\\/])Backend(?:\.exe)?(?:\s|$)/i.test(normalized)
-    || /(?:^|[\\/])dotnet(?:\.exe)?(?:\s|$).*Backend/i.test(normalized);
+    || /(?:^|[\\/"])dotnet(?:\.exe)?(?:"|\s|$).*Backend/i.test(normalized);
 }
 
 export function isSafeFrontendProcessCommand(command) {
@@ -42,6 +42,16 @@ export function findListeningProcessIds(port, cwd = process.cwd()) {
   return uniqueProcessIds(result.stdout);
 }
 
+export function findProcessIdsByCommand(predicate, cwd = process.cwd()) {
+  const entries = process.platform === "win32"
+    ? listWindowsProcessCommands(cwd)
+    : listUnixProcessCommands(cwd);
+
+  return entries
+    .filter((entry) => predicate(entry.command))
+    .map((entry) => entry.processId);
+}
+
 export function readProcessCommand(processId, cwd = process.cwd()) {
   if (process.platform === "win32") {
     const commandLine = readWindowsProcessCommandLine(processId, cwd);
@@ -63,6 +73,57 @@ export function readProcessCommand(processId, cwd = process.cwd()) {
     stdio: ["ignore", "pipe", "ignore"]
   });
   return result.status === 0 ? result.stdout : "";
+}
+
+function listWindowsProcessCommands(cwd) {
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-Command",
+    "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
+  ], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    return items
+      .map((item) => ({
+        processId: Number.parseInt(item.ProcessId, 10),
+        command: String(item.CommandLine ?? "")
+      }))
+      .filter((item) => Number.isInteger(item.processId) && item.processId > 0 && item.command);
+  } catch {
+    return [];
+  }
+}
+
+function listUnixProcessCommands(cwd) {
+  const result = spawnSync("ps", ["-eo", "pid=,command="], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^\s*(\d+)\s+(.+)$/);
+      return match
+        ? { processId: Number.parseInt(match[1], 10), command: match[2] }
+        : null;
+    })
+    .filter(Boolean);
 }
 
 function readWindowsProcessCommandLine(processId, cwd) {
