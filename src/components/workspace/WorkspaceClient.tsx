@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { finalizeSubmission, getAiResponse, getAiUsage, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
@@ -939,62 +939,66 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </div>
           <span className="badge mt-3 hidden w-fit shrink-0 xl:inline-flex">Active attempt</span>
         </div>
-        <div className="scrollbar-soft relative mt-3 max-h-[42%] shrink-0 space-y-2 overflow-y-auto pr-1">
-          {assessment.questions.map((question, index) => (
-            <button
-              key={question.question_id}
-              onClick={() => switchQuestion(question)}
-              className={`dynamic-surface w-full rounded-[14px] border p-2.5 text-left transition ${
-                question.question_id === activeQuestionId ? "border-cyanGlow/45 bg-cyanGlow/10 shadow-[0_0_18px_rgba(0,229,255,0.09),inset_0_1px_0_rgba(255,255,255,0.08)]" : "border-white/10 bg-white/[0.045] hover:bg-white/10"
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[10px] border border-white/10 bg-black/20 text-cyanGlow">
-                  {(() => {
-                    const iconName = question.task_type ? TASK_ICONS[question.task_type] : "file";
-                    return <SemanticIcon name={iconName} size={14} />;
-                  })()}
+        {/* Compact task selector: every task is always visible at the top. Click to switch. */}
+        <div className="relative mt-3 shrink-0 space-y-1">
+          {assessment.questions.map((question, index) => {
+            const isActive = question.question_id === activeQuestionId;
+            const iconName = question.task_type ? TASK_ICONS[question.task_type] : "file";
+            return (
+              <button
+                key={question.question_id}
+                type="button"
+                onClick={() => switchQuestion(question)}
+                className={`flex w-full items-center gap-2 rounded-[12px] border px-2.5 py-2 text-left transition ${
+                  isActive
+                    ? "border-cyanGlow/45 bg-cyanGlow/10 shadow-[0_0_14px_rgba(0,229,255,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                    : "border-white/10 bg-white/[0.045] hover:bg-white/10"
+                }`}
+                title={question.title}
+                aria-pressed={isActive}
+              >
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-[8px] border text-[10px] font-bold ${
+                  isActive ? "border-cyanGlow/45 bg-cyanGlow/15 text-cyanGlow" : "border-white/10 bg-black/20 text-white/55"
+                }`}>
+                  {index + 1}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="text-xs text-white/40">Task {index + 1}</span>
-                  <span className="block truncate font-semibold text-white">{question.title}</span>
-                  <span className="mt-2 flex flex-wrap gap-1">
-                    <span className="rounded-[7px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatTaskType(question.task_type)}</span>
-                    <span className="rounded-[7px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/55">{formatVerificationMode(question.verification_mode)}</span>
-                  </span>
+                <SemanticIcon name={iconName} size={13} className={isActive ? "shrink-0 text-cyanGlow" : "shrink-0 text-white/45"} />
+                <span className={`min-w-0 flex-1 truncate text-sm font-medium ${isActive ? "text-white" : "text-white/75"}`}>
+                  {question.title}
                 </span>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
-        <div className="scrollbar-soft scanline relative mt-3 min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-white/10 bg-black/20 p-3">
-          <p className="text-xs uppercase tracking-[0.16em] text-white/35">Problem statement</p>
-          <h3 className="mt-3 text-xl font-semibold text-white">{activeQuestion?.title}</h3>
+        {/* Detail panel for the currently selected task only */}
+        <div className="scrollbar-soft scanline relative mt-3 min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-white/10 bg-black/20 p-4 leading-relaxed">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-cyanGlow/70">Problem statement</p>
+          <h3 className="mt-3 text-lg font-semibold leading-snug text-white">{activeQuestion?.title}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="badge"><SemanticIcon name={activeTaskIcon} size={13} /> {formatTaskType(activeQuestion?.task_type)}</span>
             <span className="badge">Difficulty: {formatDifficulty(activeQuestion?.difficulty)}</span>
             <span className="badge">Run: {formatVerificationMode(activeQuestion?.verification_mode)}</span>
           </div>
-          <div className="mt-3 space-y-2">{renderMarkdown(activeQuestion?.problem_description_markdown ?? "")}</div>
-          <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Constraints</h4>
+          <div className="mt-4 space-y-3 text-sm text-white/80 [&_p]:leading-relaxed [&_li]:leading-relaxed [&_code]:rounded [&_code]:bg-white/8 [&_code]:px-1 [&_code]:py-0.5">{renderMarkdown(activeQuestion?.problem_description_markdown ?? "")}</div>
+          <h4 className="mt-5 text-xs font-semibold uppercase tracking-wider text-cyanGlow">Constraints</h4>
           {activeQuestion?.constraints.length ? (
-            <ul className="mt-2 space-y-2 text-sm text-white/55">
+            <ul className="mt-2 space-y-1.5 text-sm text-white/55">
               {activeQuestion.constraints.map((constraint) => <li key={constraint}>- {constraint}</li>)}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-white/40">No extra constraints are listed for this question.</p>
+            <p className="mt-2 text-sm text-white/40">No extra constraints listed.</p>
           )}
-          <h4 className="mt-6 text-sm font-semibold text-cyanGlow">Public examples</h4>
+          <h4 className="mt-5 text-xs font-semibold uppercase tracking-wider text-cyanGlow">Public examples</h4>
           {activeQuestion?.public_examples.length ? (
             <div className="mt-2 space-y-2">
               {activeQuestion.public_examples.map((example) => (
-                <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/55">
+                <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs">
                   <p className="text-white/80">{example.name}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-white/40">No public examples are listed for this question.</p>
+            <p className="mt-2 text-sm text-white/40">No public examples listed.</p>
           )}
         </div>
           </>
@@ -1276,15 +1280,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           >
             {ideLayout.isOutputCollapsed ? <PanelBottomOpen size={15} /> : <PanelBottomClose size={15} />}
             <span className="hidden sm:inline">{ideLayout.isOutputCollapsed ? "Show" : "Hide"}</span>
-          </button>
-          <button
-            className="ml-1 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/45 transition hover:border-cyanGlow/30 hover:text-cyanGlow"
-            title="Reset IDE layout"
-            aria-label="Reset IDE layout"
-            type="button"
-            onClick={ideLayout.resetLayout}
-          >
-            <SemanticIcon name="settings" size={14} />
           </button>
           <div className="ml-auto flex min-w-0 items-center gap-2 text-[10px] text-white/30">
             {runResult && displayRunStatus ? (

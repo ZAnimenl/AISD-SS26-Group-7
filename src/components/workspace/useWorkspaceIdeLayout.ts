@@ -6,11 +6,13 @@ type ResizeTarget = "tasks" | "agent" | "output";
 
 const COLLAPSED_SIDE_WIDTH = 52;
 const COLLAPSED_OUTPUT_HEIGHT = 46;
-const DEFAULT_SIDE_WIDTH = 230;
+// Tasks panel needs enough width for the task title to not truncate and for the
+// problem-statement prose underneath to wrap at a readable line length.
+const DEFAULT_SIDE_WIDTH = 310;
 const DEFAULT_AGENT_WIDTH = 340;
 const DEFAULT_OUTPUT_HEIGHT = 280;
-const MIN_SIDE_WIDTH = 200;
-const MAX_SIDE_WIDTH = 420;
+const MIN_SIDE_WIDTH = 250;
+const MAX_SIDE_WIDTH = 460;
 const MIN_OUTPUT_HEIGHT = 160;
 
 function clamp(value: number, min: number, max: number) {
