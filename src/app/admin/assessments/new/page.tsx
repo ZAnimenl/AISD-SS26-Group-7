@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Wand2 } from "lucide-react";
 import { createAssessment, generateAssessment } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 
@@ -60,23 +60,23 @@ export default function NewAssessmentPage() {
             <p className="mt-1 text-sm text-white/45">Manual creation saves the assessment shell. LLM draft creation generates four review questions and keeps the assessment in draft.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <button className="btn-secondary" type="submit" name="creation_mode" value="generate" disabled={isPending}>
+              {pendingMode === "generate" ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+              {pendingMode === "generate" ? "Generating Questions..." : "Generate Questions"}
+            </button>
             <button className="btn-primary" type="submit" name="creation_mode" value="manual" disabled={isPending}>
               {pendingMode === "manual" ? <Loader2 className="animate-spin" size={16} /> : null}
               {pendingMode === "manual" ? "Saving in backend..." : "Save assessment"}
             </button>
-            <button className="btn-secondary" type="submit" name="creation_mode" value="generate" disabled={isPending}>
-              {pendingMode === "generate" ? <Loader2 className="animate-spin" size={16} /> : null}
-              {pendingMode === "generate" ? "Waiting for AI draft..." : "Generate 4 LLM questions"}
-            </button>
-            <Link className={`btn-secondary ${isPending ? "pointer-events-none opacity-45" : ""}`} href="/admin/assessments" aria-disabled={isPending}>View list</Link>
+            <Link className={`btn-secondary ml-auto ${isPending ? "pointer-events-none opacity-45" : ""}`} href="/admin/assessments" aria-disabled={isPending}>Back to List</Link>
             {pendingMode ? (
-              <span className="text-sm text-white/55" aria-live="polite">
+              <span className="w-full text-sm text-white/55" aria-live="polite">
                 {pendingMode === "generate"
                   ? "Backend is asking the configured AI provider for four real draft questions. Nothing is saved until the response is confirmed."
                   : "Saving assessment shell in the backend..."}
               </span>
             ) : null}
-            {error ? <span className="text-sm text-pinkGlow">{error}</span> : null}
+            {error ? <span className="w-full text-sm text-pinkGlow">{error}</span> : null}
           </div>
         </form>
       </section>

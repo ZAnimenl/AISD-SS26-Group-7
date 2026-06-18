@@ -165,7 +165,7 @@ public sealed class AssessmentDraftGenerationService
             $"Difficulty: {NormalizeDifficulty(request.Difficulty)}",
             $"Supported languages: {string.Join(", ", languages)}",
             $"Shared prototype reference: {NormalizeOptionalText(request.StarterPrototypeReference) ?? NormalizeOptionalText(sharedPrototypeReference) ?? "(internal default prototype: to-do list web app)"}",
-            $"Administrator problem description to preserve and expand: {NormalizeOptionalText(request.ProblemDescriptionMarkdown) ?? "(none supplied)"}"
+            $"Administrator guidance: {NormalizeOptionalText(request.ProblemDescriptionMarkdown) ?? "(none supplied)"}"
         ]);
     }
 

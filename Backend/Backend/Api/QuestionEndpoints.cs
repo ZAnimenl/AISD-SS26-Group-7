@@ -8,6 +8,8 @@ namespace Backend.Api;
 
 public static class QuestionEndpoints
 {
+    private const int MaximumRegenerationAttempts = 3;
+
     public static void Map(RouteGroupBuilder api)
     {
         api.MapPost("/admin/assessments/{assessmentId:guid}/questions", CreateQuestionAsync);
@@ -150,12 +152,41 @@ public static class QuestionEndpoints
 
         try
         {
-            var draft = await draftGenerationService.GenerateQuestionDraftAsync(
-                question.AssessmentId,
-                request,
-                question.Assessment.SharedPrototypeReference,
-                question.SortOrder,
-                cancellationToken);
+            Question? draft = null;
+            var avoidedDrafts = new List<(string Title, string Problem)>
+            {
+                (question.Title, question.ProblemDescriptionMarkdown)
+            };
+
+            for (var attempt = 1; attempt <= MaximumRegenerationAttempts; attempt += 1)
+            {
+                var regenerationRequest = request with
+                {
+                    ProblemDescriptionMarkdown = BuildRegenerationGuidance(avoidedDrafts, attempt)
+                };
+                var candidate = await draftGenerationService.GenerateQuestionDraftAsync(
+                    question.AssessmentId,
+                    regenerationRequest,
+                    question.Assessment.SharedPrototypeReference,
+                    question.SortOrder,
+                    cancellationToken);
+
+                if (IsMateriallyDifferent(candidate, avoidedDrafts))
+                {
+                    draft = candidate;
+                    break;
+                }
+
+                avoidedDrafts.Add((candidate.Title, candidate.ProblemDescriptionMarkdown));
+            }
+
+            if (draft is null)
+            {
+                throw new AiDraftGenerationException(
+                    "The AI provider repeatedly returned the same task. Please try regeneration again.");
+            }
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
             question.Title = draft.Title;
             question.TaskType = draft.TaskType;
@@ -173,16 +204,24 @@ public static class QuestionEndpoints
             question.AdminNotes = draft.AdminNotes;
             question.MaxScore = draft.MaxScore;
 
-            dbContext.TestCases.RemoveRange(question.TestCases);
+            var existingTestCases = question.TestCases.ToList();
+            dbContext.TestCases.RemoveRange(existingTestCases);
             question.TestCases.Clear();
+
+            // Persist removals before inserting regenerated children. This avoids
+            // provider-specific command ordering failures when a tracked question's
+            // complete child collection is replaced in a single SaveChanges call.
+            await dbContext.SaveChangesAsync(cancellationToken);
+
             foreach (var testCase in draft.TestCases)
             {
                 testCase.Id = Guid.NewGuid();
                 testCase.QuestionId = question.Id;
-                question.TestCases.Add(testCase);
+                dbContext.TestCases.Add(testCase);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return ApiResults.Success(ToQuestionDto(question));
         }
         catch (AiProviderUnavailableException exception)
@@ -193,6 +232,48 @@ public static class QuestionEndpoints
         {
             return ApiResults.Error("AI_DRAFT_GENERATION_FAILED", exception.Message, StatusCodes.Status502BadGateway);
         }
+    }
+
+    internal static bool IsMateriallyDifferent(
+        Question candidate,
+        IReadOnlyCollection<(string Title, string Problem)> avoidedDrafts)
+    {
+        var candidateTitle = NormalizeComparisonText(candidate.Title);
+        var candidateProblem = NormalizeComparisonText(candidate.ProblemDescriptionMarkdown);
+
+        return avoidedDrafts.All(avoided =>
+            candidateTitle != NormalizeComparisonText(avoided.Title)
+            || candidateProblem != NormalizeComparisonText(avoided.Problem));
+    }
+
+    private static string BuildRegenerationGuidance(
+        IReadOnlyCollection<(string Title, string Problem)> avoidedDrafts,
+        int attempt)
+    {
+        var avoidedContent = avoidedDrafts.SelectMany((avoided, index) => new[]
+        {
+            $"Avoided task {index + 1} title: {avoided.Title}",
+            $"Avoided task {index + 1} problem: {avoided.Problem}"
+        });
+
+        return string.Join("\n",
+        [
+            "Create a materially different task from every avoided task listed below.",
+            "Use a different scenario, feature set, starter implementation, expected behavior, and tests.",
+            "Do not reuse or lightly reword an avoided title or problem description.",
+            "Keep only the requested task type, difficulty, supported languages, and shared prototype constraints.",
+            $"Variation attempt: {attempt}-{Guid.NewGuid():N}",
+            .. avoidedContent
+        ]);
+    }
+
+    private static string NormalizeComparisonText(string value)
+    {
+        return string.Join(
+            " ",
+            value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .Trim()
+            .ToLowerInvariant();
     }
 
     private static async Task<IResult> DeleteQuestionAsync(
