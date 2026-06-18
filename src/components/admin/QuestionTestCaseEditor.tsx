@@ -7,7 +7,6 @@ import {
   createTestCase,
   deleteQuestion,
   deleteTestCase,
-  generateQuestionDraft,
   regenerateQuestionDraft,
   updateQuestion,
   updateTestCase
@@ -59,9 +58,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
   const hasSeededFirstQuestionRef = useRef(false);
-  const [draftTaskType, setDraftTaskType] = useState<TaskType>("frontend_ui_extension");
-  const [draftDifficulty, setDraftDifficulty] = useState<Difficulty>("medium");
-  const [draftLanguages, setDraftLanguages] = useState<Language[]>(getDefaultLanguagesForTaskType("frontend_ui_extension"));
 
   const runEditorAction = useCallback(async (action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) => {
     if (pendingAction !== null) {
@@ -114,6 +110,12 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     });
   }
 
+  function updateQuestionSortOrder(questionId: string, value: number) {
+    const maximumSortOrder = Math.max(1, assessment.questions.length);
+    const nextSortOrder = Math.min(maximumSortOrder, Math.max(1, value || 1));
+    updateQuestionState(questionId, { sort_order: nextSortOrder });
+  }
+
   function updateQuestionLanguage(questionId: string, language: Language, checked: boolean) {
     const question = assessment.questions.find((item) => item.question_id === questionId);
     if (!question) {
@@ -126,16 +128,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       : current.filter((item) => item !== language);
 
     updateQuestionState(questionId, { language_constraints: nextLanguages.length ? nextLanguages : current });
-  }
-
-  function toggleDraftLanguage(language: Language, checked: boolean) {
-    setDraftLanguages((current) => {
-      const nextLanguages = checked
-        ? Array.from(new Set([...current, language]))
-        : current.filter((item) => item !== language);
-
-      return nextLanguages.length ? nextLanguages : current;
-    });
   }
 
   function getFirstFileContent(files: Record<string, string> | undefined): string {
@@ -174,11 +166,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       task_type: taskType,
       language_constraints: getDefaultLanguagesForTaskType(taskType)
     });
-  }
-
-  function updateDraftTaskType(taskType: TaskType) {
-    setDraftTaskType(taskType);
-    setDraftLanguages(getDefaultLanguagesForTaskType(taskType));
   }
 
   function updateTestCaseState(questionId: string, testCaseId: string, update: Partial<AdminTestCase>) {
@@ -240,21 +227,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       questions: [...assessment.questions, question]
     });
   }, [assessment, onAssessmentChange]);
-
-  async function addGeneratedDraftQuestion() {
-    const question = await generateQuestionDraft(assessment.assessment_id, {
-      task_type: draftTaskType,
-      difficulty: draftDifficulty,
-      supported_languages: draftLanguages,
-      starter_prototype_reference: null
-    });
-
-    onAssessmentChange({
-      ...assessment,
-      question_count: assessment.question_count + 1,
-      questions: [...assessment.questions, question]
-    });
-  }
 
   async function saveQuestion(question: Question) {
     const savedQuestion = await updateQuestion(question);
@@ -395,51 +367,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
             {isActionPending("add-question") ? "Creating..." : "Add question"}
           </button>
         </div>
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-          <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_1fr_auto]">
-            <label className="grid gap-2 text-sm text-white/60">
-              Generated draft task type
-              <select className="field w-full" value={draftTaskType} onChange={(event) => updateDraftTaskType(event.target.value as TaskType)}>
-                {taskTypes.map((taskType) => (
-                  <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm text-white/60">
-              Difficulty
-              <select className="field w-full" value={draftDifficulty} onChange={(event) => setDraftDifficulty(event.target.value as Difficulty)}>
-                {difficulties.map((difficulty) => (
-                  <option key={difficulty} value={difficulty}>{difficulty}</option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-2 text-sm text-white/60">
-              Supported languages
-              <div className="flex flex-wrap gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                {studentLanguages.map((language) => (
-                  <label key={language.value} className="flex items-center gap-2 text-xs text-white/60">
-                    <input type="checkbox" checked={draftLanguages.includes(language.value)} onChange={(event) => toggleDraftLanguage(language.value, event.target.checked)} />
-                    {language.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-end">
-              <button
-                className="btn-secondary px-3 py-2"
-                type="button"
-                disabled={pendingAction !== null}
-                onClick={() => runEditorAction(addGeneratedDraftQuestion, "Generated task draft added for review.", { key: "generate-draft", label: "Waiting for the configured AI provider to return a real draft..." })}
-              >
-                {isActionPending("generate-draft") ? <Loader2 className="animate-spin" size={15} /> : <Wand2 size={15} />}
-                {isActionPending("generate-draft") ? "Generating..." : "Generate draft"}
-              </button>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-white/40">
-            Generated tasks are review drafts. Keep the assessment in draft while editing, then publish by changing the assessment status to active.
-          </p>
-        </div>
         {pendingAction ? <p className="mt-3 text-sm text-white/55" aria-live="polite">{pendingAction.label}</p> : null}
         {status ? <p className="mt-3 text-sm text-cyanGlow">{status}</p> : null}
         {error ? <p className="mt-3 text-sm text-pinkGlow">{error}</p> : null}
@@ -484,7 +411,14 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Sort order
-                    <input className="field w-full" type="number" value={question.sort_order ?? 0} onChange={(event) => updateQuestionState(question.question_id, { sort_order: Number(event.target.value) })} />
+                    <input
+                      className="field w-full"
+                      type="number"
+                      min={1}
+                      max={Math.max(1, assessment.questions.length)}
+                      value={Math.min(Math.max(1, assessment.questions.length), Math.max(1, question.sort_order ?? 1))}
+                      onChange={(event) => updateQuestionSortOrder(question.question_id, Number(event.target.value))}
+                    />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Max score

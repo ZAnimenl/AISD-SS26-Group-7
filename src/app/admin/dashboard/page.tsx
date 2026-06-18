@@ -62,8 +62,8 @@ export default function AdminDashboardPage() {
         <section className="panel">
           <h2 className="relative text-lg font-semibold">Recent submissions</h2>
           <div className="relative mt-4 space-y-3">
-            {dashboard.recent_submissions.map((submission) => (
-              <div key={`${submission.student_name}-${submission.assessment_title}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+            {dashboard.recent_submissions.map((submission, index) => (
+              <div key={`${submission.student_name}-${submission.assessment_title}-${submission.submitted_at}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold">{submission.student_name}</p>
                   <span className="text-cyanGlow">{submission.score}%</span>
