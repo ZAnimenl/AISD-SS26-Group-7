@@ -78,6 +78,8 @@ the active requirements. It does not replace automated test files.
 ## AI Assistance
 
 - AI assistance is hidden or blocked when disabled for the assessment.
+- AI-enabled final submission is blocked until at least one AI interaction has
+  been successfully persisted for the attempt.
 - AI interactions record message, response, semantic tags, input tokens, output
   tokens, total tokens, assessment, task, and attempt ownership.
 - AI requests include active file name, selected language, visible
@@ -97,6 +99,31 @@ the active requirements. It does not replace automated test files.
   of mock guidance.
 - AI chat may show the student's sent intent immediately, but assistant content
   is displayed only after the backend returns a real provider response.
+- Actionable AI responses record when the complete response becomes visible and
+  when the student applies, edits before applying, rejects, dismisses, or undoes
+  the suggestion.
+- Applying an actionable suggestion unchanged within three seconds records a
+  `rapid_unchanged_accept` event.
+- Explanatory or trivial responses do not produce rapid-accept deductions, and
+  immediate undo or substantial editing cancels the deduction.
+- Near-duplicate prompt detection considers intervening code changes, suggestion
+  actions, and runs rather than exact prompt text alone.
+
+## AI-Enabled Reflection
+
+- After an AI-enabled code submission is frozen, the student sees the single
+  required reflection prompt and a backend-owned ten-minute countdown.
+- The reflection input enforces a maximum of 100 words and displays a live word
+  count.
+- Reflection drafts autosave and survive refresh or reconnect without resetting
+  the deadline.
+- The student can submit the reflection before the deadline.
+- At timeout, the latest saved draft is submitted automatically.
+- An empty timeout reflection receives zero reflection points but preserves the
+  Functional Score and continues automatic AI grading.
+- Code editing, Run, AI assistance, and resubmission are disabled while
+  reflection is pending.
+- AI-disabled assessments do not show or require a reflection.
 
 ## Truthful Optimistic UI
 
@@ -175,8 +202,23 @@ the active requirements. It does not replace automated test files.
 
 ## Reporting
 
-- Administrator reports include score, status, AI interaction count, total
-  tokens, average tokens per interaction, and token efficiency indicator.
+- AI-disabled reports show only the `0-100` Functional Score.
+- AI-enabled reports show separate `0-100` Functional and AI Usage scores and a
+  Final Score equal to their arithmetic mean.
+- The AI Usage Score contains Prompt quality and context `0-30`, Token and
+  interaction efficiency `0-40`, Critical evaluation and adaptation `0-20`,
+  and Reflection quality and consistency `0-10`.
+- Token and interaction efficiency contains LLM behavioral assessment `0-30`
+  and objective repetition metrics `0-10`.
+- Reports do not use or display a fixed 2,500-token efficiency threshold and do
+  not use cohort-relative token grading.
+- Automatic grading returns criterion-level evidence, rubric version, model,
+  confidence, summary, and reflection consistency.
+- Provider, timeout, and malformed-output failures display pending or failed AI
+  grading without converting the AI Usage Score to zero.
+- Administrator reports retain AI interaction count, input/output/total tokens,
+  average tokens per interaction, per-task totals, reflection, and suggestion
+  event evidence.
 - Student-facing result views do not expose hidden tests or administrator notes.
 
 ## Security

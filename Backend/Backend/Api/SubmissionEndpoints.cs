@@ -66,6 +66,20 @@ public static class SubmissionEndpoints
         CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
+        if (session.Assessment!.AiEnabled)
+        {
+            var interactionCount = await dbContext.AiInteractions.CountAsync(
+                item => item.SessionId == session.Id,
+                cancellationToken);
+            if (interactionCount == 0)
+            {
+                return ApiResults.Error(
+                    "AI_INTERACTION_REQUIRED",
+                    "Use the embedded AI assistant at least once before submitting this AI-enabled assessment.",
+                    StatusCodes.Status409Conflict);
+            }
+        }
+
         var addedStates = EnsureWorkspaceStates(session, now);
         dbContext.WorkspaceQuestionStates.AddRange(addedStates);
 
@@ -128,6 +142,10 @@ public static class SubmissionEndpoints
 
         session.Status = SessionStatuses.Submitted;
         session.CompletedAt = now;
+        session.ReflectionDeadline = session.Assessment.AiEnabled ? now.AddMinutes(10) : null;
+        session.AiGradingStatus = session.Assessment.AiEnabled
+            ? AiGradingStatuses.ReflectionPending
+            : AiGradingStatuses.NotRequired;
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var totalScore = allSubmissions.Sum(submission => submission.Score);
@@ -139,6 +157,12 @@ public static class SubmissionEndpoints
             evaluation_status = status,
             score = totalScore,
             max_score = maxScore,
+            functional_score = maxScore > 0 ? (int)Math.Round(totalScore * 100.0 / maxScore, MidpointRounding.AwayFromZero) : 0,
+            functional_max_score = 100,
+            ai_enabled = session.Assessment.AiEnabled,
+            submission_state = session.Assessment.AiEnabled ? AiGradingStatuses.ReflectionPending : "completed",
+            reflection_required = session.Assessment.AiEnabled,
+            reflection_deadline = session.ReflectionDeadline,
             stdout = status == ExecutionStatuses.Passed ? "All tests passed." : null,
             stderr = status == ExecutionStatuses.Passed ? null : "One or more questions failed.",
             submitted_at = session.CompletedAt,

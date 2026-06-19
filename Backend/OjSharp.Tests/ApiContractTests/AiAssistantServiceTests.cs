@@ -250,6 +250,38 @@ public sealed class AiAssistantServiceTests
     }
 
     [Fact]
+    public async Task Generate_response_parses_json_from_markdown_fence_without_showing_the_envelope()
+    {
+        var handler = new CapturingHandler(CompletionJson(
+            """
+            ```json
+            {"response_markdown":"Review this edit first.","semantic_tags":["code_suggestion"],"workspace_actions":[{"type":"replace_file","target_file":"app.js","language":"javascript","replacement_code":"const list = document.getElementById('taskList');\n","label":"Apply"}]}
+            ```
+            """,
+            24,
+            16));
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Update app.js.",
+            "javascript",
+            "app.js",
+            "const list = document.getElementById('taskList');\n",
+            new Dictionary<string, string> { ["app.js"] = "const list = document.getElementById('taskList');\n" },
+            new Dictionary<string, string> { ["app.js"] = "const list = document.getElementById('taskList');\n" },
+            null,
+            "Update Todo behavior",
+            "Update the visible Todo behavior.",
+            ["app.js"],
+            CancellationToken.None);
+
+        Assert.Equal("Review this edit first.", result.ResponseMarkdown);
+        Assert.Single(result.WorkspaceActions);
+        Assert.DoesNotContain("response_markdown", result.ResponseMarkdown);
+    }
+
+    [Fact]
     public async Task Generate_response_rejects_workspace_action_for_non_visible_file()
     {
         var handler = new CapturingHandler(

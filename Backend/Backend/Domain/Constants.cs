@@ -88,6 +88,25 @@ public static class AuthoringSources
     public const string AdminEdited = "admin_edited";
 }
 
+public static class AiInteractionEventTypes
+{
+    public const string ResponseVisible = "response_visible";
+    public const string Apply = "apply";
+    public const string Edit = "edit";
+    public const string Reject = "reject";
+    public const string Dismiss = "dismiss";
+    public const string Undo = "undo";
+}
+
+public static class AiGradingStatuses
+{
+    public const string NotRequired = "not_required";
+    public const string ReflectionPending = "reflection_pending";
+    public const string Pending = "pending";
+    public const string Completed = "completed";
+    public const string Failed = "failed";
+}
+
 public static class PrototypeDefaults
 {
     public const string TodoListReference = "default-todo-list";

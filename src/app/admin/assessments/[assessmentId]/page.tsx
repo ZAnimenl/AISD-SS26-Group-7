@@ -7,7 +7,7 @@ import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEdito
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { deleteAssessment, getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
-import { toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
+import { currentUtcIso, toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage() {
@@ -54,7 +54,7 @@ export default function EditAssessmentPage() {
       title: String(form.get("title") ?? assessment.title),
       description: String(form.get("description") ?? assessment.description),
       duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
-      starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : null,
+      starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : currentUtcIso(),
       status: String(form.get("status") ?? assessment.status) as AssessmentStatus,
       ai_enabled: form.get("ai_enabled") === "enabled",
       shared_prototype_reference: assessment.shared_prototype_reference ?? null,

@@ -48,6 +48,10 @@ public sealed record GenerateQuestionDraftRequest(
     string? StarterPrototypeReference = null,
     string? ProblemDescriptionMarkdown = null);
 
+public sealed record GenerateAssessmentBlueprintRequest(
+    Dictionary<string, int>? TaskTypeCounts = null,
+    string? Difficulty = null);
+
 public sealed record QuestionRequest(
     string Title,
     string ProblemDescriptionMarkdown,
@@ -106,3 +110,11 @@ public sealed record AiRunTestResultRequest(
     string Name,
     bool Passed,
     string? Output = null);
+
+public sealed record AiInteractionEventRequest(
+    string EventType,
+    int? ElapsedMilliseconds = null,
+    bool AppliedUnchanged = false,
+    Dictionary<string, string>? Metadata = null);
+
+public sealed record ReflectionRequest(string ReflectionText);

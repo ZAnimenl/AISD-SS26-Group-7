@@ -7,6 +7,8 @@ public sealed class OjSharpDbContext(DbContextOptions<OjSharpDbContext> options)
 {
     public DbSet<AiInteraction> AiInteractions => Set<AiInteraction>();
 
+    public DbSet<AiInteractionEvent> AiInteractionEvents => Set<AiInteractionEvent>();
+
     public DbSet<Assessment> Assessments => Set<Assessment>();
 
     public DbSet<AssessmentSession> AssessmentSessions => Set<AssessmentSession>();
@@ -34,5 +36,6 @@ public sealed class OjSharpDbContext(DbContextOptions<OjSharpDbContext> options)
         SubmissionConfiguration.Configure(modelBuilder);
         ExecutionRecordConfiguration.Configure(modelBuilder);
         AiInteractionConfiguration.Configure(modelBuilder);
+        AiInteractionEventConfiguration.Configure(modelBuilder);
     }
 }

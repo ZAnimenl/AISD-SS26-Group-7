@@ -6,7 +6,8 @@ This version incorporates tutor feedback from 2026-06-03. Key changes from the o
 
 - Task types changed from algorithmic/leetcode-style questions to practical development tasks based on a shared runnable prototype. The first implementation uses four task categories: frontend UI extension, REST API development, database query/schema work, and bug fixing in existing code.
 - AI assistance changed from chat/hint levels to an embedded AI agent in the workspace.
-- Added AI token usage and efficiency tracking as a core evaluation metric.
+- Added automatic AI usage scoring, interaction telemetry, and a timed student
+  reflection as core evaluation mechanisms for AI-enabled assessments.
 - Added administrator support for selecting task/question types and using an LLM to generate draft tasks and test cases for review.
 - Clarified that only frontend UI extension tasks require a direct browser UI preview; other task categories may use API responses, database result tables, or automated test results as their primary verification view.
 - Removed AI Rescue button feature (tutor rejected).
@@ -41,7 +42,11 @@ This document defines the requirements for the system in a structured, testable 
 - **Practical task** means a development task that simulates real-world software work, such as building a REST API endpoint, writing database queries, creating a web page component, or fixing a bug in an existing codebase.
 - **Embedded AI agent** means an AI assistant integrated directly into the coding workspace that can read the student's code context, suggest edits, answer questions about the task, and assist with debugging. Unlike a separate chat panel, the embedded agent operates within the code editing environment.
 - **AI token usage** means the total number of LLM input and output tokens consumed during an assessment attempt.
-- **Token efficiency** means the ratio of useful AI-assisted progress to total tokens consumed. Administrators can review whether students used AI strategically or wastefully.
+- **Token and interaction efficiency** means how economically and purposefully a student converts AI interactions into demonstrable progress. Raw token totals are evidence, not a direct penalty, and the platform does not use a universal token cutoff or cohort-relative token grade.
+- **Functional Score** means the `0-100` score produced only from automated evaluation of submitted code.
+- **AI Usage Score** means the separate `0-100` automatically graded score for prompt quality and context, token and interaction efficiency, critical evaluation and adaptation, and reflection quality and consistency.
+- **Final Score** means the arithmetic mean of the Functional Score and AI Usage Score for an AI-enabled assessment.
+- **Submission reflection** means the mandatory, maximum-100-word reflection completed within ten minutes after code is frozen for an AI-enabled assessment.
 - **Starter project** means a pre-configured project scaffold provided with a practical task, including existing files, dependencies, and structure that students build upon.
 - **Shared runnable prototype** means the common full-stack starter project used as the basis for an assessment. Students modify this existing codebase rather than starting from an empty project or receiving a newly generated standalone project for each task.
 - **Manual assessment creation** means an administrator creates an assessment and chooses the number, order, and type of tasks.
@@ -119,7 +124,10 @@ As an administrator, I want submissions to be evaluated automatically using test
 
 ### US-07 AI Usage and Token Efficiency Review
 
-As an administrator, I want to review how AI was used during an assessment, including total token consumption and usage efficiency, so that I can judge whether students use AI strategically.
+As an administrator, I want AI-enabled attempts to receive an automatic,
+evidence-backed AI Usage Score so that I can assess prompt quality, interaction
+efficiency, critical evaluation, and reflection consistency separately from
+functional correctness.
 
 ### US-08 Reporting
 
@@ -212,6 +220,8 @@ As an administrator, I want to select a task type and optionally use an LLM to g
 - **REQ-35** When a student interacts with the embedded AI agent, the system shall log the interaction with the associated user, assessment, task, token usage, prompt, response, and timestamp.
 - **REQ-36** If the embedded AI agent is disabled for a given assessment, then the system shall hide the AI agent features for that assessment.
 - **REQ-37** The embedded AI agent shall not provide direct complete solutions. It shall assist, explain, and guide rather than generate entire task solutions.
+- **REQ-37a** For an AI-enabled assessment, use of the platform AI agent shall be mandatory and at least one successfully logged AI interaction shall exist before final submission can begin.
+- **REQ-37b** For an AI-disabled assessment, the student workflow shall not require AI interaction or a submission reflection.
 
 ### 7.7 AI Token Usage and Efficiency Tracking
 
@@ -219,8 +229,14 @@ As an administrator, I want to select a task type and optionally use an LLM to g
 - **REQ-39** The system shall calculate and store the total token usage per student per assessment attempt.
 - **REQ-40** The system shall calculate and store the total token usage per student per task within an assessment.
 - **REQ-41** The administrator report shall include token usage metrics: total tokens consumed, number of AI interactions, and average tokens per interaction.
-- **REQ-42** The administrator report shall include a token efficiency indicator that helps administrators assess whether students used AI strategically or wastefully.
+- **REQ-42** The system shall calculate a separate automatic AI Usage Score from `0-100` for each submitted AI-enabled attempt.
 - **REQ-43** The system shall record which types of AI assistance were requested (code suggestion, explanation, debugging, etc.) alongside token costs.
+- **REQ-43a** The AI Usage Score shall use these weights: Prompt quality and context 30%, Token and interaction efficiency 40%, Critical evaluation and adaptation 20%, and Reflection quality and consistency 10%.
+- **REQ-43b** Token and interaction efficiency shall comprise a 30-point structured LLM behavioral assessment and a 10-point objective repetition metric.
+- **REQ-43c** The system shall not use a fixed absolute token threshold or cohort-relative token usage when calculating the AI Usage Score.
+- **REQ-43d** Raw input, output, total, per-interaction, and per-task token counts shall remain visible as descriptive and auditable evidence.
+- **REQ-43e** Automatic LLM grading shall use a fixed versioned rubric, return criterion-level scores and evidence, and store the grading model and rubric version.
+- **REQ-43f** If automatic AI grading fails because of provider, timeout, or schema failure, the system shall preserve the functional submission and mark AI grading as pending or failed rather than assigning zero.
 
 ### 7.8 Sandboxed Code Execution
 
@@ -242,25 +258,40 @@ As an administrator, I want to select a task type and optionally use an LLM to g
 - **REQ-53** The system shall determine whether each relevant test case passes or fails.
 - **REQ-54** The system shall calculate and store an overall result, score, or pass/fail outcome for the submission.
 - **REQ-55** Where execution fails before all test cases run, the system shall store the failure status.
+- **REQ-55a** The Functional Score shall be represented on a `0-100` scale and shall be based only on automated code evaluation, independent of AI usage.
 
 ### 7.11 Submission and Result Storage
 
 - **REQ-56** The system shall store each submission with its source code, selected language, timestamp, and related identifiers.
 - **REQ-57** The system shall store evaluation results linked to the corresponding submission.
 - **REQ-58** Where multiple submissions are allowed, the system shall preserve submission history.
+- **REQ-58a** After code submission is confirmed for an AI-enabled assessment, the system shall freeze the submitted workspace and start a backend-authoritative ten-minute reflection period.
+- **REQ-58b** The AI-enabled reflection shall use one prompt: "In no more than 100 words, explain how you used the AI assistant during this assessment. Include one suggestion that helped and how you verified it, and one suggestion that you rejected, corrected, or found unhelpful."
+- **REQ-58c** The reflection shall be mandatory, limited to 100 words, autosaved, restorable after refresh, and submittable before the deadline.
+- **REQ-58d** When the ten-minute deadline expires, the system shall automatically submit the latest saved reflection, including an empty reflection.
+- **REQ-58e** An empty reflection shall receive zero points for Reflection quality and consistency but shall not invalidate the Functional Score.
+- **REQ-58f** While reflection is pending, code editing, Run, AI assistance, and code resubmission shall remain unavailable.
 
 ### 7.12 Reporting and Analytics
 
 - **REQ-59** The system shall provide an administrator-facing report view.
 - **REQ-60** When an administrator selects an assessment, the system shall show submission outcomes for participating students.
-- **REQ-61** The report shall include at least: student identifier, assessment identifier, submission status, score or result, AI usage summary, total token consumption, token efficiency indicator, and number of AI interactions.
-- **REQ-62** The system should provide simple aggregate statistics for each assessment, such as average score, completion counts, and average token usage.
+- **REQ-61** For AI-enabled assessments, student and administrator result views shall show the Functional Score, AI Usage Score, and Final Score as three distinct values.
+- **REQ-61a** For AI-enabled assessments, the Final Score shall equal `(Functional Score + AI Usage Score) / 2`.
+- **REQ-61b** For AI-disabled assessments, result views shall show only the Functional Score and shall not show a reflection, AI Usage Score, or averaged Final Score.
+- **REQ-61c** Administrator reports shall include criterion-level AI Usage Score details, grading evidence, reflection, reflection consistency, total token consumption, number of AI interactions, average tokens per interaction, and per-task token totals.
+- **REQ-62** The system should provide simple aggregate statistics for each assessment, including average Functional Score and, where AI is enabled, average AI Usage Score, average Final Score, completion counts, and average token usage.
 
 ### 7.13 AI Usage Tracking
 
 - **REQ-63** The system shall record AI usage events during an assessment.
 - **REQ-64** The system shall store at least the timestamp, user, assessment context, task context, interaction type, token counts (input and output), and AI response for each AI usage event.
 - **REQ-65** The system shall make AI usage summaries and token metrics visible to administrators.
+- **REQ-65a** For actionable AI suggestions, the system shall record response-visible, apply, edit-before-apply, reject, dismiss, undo, and subsequent run or test events where applicable.
+- **REQ-65b** The system shall record elapsed time from complete suggestion rendering to the student's first suggestion decision.
+- **REQ-65c** Applying an actionable suggestion unchanged within three seconds shall create a `rapid_unchanged_accept` event and deduct one point from Critical evaluation and adaptation, up to eight points per attempt.
+- **REQ-65d** The rapid-accept deduction shall not apply to explanatory or trivial responses and shall be cancelled by an immediate undo or substantial edit.
+- **REQ-65e** Objective repetition analysis shall consider near-duplicate prompts, premature regeneration, repeated error-request cycles, and intervening actions rather than exact text alone.
 
 ### 7.14 Assessment Attempt and Identity Scope
 
@@ -368,11 +399,21 @@ Accepted when students can interact with an AI agent embedded in the workspace t
 
 ### F. Token Efficiency Tracking
 
-Accepted when the system tracks AI token consumption per student per task, and administrators can view token usage metrics and efficiency indicators in reports.
+Accepted when AI-enabled attempts receive a versioned, evidence-backed AI Usage
+Score using the defined 30/40/20/10 rubric, token totals remain visible as
+descriptive evidence, and neither a fixed token threshold nor cohort-relative
+usage affects grading.
 
 ### G. Reporting
 
-Accepted when administrators can review per-student results, AI usage summaries, and token efficiency metrics for a selected assessment.
+Accepted when AI-enabled reports show Functional, AI Usage, and Final scores,
+while AI-disabled reports show only the Functional Score.
+
+### H. Submission Reflection
+
+Accepted when AI-enabled code submission freezes the workspace, starts a
+backend-owned ten-minute reflection period, enforces the 100-word limit,
+autosaves the draft, and finalizes the latest draft at submission or timeout.
 
 ## 12. Traceability Notes
 
@@ -391,7 +432,13 @@ Accepted when administrators can review per-student results, AI usage summaries,
 - Resolved: only frontend UI extension tasks require a direct browser UI preview; other task types can use task-appropriate verification output.
 - Resolved: AI assistance is provided through an embedded agent in the workspace, not through chat or hint levels (tutor feedback 2026-06-03).
 - Resolved: AI Rescue button feature is not implemented (tutor feedback 2026-06-03).
-- Resolved: AI token usage and efficiency must be tracked and reported (tutor feedback 2026-06-03).
+- Resolved: AI-enabled assessments use separate Functional and AI Usage scores,
+  with their arithmetic mean shown as the Final Score.
+- Resolved: the AI Usage Score uses the 30/40/20/10 rubric defined in
+  `docs/design/automatic-ai-usage-scoring.md`; it has no fixed token threshold
+  and no cohort-relative token component.
+- Resolved: AI-enabled attempts require a maximum-100-word reflection completed
+  within ten minutes after code is frozen.
 - Resolved: User Acceptance Testing is required and tracked separately in `docs/uat-requirements.md` (tutor feedback 2026-06-03).
 - Resolved: authentication identifies the user, and the backend resolves the active assessment attempt from authenticated user and assessment ID.
 - Resolved: the frontend does not manage a real `session_id`.

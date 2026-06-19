@@ -12,6 +12,8 @@
 - `docs/BRD.md`, `docs/MRD.md`, `docs/PRD.md`, `docs/TRD.md`, `docs/DesignSpec.md`, and `docs/TestCase.md` exist as minimal project documents.
 - Project documents are aligned with `SPEC.md`, the English architecture PDF, the API alignment document, and the current four-module architecture.
 - Documentation does not claim that unimplemented runtime behavior has been delivered.
+- Automatic AI usage scoring and reflection behavior is documented in
+  `docs/design/automatic-ai-usage-scoring.md`.
 
 ## Dependency Security
 
@@ -27,6 +29,46 @@
 - Browser UI preview does not render sample content when sandbox output is unavailable.
 - Real dependency enforcement is documented in `docs/design/real-dependency-enforcement.md`.
 - Missing or failing AI providers return a structured API error instead of fabricated assistant content.
+- Automatic AI grading failures preserve the functional submission and expose
+  a pending or failed state instead of assigning a fabricated score or zero.
+
+## Automatic AI Usage Scoring
+
+- AI-disabled assessments produce only a `0-100` Functional Score and do not
+  require AI interaction or reflection.
+- AI-enabled assessments require at least one successfully logged platform AI
+  interaction before final submission.
+- AI-enabled attempts produce a `0-100` Functional Score, a separate `0-100` AI
+  Usage Score, and a Final Score equal to their arithmetic mean.
+- AI Usage Score weights are Prompt quality and context 30%, Token and
+  interaction efficiency 40%, Critical evaluation and adaptation 20%, and
+  Reflection quality and consistency 10%.
+- Token and interaction efficiency contains a 30-point structured LLM
+  behavioral assessment and a 10-point objective repetition metric.
+- No fixed absolute token threshold, including 2,500 tokens, and no
+  cohort-relative token usage contributes to the AI Usage Score.
+- Automatic grading stores rubric version, model identifier, criterion scores,
+  evidence, confidence, and summary.
+- Deterministic repetition and rapid-accept measurements cannot be overwritten
+  by the grading LLM.
+- Actionable suggestion events record response visibility, decision type,
+  elapsed decision time, unchanged application, editing, rejection, dismissal,
+  and undo where applicable.
+- Each actionable suggestion applied unchanged within three seconds deducts one
+  Critical evaluation point, up to eight points, except where an immediate undo
+  or substantial edit cancels the deduction.
+
+## Timed Submission Reflection
+
+- AI-enabled code submission freezes the workspace before reflection begins.
+- The reflection uses the approved consolidated prompt and accepts no more than
+  100 words.
+- The backend owns a ten-minute deadline that survives refresh and reconnect.
+- Reflection drafts autosave and the latest draft is finalized automatically at
+  timeout.
+- An empty reflection receives zero Reflection quality points but preserves the
+  Functional Score.
+- AI-disabled assessments bypass reflection entirely.
 
 ## Real Deployment Readiness
 

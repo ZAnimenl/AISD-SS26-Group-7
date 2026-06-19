@@ -220,6 +220,50 @@ public sealed class AssessmentDraftGenerationServiceTests
     }
 
     [Fact]
+    public async Task Generate_assessment_draft_includes_public_and_hidden_test_cases_for_every_task()
+    {
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+                ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+                ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+            })));
+        var service = CreateDraftService(handler);
+
+        var questions = await service.GenerateAssessmentDraftAsync(
+            Guid.NewGuid(),
+            new AssessmentRequest(
+                "Todo data integrity",
+                "Generate a transaction-safe Todo database assessment.",
+                50,
+                AssessmentStatuses.Draft,
+                true,
+                TaskTypeCounts: new Dictionary<string, int>
+                {
+                    [TaskTypes.FrontendUiExtension] = 0,
+                    [TaskTypes.RestApiDevelopment] = 0,
+                    [TaskTypes.DatabaseQuerySchema] = 1,
+                    [TaskTypes.BugFix] = 0
+                },
+                Difficulty: "hard"),
+            CancellationToken.None);
+
+        var question = Assert.Single(questions);
+        Assert.Equal(2, question.TestCases.Count(testCase => testCase.Visibility == TestCaseVisibilities.Public));
+        Assert.Equal(2, question.TestCases.Count(testCase => testCase.Visibility == TestCaseVisibilities.Hidden));
+        Assert.All(question.TestCases, testCase =>
+        {
+            var testCode = JsonDocumentSerializer.Deserialize(
+                testCase.TestCodeJson,
+                new Dictionary<string, string>());
+            Assert.True(testCode.TryGetValue("sql", out var sqlTestCode));
+            Assert.False(string.IsNullOrWhiteSpace(sqlTestCode));
+            Assert.Equal(AuthoringSources.LlmGenerated, testCase.AuthoringSource);
+        });
+    }
+
+    [Fact]
     public async Task Generate_question_draft_rejects_verbose_but_tutorial_level_task()
     {
         var shallowDescription = string.Join(" ", Enumerable.Repeat(
@@ -247,6 +291,36 @@ public sealed class AssessmentDraftGenerationServiceTests
                 CancellationToken.None));
 
         Assert.Contains("still tutorial-level", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_rejects_problem_statements_over_150_words()
+    {
+        var verboseDescription = string.Join(" ", Enumerable.Repeat(
+            "Todo transactions require concurrency rollback audit persistence accessibility validation and deterministic dependency handling.",
+            16));
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+                ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+                ["solution.sql"] = "-- Implement transaction-safe Todo reporting."
+            },
+            description: verboseDescription)));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "hard",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("no more than 150 words", exception.Message);
     }
 
     [Fact]
@@ -375,9 +449,9 @@ public sealed class AssessmentDraftGenerationServiceTests
         description ??= string.Join(" ",
         [
             "Context: The default Todo List application needs a transaction-safe task history and reconciliation module spanning schema, seed data, and reporting logic.",
-            "Deliverables: complete all supplied SQL files while preserving the public todo, assignee, dependency, and audit view contracts.",
+            "Complete the supplied SQL files while preserving public todo, assignee, dependency, and audit view contracts.",
             "Functional requirements: enforce task ownership; prevent invalid completion transitions; record immutable todo audit entries; calculate running completion metrics with window functions; produce daily assignee summaries; identify duplicate update requests idempotently; support nullable due dates; and expose failed dependency reconciliations.",
-            "Constraints: use portable SQL, keep supplied Todo prototype names stable, preserve referential integrity, avoid destructive data loss, and make every migration safe to rerun.",
+            "Use portable SQL, preserve referential integrity, avoid data loss, and make migrations safe to rerun.",
             "Edge cases: duplicate task updates, null due dates, dependency cycles, concurrent completion changes, orphaned audit rows, and ties in timestamps must behave deterministically.",
             "Acceptance criteria: all public and hidden checks pass, constraints reject invalid todo writes, aggregates remain correct after retries, and existing Todo prototype consumers continue to query the original views without changes."
         ]);

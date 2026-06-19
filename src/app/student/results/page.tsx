@@ -41,8 +41,9 @@ export default function StudentResultsPage() {
               <tr>
                 <th className="pb-3">Assessment</th>
                 <th className="pb-3">Status</th>
-                <th className="pb-3">Score</th>
-                <th className="pb-3">AI summary</th>
+                <th className="pb-3">Functional</th>
+                <th className="pb-3">AI usage</th>
+                <th className="pb-3">Final</th>
                 <th className="pb-3">Report</th>
               </tr>
             </thead>
@@ -51,8 +52,9 @@ export default function StudentResultsPage() {
                 <tr key={result.assessment_id}>
                   <td className="py-4 text-white">{result.title}</td>
                   <td className="py-4"><StatusBadge status="submitted" /></td>
-                  <td className="py-4 text-cyanGlow">{result.score}%</td>
-                  <td className="py-4 text-white/55">{result.ai_enabled ? "AI enabled" : "AI disabled"}</td>
+                  <td className="py-4 text-cyanGlow">{result.functional_score ?? result.score}%</td>
+                  <td className="py-4 text-purpleGlow">{result.ai_enabled ? (result.ai_usage_score != null ? `${result.ai_usage_score}%` : result.ai_grading_status ?? "pending") : "—"}</td>
+                  <td className="py-4 text-white">{result.ai_enabled ? (result.final_score != null ? `${result.final_score}%` : "Pending") : "—"}</td>
                   <td className="py-4">
                     <Link
                       href={`/student/assessments/${result.assessment_id}/review?submissionId=${result.submission_id}`}

@@ -107,7 +107,7 @@ export default function StudentAssessmentReviewPage() {
           </div>
         }
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className={`grid gap-4 ${result.ai_enabled ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
         <section className="metric-card">
           <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><CheckCircle2 size={20} /></span>
@@ -121,11 +121,25 @@ export default function StudentAssessmentReviewPage() {
           <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><BarChart3 size={20} /></span>
             <div>
-              <p className="text-sm text-white/45">Score</p>
-              <p className="text-2xl font-semibold text-cyanGlow">{result.score ?? 0}%</p>
+              <p className="text-sm text-white/45">Functional score</p>
+              <p className="text-2xl font-semibold text-cyanGlow">{result.functional_score ?? result.score ?? 0}%</p>
             </div>
           </div>
         </section>
+        {result.ai_enabled ? (
+          <section className="metric-card">
+            <div className="relative flex flex-col items-center gap-3 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-purpleGlow/10 text-purpleGlow"><BarChart3 size={20} /></span>
+              <div>
+                <p className="text-sm text-white/45">AI usage score</p>
+                <p className="text-2xl font-semibold text-purpleGlow">
+                  {result.ai_usage_score ?? (result.ai_grading_status === "failed" ? "Failed" : "Pending")}
+                  {result.ai_usage_score != null ? "%" : ""}
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
         <section className="metric-card">
           <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><FileCode2 size={20} /></span>
@@ -136,12 +150,27 @@ export default function StudentAssessmentReviewPage() {
           </div>
         </section>
       </div>
+      {result.ai_enabled ? (
+        <section className="panel mt-6 text-center">
+          <p className="text-sm uppercase tracking-[0.14em] text-white/35">Final score</p>
+          <p className="mt-2 text-4xl font-semibold text-cyanGlow">
+            {result.final_score ?? "Pending"}{result.final_score != null ? "%" : ""}
+          </p>
+          <p className="mt-2 text-sm text-white/45">Arithmetic mean of Functional Score and AI Usage Score.</p>
+        </section>
+      ) : null}
       <section className="panel mt-6">
         <div className="relative">
           <h2 className="text-lg font-semibold">Submission summary</h2>
           <p className="mt-3 max-w-3xl leading-7 text-white/60">
             Your final submission for this assessment has been recorded. Hidden test inputs and expected outputs remain private; only the published score and status are shown here.
           </p>
+          {result.ai_enabled && result.reflection_text ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.14em] text-white/35">Your reflection</p>
+              <p className="mt-2 leading-7 text-white/65">{result.reflection_text}</p>
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Back to dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> View all results</Link>

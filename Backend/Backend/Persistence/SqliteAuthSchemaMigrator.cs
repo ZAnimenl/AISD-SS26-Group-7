@@ -106,5 +106,66 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
                 cancellationToken);
             logger.LogInformation("Added assessments.StartsAt column to local SQLite database.");
         }
+
+        if (assessmentColumns.Count > 0)
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE assessments SET StartsAt = CreatedAt WHERE StartsAt IS NULL OR StartsAt = '';",
+                cancellationToken);
+        }
+
+        var sessionColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA table_info(assessment_sessions);";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                sessionColumns.Add(reader.GetString(1));
+            }
+        }
+
+        var sessionPending = new List<(string Name, string Sql)>
+        {
+            ("ReflectionText", "ALTER TABLE assessment_sessions ADD COLUMN ReflectionText TEXT NOT NULL DEFAULT '';"),
+            ("ReflectionWordCount", "ALTER TABLE assessment_sessions ADD COLUMN ReflectionWordCount INTEGER NOT NULL DEFAULT 0;"),
+            ("ReflectionDeadline", "ALTER TABLE assessment_sessions ADD COLUMN ReflectionDeadline TEXT NULL;"),
+            ("ReflectionSubmittedAt", "ALTER TABLE assessment_sessions ADD COLUMN ReflectionSubmittedAt TEXT NULL;"),
+            ("ReflectionSubmissionReason", "ALTER TABLE assessment_sessions ADD COLUMN ReflectionSubmissionReason TEXT NULL;"),
+            ("AiGradingStatus", "ALTER TABLE assessment_sessions ADD COLUMN AiGradingStatus TEXT NOT NULL DEFAULT 'not_required';"),
+            ("AiUsageScore", "ALTER TABLE assessment_sessions ADD COLUMN AiUsageScore INTEGER NULL;"),
+            ("AiGradingDetailsJson", "ALTER TABLE assessment_sessions ADD COLUMN AiGradingDetailsJson jsonb NOT NULL DEFAULT '{{}}';"),
+            ("AiGradingModel", "ALTER TABLE assessment_sessions ADD COLUMN AiGradingModel TEXT NULL;"),
+            ("AiRubricVersion", "ALTER TABLE assessment_sessions ADD COLUMN AiRubricVersion TEXT NULL;"),
+            ("AiGradingSummary", "ALTER TABLE assessment_sessions ADD COLUMN AiGradingSummary TEXT NULL;"),
+            ("AiGradingConfidence", "ALTER TABLE assessment_sessions ADD COLUMN AiGradingConfidence TEXT NULL;"),
+            ("AiGradedAt", "ALTER TABLE assessment_sessions ADD COLUMN AiGradedAt TEXT NULL;")
+        };
+        foreach (var (name, sql) in sessionPending)
+        {
+            if (!sessionColumns.Contains(name))
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                logger.LogInformation("Added assessment_sessions.{Column} column to local SQLite database.", name);
+            }
+        }
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS ai_interaction_events (
+                Id TEXT NOT NULL PRIMARY KEY,
+                InteractionId TEXT NOT NULL,
+                SessionId TEXT NOT NULL,
+                EventType TEXT NOT NULL,
+                ElapsedMilliseconds INTEGER NULL,
+                AppliedUnchanged INTEGER NOT NULL DEFAULT 0,
+                MetadataJson jsonb NOT NULL DEFAULT '{{}}',
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (InteractionId) REFERENCES ai_interactions (Id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS IX_ai_interaction_events_SessionId_CreatedAt
+            ON ai_interaction_events (SessionId, CreatedAt);
+            """,
+            cancellationToken);
     }
 }

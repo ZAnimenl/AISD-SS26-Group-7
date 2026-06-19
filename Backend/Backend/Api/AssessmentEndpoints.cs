@@ -13,6 +13,7 @@ public static class AssessmentEndpoints
         api.MapGet("/admin/assessments", ListAdminAsync);
         api.MapPost("/admin/assessments", CreateAsync);
         api.MapPost("/admin/assessments/generate", GenerateAsync);
+        api.MapPost("/admin/assessments/{assessmentId:guid}/questions/generate-blueprint", GenerateBlueprintAsync);
         api.MapPost("/admin/assessments/{assessmentId:guid}/questions/generate", GenerateQuestionDraftAsync);
         api.MapGet("/admin/assessments/{assessmentId:guid}", GetAdminAsync);
         api.MapPut("/admin/assessments/{assessmentId:guid}", UpdateAsync);
@@ -62,6 +63,7 @@ public static class AssessmentEndpoints
         }
 
         await schemaCompatibilityService.EnsureAsync(cancellationToken);
+        var startsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
 
         var assessment = new Assessment
         {
@@ -71,7 +73,7 @@ public static class AssessmentEndpoints
             DurationMinutes = request.DurationMinutes,
             Status = NormalizeAssessmentStatus(request.Status),
             AiEnabled = request.AiEnabled,
-            StartsAt = request.StartsAt,
+            StartsAt = startsAt,
             SharedPrototypeReference = PrototypeDefaults.TodoListReference,
             SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
             SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
@@ -144,6 +146,83 @@ public static class AssessmentEndpoints
         }
     }
 
+    private static async Task<IResult> GenerateBlueprintAsync(
+        Guid assessmentId,
+        GenerateAssessmentBlueprintRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        SchemaCompatibilityService schemaCompatibilityService,
+        AssessmentDraftGenerationService draftGenerationService,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Administrator, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        await schemaCompatibilityService.EnsureAsync(cancellationToken);
+
+        var assessment = await dbContext.Assessments
+            .Include(item => item.Questions)
+            .Include(item => item.Sessions)
+            .FirstOrDefaultAsync(item => item.Id == assessmentId, cancellationToken);
+        if (assessment is null)
+        {
+            return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (assessment.Questions.Count > 0)
+        {
+            return ApiResults.Error(
+                "BLUEPRINT_ALREADY_CONFIGURED",
+                "Delete the existing questions before generating a new assessment blueprint.",
+                StatusCodes.Status409Conflict);
+        }
+
+        if (assessment.Sessions.Count > 0)
+        {
+            return ApiResults.Error(
+                "ASSESSMENT_ALREADY_ATTEMPTED",
+                "Questions cannot be generated after a student attempt has been created.",
+                StatusCodes.Status409Conflict);
+        }
+
+        var generationRequest = new AssessmentRequest(
+            assessment.Title,
+            assessment.Description,
+            assessment.DurationMinutes,
+            assessment.Status,
+            assessment.AiEnabled,
+            assessment.StartsAt,
+            assessment.SharedPrototypeReference,
+            assessment.SharedPrototypeVersion,
+            JsonDocumentSerializer.Deserialize(assessment.SharedPrototypeMetadataJson, new Dictionary<string, string>()),
+            request.TaskTypeCounts,
+            request.Difficulty);
+
+        try
+        {
+            var questions = await draftGenerationService.GenerateAssessmentDraftAsync(
+                assessment.Id,
+                generationRequest,
+                cancellationToken);
+
+            assessment.Questions.AddRange(questions);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return ApiResults.Success(questions.Select(ToQuestionDto));
+        }
+        catch (AiProviderUnavailableException exception)
+        {
+            return ApiResults.Error("AI_PROVIDER_UNAVAILABLE", exception.Message, StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (AiDraftGenerationException exception)
+        {
+            return ApiResults.Error("AI_DRAFT_GENERATION_FAILED", exception.Message, StatusCodes.Status502BadGateway);
+        }
+    }
+
     private static async Task<IResult> GenerateAsync(
         AssessmentRequest request,
         HttpContext httpContext,
@@ -160,6 +239,7 @@ public static class AssessmentEndpoints
         }
 
         await schemaCompatibilityService.EnsureAsync(cancellationToken);
+        var startsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
 
         var assessmentId = Guid.NewGuid();
         try
@@ -176,7 +256,7 @@ public static class AssessmentEndpoints
                 DurationMinutes = request.DurationMinutes,
                 Status = AssessmentStatuses.Draft,
                 AiEnabled = request.AiEnabled,
-                StartsAt = request.StartsAt,
+                StartsAt = startsAt,
                 SharedPrototypeReference = PrototypeDefaults.TodoListReference,
                 SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
                 SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
@@ -256,7 +336,7 @@ public static class AssessmentEndpoints
         assessment.DurationMinutes = request.DurationMinutes;
         assessment.Status = NormalizeAssessmentStatus(request.Status);
         assessment.AiEnabled = request.AiEnabled;
-        assessment.StartsAt = request.StartsAt;
+        assessment.StartsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
         assessment.SharedPrototypeReference = PrototypeDefaults.TodoListReference;
         assessment.SharedPrototypeVersion = PrototypeDefaults.TodoListVersion;
         assessment.SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>());

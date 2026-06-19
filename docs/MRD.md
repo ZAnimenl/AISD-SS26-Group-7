@@ -13,13 +13,16 @@
 - In-browser editing, running, and submitting.
 - Safe execution of untrusted code.
 - AI assistance that is measurable and controlled.
-- Reports that combine score outcomes with AI usage patterns.
+- Reports that distinguish functional correctness, AI-assisted working
+  behavior, and the combined final result.
 
 ## Differentiators
 
 - Practical task categories based on a shared starter prototype.
 - Embedded AI agent behavior tracked as part of assessment evidence.
-- Token usage and token efficiency treated as reportable metrics.
+- Automatic evidence-backed AI Usage Score with prompt, interaction, suggestion
+  decision, token, execution, and reflection evidence.
+- Timed reflection after AI-enabled code submission.
 - Platform-managed task execution so students do not install dependencies.
 
 ## Constraints

@@ -426,9 +426,15 @@ internal_error
 
 ## 10. Submission APIs
 
+The automatic AI Usage Score and timed reflection entries below are the target
+contract approved for future implementation. They are not claims about the
+current runtime.
+
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
 | P0 | POST | `/api/v1/assessments/{assessment_id}/submit` | Final submit and grading for the authenticated user's active attempt |
+| P0 | PUT | `/api/v1/assessments/{assessment_id}/reflection` | Autosave the authenticated student's AI-enabled reflection draft |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/reflection/submit` | Finalize the reflection before the backend deadline |
 | P1 | GET | `/api/v1/assessments/{assessment_id}/submissions?question_id={question_id}` | Authenticated student submission history |
 | P1 | GET | `/api/v1/admin/submissions/{submission_id}` | Admin submission detail |
 
@@ -438,8 +444,12 @@ internal_error
 {
   "submission_id": "uuid",
   "evaluation_status": "passed",
-  "score": 100,
-  "max_score": 100,
+  "functional_score": 100,
+  "functional_max_score": 100,
+  "ai_enabled": true,
+  "submission_state": "reflection_pending",
+  "reflection_required": true,
+  "reflection_deadline": "2026-04-30T13:50:00Z",
   "stdout": "All tests passed.",
   "stderr": null,
   "submitted_at": "2026-04-30T13:40:00Z",
@@ -456,13 +466,30 @@ internal_error
 }
 ```
 
-### Submission decisions to confirm
+For an AI-disabled assessment, the response uses
+`submission_state="completed"` and `reflection_required=false`.
+
+### Reflection request
+
+```json
+{
+  "reflection_text": "I used AI to diagnose..."
+}
+```
+
+The backend enforces the 100-word limit and ten-minute deadline. Refreshing the
+page does not restart the deadline. At timeout, the backend finalizes the latest
+saved draft, including an empty draft.
+
+### Submission decisions
 
 - Are multiple submissions allowed?
 - MVP decision: mock UI presents the latest submission as the counted submission.
-- Does submit lock the editor?
+- Approved decision: submit freezes the editor before reflection begins.
 - Required decision: hidden test input/output stay hidden from students.
 - MVP decision: student-facing frontend may show hidden test summary counts only.
+- Approved decision: AI-enabled final submission requires at least one persisted
+  AI interaction; AI-disabled submission has no reflection.
 
 ---
 
@@ -471,6 +498,7 @@ internal_error
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
 | P0 | POST | `/api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist` | Embedded AI agent request (code suggestion, explanation, debugging) |
+| P0 | POST | `/api/v1/assessments/{assessment_id}/ai-interactions/{interaction_id}/events` | Record response-visible and suggestion decision telemetry |
 | P1 | GET | `/api/v1/assessments/{assessment_id}/ai-usage` | Authenticated student AI usage and token summary |
 | P1 | GET | `/api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions` | Admin AI interaction logs with token details |
 
@@ -537,6 +565,15 @@ debugging
 - The AI agent must not provide direct complete solutions.
 - If AI is disabled for an assessment, the agent UI is hidden.
 - If AI provider is down, show an error message and preserve the assessment attempt.
+- AI-enabled assessment submission requires at least one successfully logged AI
+  interaction.
+- Actionable suggestions record response visibility, apply, edit-before-apply,
+  reject, dismiss, undo, elapsed decision time, and whether application was
+  unchanged.
+- Applying an actionable suggestion unchanged within three seconds records the
+  bounded rapid-accept deduction evidence.
+- Token grading has no fixed absolute threshold and no cohort-relative
+  component.
 
 ---
 
@@ -547,6 +584,7 @@ debugging
 | P0 | GET | `/api/v1/admin/reports` | Admin report list page |
 | P0 | GET | `/api/v1/reports/aggregate/{assessment_id}` | Assessment report detail |
 | P2 | GET | `/api/v1/admin/reports/{assessment_id}/students/{student_id}` | Student detail report modal |
+| P1 | POST | `/api/v1/admin/reports/{assessment_id}/students/{student_id}/ai-grade/retry` | Retry failed automatic AI grading without changing the Functional Score |
 
 ### Aggregate report should include
 
@@ -554,7 +592,10 @@ debugging
 {
   "assessment_id": "uuid",
   "assessment_title": "Python Basics",
-  "average_score": 82.5,
+  "ai_enabled": true,
+  "average_functional_score": 82.5,
+  "average_ai_usage_score": 76.5,
+  "average_final_score": 79.5,
   "completion_count": 24,
   "participant_count": 28,
   "score_distribution": [
@@ -571,26 +612,50 @@ debugging
       "student_email": "student@example.com",
       "attempt_status": "submitted",
       "submission_status": "passed",
-      "score": 90,
+      "functional_score": 90,
+      "ai_usage_score": 78,
+      "final_score": 84,
       "max_score": 100,
       "submitted_at": "2026-04-30T13:40:00Z",
+      "reflection": {
+        "text": "I used AI to diagnose...",
+        "word_count": 76,
+        "submitted_by": "student_submit"
+      },
       "ai_usage_summary": {
         "total_interactions": 5,
         "total_tokens": 2150,
         "total_input_tokens": 1200,
         "total_output_tokens": 950,
         "average_tokens_per_interaction": 430,
-        "main_semantic_tags": ["code_suggestion", "debugging"]
+        "main_semantic_tags": ["code_suggestion", "debugging"],
+        "grading_status": "completed",
+        "rubric_version": "ai-usage-v1",
+        "criteria": {
+          "prompt_quality_and_context": 24,
+          "behavioral_efficiency": 22,
+          "objective_repetition": 8,
+          "critical_evaluation_and_adaptation": 16,
+          "reflection_quality_and_consistency": 8
+        },
+        "confidence": "medium",
+        "evidence": []
       }
     }
   ]
 }
 ```
 
-### Report decisions to confirm
+For an AI-disabled assessment, report payloads omit AI Usage Score, Final Score,
+reflection, and AI grading details.
 
-- Which metrics are needed for admin reports?
-- Should reports include raw AI logs or only summaries?
+### Report decisions
+
+- Approved metrics are Functional Score, AI Usage Score, Final Score, rubric
+  criteria, reflection, grading evidence, interaction counts, and descriptive
+  token totals.
+- Administrator detail includes raw AI logs and event evidence; list views use
+  summaries.
 - Should report generation be live or cached?
 - Should hidden test details be visible to admins in reports?
 - What chart data should backend provide?
@@ -640,7 +705,8 @@ debugging
 | `/student/assessments` | `GET /api/v1/student/assessments` |
 | `/student/results` | `GET /api/v1/student/results` |
 | `/student/assessments/{assessment_id}/start` | `POST /api/v1/assessments/{assessment_id}/attempts/start` |
-| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/assessments/{assessment_id}/attempt`, `GET /api/v1/assessments/{assessment_id}/workspace`, `PUT /api/v1/assessments/{assessment_id}/workspace`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run`, `POST /api/v1/assessments/{assessment_id}/submit`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist`, `GET /api/v1/assessments/{assessment_id}/ai-usage` |
+| `/student/assessments/{assessment_id}/workspace` | `GET /api/v1/assessments/{assessment_id}/context`, `GET /api/v1/assessments/{assessment_id}/attempt`, `GET /api/v1/assessments/{assessment_id}/workspace`, `PUT /api/v1/assessments/{assessment_id}/workspace`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run`, `POST /api/v1/assessments/{assessment_id}/submit`, `POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist`, `POST /api/v1/assessments/{assessment_id}/ai-interactions/{interaction_id}/events`, `GET /api/v1/assessments/{assessment_id}/ai-usage` |
+| `/student/assessments/{assessment_id}/reflection` | `PUT /api/v1/assessments/{assessment_id}/reflection`, `POST /api/v1/assessments/{assessment_id}/reflection/submit` |
 
 ### Admin Pages
 
@@ -679,6 +745,8 @@ GET  /api/v1/assessments/{assessment_id}/workspace
 PUT  /api/v1/assessments/{assessment_id}/workspace
 POST /api/v1/assessments/{assessment_id}/questions/{question_id}/run
 POST /api/v1/assessments/{assessment_id}/submit
+PUT  /api/v1/assessments/{assessment_id}/reflection
+POST /api/v1/assessments/{assessment_id}/reflection/submit
 
 GET  /api/v1/admin/dashboard
 GET  /api/v1/admin/assessments
@@ -702,6 +770,7 @@ POST /api/v1/admin/questions/{question_id}/test-cases
 
 GET  /api/v1/assessments/{assessment_id}/submissions
 POST /api/v1/assessments/{assessment_id}/questions/{question_id}/ai/assist
+POST /api/v1/assessments/{assessment_id}/ai-interactions/{interaction_id}/events
 GET  /api/v1/assessments/{assessment_id}/ai-usage
 GET  /api/v1/admin/assessments/{assessment_id}/students/{student_id}/ai-interactions
 GET  /api/v1/admin/submissions/{submission_id}

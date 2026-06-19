@@ -217,7 +217,7 @@ public static class QuestionEndpoints
             {
                 testCase.Id = Guid.NewGuid();
                 testCase.QuestionId = question.Id;
-                dbContext.TestCases.Add(testCase);
+                question.TestCases.Add(testCase);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);

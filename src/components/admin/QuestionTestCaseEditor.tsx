@@ -1,12 +1,13 @@
 "use client";
 
-import { Loader2, Plus, Save, Trash2, Wand2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Minus, Plus, Save, Trash2, Wand2 } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import {
   createQuestion,
   createTestCase,
   deleteQuestion,
   deleteTestCase,
+  generateAssessmentBlueprint,
   regenerateQuestionDraft,
   updateQuestion,
   updateTestCase
@@ -35,6 +36,8 @@ const taskTypes: Array<{ value: TaskType; label: string }> = [
 ];
 
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
+const MAX_TASKS_PER_TYPE = 5;
+const MAX_TOTAL_TASKS = 12;
 
 const verificationModes: Array<{ value: VerificationMode; label: string }> = [
   { value: "browser_ui_preview", label: "Browser UI preview" },
@@ -59,7 +62,13 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
     assessment.questions[0]?.question_id ?? null
   );
-  const hasSeededFirstQuestionRef = useRef(false);
+  const [blueprintDifficulty, setBlueprintDifficulty] = useState<Difficulty>("medium");
+  const [blueprintTaskCounts, setBlueprintTaskCounts] = useState<Record<TaskType, number>>({
+    frontend_ui_extension: 1,
+    rest_api_development: 1,
+    database_query_schema: 1,
+    bug_fix: 1
+  });
   const orderedQuestions = useMemo(
     () => [...assessment.questions].sort((left, right) =>
       (left.sort_order ?? 0) - (right.sort_order ?? 0)
@@ -70,6 +79,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const selectedQuestion = orderedQuestions.find((question) => question.question_id === selectedQuestionId)
     ?? orderedQuestions[0]
     ?? null;
+  const blueprintTaskTotal = Object.values(blueprintTaskCounts).reduce((sum, count) => sum + count, 0);
 
   const runEditorAction = useCallback(async (action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) => {
     if (pendingAction !== null) {
@@ -103,7 +113,9 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     return {
       action: generated ? "Regenerate" : "Generate",
       pending: generated ? "Regenerating..." : "Generating...",
-      success: generated ? "Question regenerated for review." : "Question generated for review.",
+      success: generated
+        ? "Question and test cases regenerated for review."
+        : "Question and test cases generated for review.",
       title: generated
         ? "Regenerate this task from the current problem description"
         : "Generate this task from the current problem description",
@@ -126,6 +138,21 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     const maximumSortOrder = Math.max(1, assessment.questions.length);
     const nextSortOrder = Math.min(maximumSortOrder, Math.max(1, value || 1));
     updateQuestionState(questionId, { sort_order: nextSortOrder });
+  }
+
+  function updateBlueprintTaskCount(taskType: TaskType, requestedCount: number) {
+    setBlueprintTaskCounts((current) => {
+      const currentTotal = Object.values(current).reduce((sum, count) => sum + count, 0);
+      const maximumForType = Math.min(
+        MAX_TASKS_PER_TYPE,
+        current[taskType] + (MAX_TOTAL_TASKS - currentTotal)
+      );
+
+      return {
+        ...current,
+        [taskType]: Math.max(0, Math.min(maximumForType, requestedCount))
+      };
+    });
   }
 
   function updateQuestionLanguage(questionId: string, language: Language, checked: boolean) {
@@ -283,6 +310,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     setSelectedQuestionId(nextQuestion?.question_id ?? null);
   }
 
+  async function generateBlueprint() {
+    const questions = await generateAssessmentBlueprint(assessment.assessment_id, {
+      task_type_counts: blueprintTaskCounts,
+      difficulty: blueprintDifficulty
+    });
+
+    onAssessmentChange({
+      ...assessment,
+      question_count: questions.length,
+      questions
+    });
+    setSelectedQuestionId(questions[0]?.question_id ?? null);
+  }
+
   async function addTestCase(questionId: string) {
     const question = assessment.questions.find((item) => item.question_id === questionId);
     if (!question) {
@@ -311,45 +352,6 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       ]
     });
   }
-
-  useEffect(() => {
-    const firstQuestionSeedKey = `admin-assessment-${assessment.assessment_id}-seeded-first-question`;
-
-    if (assessment.questions.length > 0) {
-      hasSeededFirstQuestionRef.current = false;
-      if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(firstQuestionSeedKey);
-      }
-      return;
-    }
-
-    if (hasSeededFirstQuestionRef.current || pendingAction !== null) {
-      return;
-    }
-
-    if (typeof window !== "undefined" && window.sessionStorage.getItem(firstQuestionSeedKey) === "true") {
-      hasSeededFirstQuestionRef.current = true;
-      return;
-    }
-
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(firstQuestionSeedKey, "true");
-    }
-
-    hasSeededFirstQuestionRef.current = true;
-    const seedTimer = window.setTimeout(() => {
-      void runEditorAction(addQuestion, "Question 1 added.", {
-        key: "seed-question-1",
-        label: "Creating question 1 in backend..."
-      }).finally(() => {
-        if (typeof window !== "undefined") {
-          window.sessionStorage.removeItem(firstQuestionSeedKey);
-        }
-      });
-    }, 0);
-
-    return () => window.clearTimeout(seedTimer);
-  }, [addQuestion, assessment.assessment_id, assessment.questions.length, pendingAction, runEditorAction]);
 
   async function saveTestCase(testCase: AdminTestCase) {
     await updateTestCase(testCase);
@@ -613,7 +615,100 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 );
               })()}
             </article>
-          ) : null}
+          ) : (
+            <div className="rounded-2xl border border-cyanGlow/20 bg-black/20 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question blueprint</p>
+                  <h3 className="mt-1 text-lg font-semibold">Choose the assessment mix</h3>
+                  <p className="mt-1 max-w-2xl text-sm text-white/45">
+                    No questions are configured yet. Generate the complete task set here, or use Add question for manual authoring.
+                  </p>
+                </div>
+                <div className="grid min-w-[124px] place-items-center rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-4 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">Total tasks</p>
+                  <p className="text-2xl font-semibold text-cyanGlow">{blueprintTaskTotal}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {taskTypes.map((taskType) => {
+                  const count = blueprintTaskCounts[taskType.value];
+                  const canIncrease = blueprintTaskTotal < MAX_TOTAL_TASKS && count < MAX_TASKS_PER_TYPE;
+
+                  return (
+                    <div key={taskType.value} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-white/85">{taskType.label}</p>
+                        <span className="grid h-9 min-w-9 place-items-center rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 px-2 font-mono text-sm text-cyanGlow">
+                          {count}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-[36px_1fr_36px] items-center gap-3">
+                        <button
+                          className="grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/20 text-white/65 transition hover:border-cyanGlow/45 hover:text-cyanGlow disabled:opacity-30"
+                          type="button"
+                          aria-label={`Remove one ${taskType.label} task`}
+                          disabled={pendingAction !== null || count === 0}
+                          onClick={() => updateBlueprintTaskCount(taskType.value, count - 1)}
+                        >
+                          <Minus size={15} />
+                        </button>
+                        <input
+                          className="h-2 w-full cursor-pointer accent-cyan-400"
+                          type="range"
+                          min={0}
+                          max={MAX_TASKS_PER_TYPE}
+                          value={count}
+                          aria-label={`${taskType.label} question count`}
+                          disabled={pendingAction !== null}
+                          onChange={(event) => updateBlueprintTaskCount(taskType.value, Number(event.target.value))}
+                        />
+                        <button
+                          className="grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/20 text-white/65 transition hover:border-cyanGlow/45 hover:text-cyanGlow disabled:opacity-30"
+                          type="button"
+                          aria-label={`Add one ${taskType.label} task`}
+                          disabled={pendingAction !== null || !canIncrease}
+                          onClick={() => updateBlueprintTaskCount(taskType.value, count + 1)}
+                        >
+                          <Plus size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                <label className="grid min-w-44 gap-2 text-sm text-white/60">
+                  Shared difficulty
+                  <select
+                    className="field capitalize"
+                    value={blueprintDifficulty}
+                    disabled={pendingAction !== null}
+                    onChange={(event) => setBlueprintDifficulty(event.target.value as Difficulty)}
+                  >
+                    {difficulties.map((difficulty) => (
+                      <option key={difficulty} value={difficulty}>{difficulty}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={pendingAction !== null || blueprintTaskTotal === 0}
+                  onClick={() => runEditorAction(
+                    generateBlueprint,
+                    `${blueprintTaskTotal} question${blueprintTaskTotal === 1 ? "" : "s"} and their test cases generated for review.`,
+                    { key: "generate-blueprint", label: `Generating ${blueprintTaskTotal} validated questions in backend...` }
+                  )}
+                >
+                  {isActionPending("generate-blueprint") ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+                  {isActionPending("generate-blueprint") ? "Generating questions..." : "Generate questions"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

@@ -37,6 +37,10 @@ public sealed class StudentResultsTests
         Assert.Equal("Assessment", summary.AssessmentTitle);
         Assert.Equal(75, summary.Score);
         Assert.Equal(100, summary.MaxScore);
+        Assert.Equal(75, summary.FunctionalScore);
+        Assert.False(summary.AiEnabled);
+        Assert.Null(summary.AiUsageScore);
+        Assert.Null(summary.FinalScore);
         Assert.Equal(2, summary.QuestionCount);
         Assert.Equal(ExecutionStatuses.Failed, summary.EvaluationStatus);
     }

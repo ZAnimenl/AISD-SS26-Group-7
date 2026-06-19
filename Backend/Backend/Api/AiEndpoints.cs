@@ -11,6 +11,7 @@ public static class AiEndpoints
     public static void Map(RouteGroupBuilder api)
     {
         api.MapPost("/assessments/{assessmentId:guid}/questions/{questionId:guid}/ai/assist", AssistByAssessmentAsync);
+        api.MapPost("/assessments/{assessmentId:guid}/ai-interactions/{interactionId:guid}/events", RecordEventAsync);
         api.MapGet("/assessments/{assessmentId:guid}/ai-usage", UsageByAssessmentAsync);
         api.MapGet("/admin/assessments/{assessmentId:guid}/students/{studentId:guid}/ai-interactions", AdminInteractionsByAssessmentAsync);
     }
@@ -144,6 +145,79 @@ public static class AiEndpoints
                 total_tokens = assistantResult.InputTokens + assistantResult.OutputTokens
             },
             created_at = interaction.CreatedAt
+        });
+    }
+
+    private static async Task<IResult> RecordEventAsync(
+        Guid assessmentId,
+        Guid interactionId,
+        AiInteractionEventRequest request,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var interaction = await dbContext.AiInteractions
+            .FirstOrDefaultAsync(item =>
+                item.Id == interactionId
+                && item.AssessmentId == assessmentId,
+                cancellationToken);
+        if (interaction is null
+            || !await dbContext.AssessmentSessions.AnyAsync(
+                item => item.Id == interaction.SessionId && item.UserId == user!.Id,
+                cancellationToken))
+        {
+            return ApiResults.Error("AI_INTERACTION_NOT_FOUND", "AI interaction was not found.", StatusCodes.Status404NotFound);
+        }
+
+        var allowedTypes = new[]
+        {
+            AiInteractionEventTypes.ResponseVisible,
+            AiInteractionEventTypes.Apply,
+            AiInteractionEventTypes.Edit,
+            AiInteractionEventTypes.Reject,
+            AiInteractionEventTypes.Dismiss,
+            AiInteractionEventTypes.Undo
+        };
+        if (!allowedTypes.Contains(request.EventType))
+        {
+            return ApiResults.Error("INVALID_AI_EVENT", "AI interaction event type is not supported.", StatusCodes.Status400BadRequest);
+        }
+
+        if (request.EventType == AiInteractionEventTypes.ResponseVisible
+            && await dbContext.AiInteractionEvents.AnyAsync(
+                item => item.InteractionId == interactionId && item.EventType == AiInteractionEventTypes.ResponseVisible,
+                cancellationToken))
+        {
+            return ApiResults.Success(new { interaction_id = interactionId, recorded = false });
+        }
+
+        var interactionEvent = new AiInteractionEvent
+        {
+            Id = Guid.NewGuid(),
+            InteractionId = interactionId,
+            SessionId = interaction.SessionId,
+            EventType = request.EventType,
+            ElapsedMilliseconds = request.ElapsedMilliseconds is null
+                ? null
+                : Math.Clamp(request.ElapsedMilliseconds.Value, 0, 86_400_000),
+            AppliedUnchanged = request.AppliedUnchanged,
+            MetadataJson = JsonDocumentSerializer.Serialize(request.Metadata ?? new Dictionary<string, string>()),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        dbContext.AiInteractionEvents.Add(interactionEvent);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ApiResults.Success(new
+        {
+            event_id = interactionEvent.Id,
+            interaction_id = interactionId,
+            recorded = true
         });
     }
 

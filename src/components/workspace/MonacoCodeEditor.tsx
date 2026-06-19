@@ -20,7 +20,7 @@ interface MonacoCodeEditorProps {
   fileName: string;
   language: Language;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, eventTimestamp: number) => void;
 }
 
 const MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE: Record<Language, string> = {
@@ -73,7 +73,7 @@ export function MonacoCodeEditor({ assessmentId, questionId, fileName, language,
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   const handleEditorChange: OnChange = (nextValue) => {
-    onChange(nextValue ?? "");
+    onChange(nextValue ?? "", performance.now());
   };
 
   const handleEditorMount: OnMount = (editor) => {

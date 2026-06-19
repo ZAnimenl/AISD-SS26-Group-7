@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, FileText, Loader2, Minus, Plus, Settings2, Wand2 } from "lucide-react";
 import { createAssessment, generateAssessment } from "@/lib/api";
-import { toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
+import { currentUtcIso, toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Difficulty, TaskType } from "@/lib/types";
 
@@ -103,7 +103,7 @@ export default function NewAssessmentPage() {
         title: title.trim(),
         description: description.trim(),
         duration_minutes: Number(form.get("duration_minutes") ?? 50),
-        starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : null,
+        starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : currentUtcIso(),
         status: (shouldGenerate ? "draft" : String(form.get("status") ?? "draft")) as any,
         ai_enabled: form.get("ai_enabled") === "enabled",
         shared_prototype_reference: "default-todo-list",
@@ -448,7 +448,7 @@ export default function NewAssessmentPage() {
             {pendingMode ? (
               <span className="w-full text-sm text-white/55" aria-live="polite">
                 {pendingMode === "generate"
-                  ? `Backend is generating ${totalTasks} validated Todo-prototype task${totalTasks === 1 ? "" : "s"}. Nothing is saved until every draft is confirmed.`
+                  ? `Backend is generating ${totalTasks} validated Todo-prototype task${totalTasks === 1 ? "" : "s"} with public and hidden test cases. Nothing is saved until every draft and test set is confirmed.`
                   : "Saving assessment shell in the backend..."}
               </span>
             ) : null}

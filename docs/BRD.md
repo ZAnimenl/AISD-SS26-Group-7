@@ -11,8 +11,9 @@ system evaluates submissions safely, and reports summarize results and AI usage.
 - Evaluate practical development skills instead of algorithm-only puzzle
   performance.
 - Measure how students use embedded AI assistance during assessment work.
-- Let administrators review task quality, submissions, AI token usage, and token
-  efficiency.
+- Let administrators review task quality, submissions, AI interaction evidence,
+  and automatically graded AI-assisted working behavior.
+- Keep functional correctness and AI usage as separate, understandable scores.
 - Keep student work inside the assessment website without local setup.
 
 ## Stakeholders
@@ -30,7 +31,9 @@ system evaluates submissions safely, and reports summarize results and AI usage.
 - Browser-based coding workspace.
 - Sandboxed execution and grading.
 - Embedded AI assistance with telemetry.
-- Reporting for performance and AI usage.
+- Automatic AI usage grading and timed submission reflections for AI-enabled
+  assessments.
+- Reporting for functional performance, AI usage, and the combined result.
 
 ## Out of Scope
 
@@ -45,4 +48,8 @@ system evaluates submissions safely, and reports summarize results and AI usage.
 - Administrators can create and publish practical assessments.
 - Students can complete tasks without local dependency setup.
 - Submissions are evaluated without exposing hidden tests.
-- AI interactions and token totals are visible in administrator reports.
+- AI-disabled assessments produce a Functional Score only.
+- AI-enabled assessments produce separate Functional and AI Usage scores plus
+  their arithmetic mean as the Final Score.
+- AI interactions, reflections, grading evidence, and token totals are visible
+  in administrator reports.

@@ -8,6 +8,10 @@ export function toUtcIso(localValue: string) {
   return localValue ? new Date(localValue).toISOString() : null;
 }
 
+export function currentUtcIso() {
+  return new Date().toISOString();
+}
+
 export function hasAssessmentStarted(startsAt?: string | null) {
   return !startsAt || new Date(startsAt).getTime() <= Date.now();
 }

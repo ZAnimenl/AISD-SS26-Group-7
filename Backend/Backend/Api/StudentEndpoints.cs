@@ -153,18 +153,33 @@ public static class StudentEndpoints
             {
                 var submissions = group.ToList();
                 var latestSubmission = submissions.OrderByDescending(submission => submission.SubmittedAt).First();
+                var session = latestSubmission.Session!;
                 var score = submissions.Sum(submission => submission.Score);
                 var maxScore = submissions.Sum(submission => submission.MaxScore);
+                var functionalScore = maxScore > 0
+                    ? (int)Math.Round(score * 100.0 / maxScore, MidpointRounding.AwayFromZero)
+                    : 0;
+                var aiEnabled = session.Assessment!.AiEnabled;
+                var aiUsageScore = session.AiUsageScore;
 
                 return new StudentResultSummary(
                     SubmissionId: latestSubmission.Id,
                     AttemptId: latestSubmission.SessionId,
-                    AssessmentId: latestSubmission.Session!.AssessmentId,
-                    AssessmentTitle: latestSubmission.Session.Assessment!.Title,
+                    AssessmentId: session.AssessmentId,
+                    AssessmentTitle: session.Assessment.Title,
                     EvaluationStatus: BuildResultStatus(submissions, score, maxScore),
                     Score: score,
                     MaxScore: maxScore,
-                    QuestionCount: latestSubmission.Session.Assessment.Questions.Count,
+                    FunctionalScore: functionalScore,
+                    AiEnabled: aiEnabled,
+                    AiUsageScore: aiUsageScore,
+                    FinalScore: aiEnabled && aiUsageScore.HasValue
+                        ? (int?)Math.Round((functionalScore + aiUsageScore.Value) / 2.0, MidpointRounding.AwayFromZero)
+                        : null,
+                    AiGradingStatus: session.AiGradingStatus,
+                    ReflectionText: session.ReflectionText,
+                    ReflectionSubmittedAt: session.ReflectionSubmittedAt,
+                    QuestionCount: session.Assessment.Questions.Count,
                     SubmittedAt: submissions.Max(submission => submission.SubmittedAt));
             })
             .OrderByDescending(result => result.SubmittedAt)
@@ -209,6 +224,13 @@ public static class StudentEndpoints
         string EvaluationStatus,
         int Score,
         int MaxScore,
+        int FunctionalScore,
+        bool AiEnabled,
+        int? AiUsageScore,
+        int? FinalScore,
+        string AiGradingStatus,
+        string ReflectionText,
+        DateTimeOffset? ReflectionSubmittedAt,
         int QuestionCount,
         DateTimeOffset SubmittedAt);
 }
