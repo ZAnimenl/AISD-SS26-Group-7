@@ -51,7 +51,12 @@ internal sealed class DockerCodeRunner : ICodeRunner
         try
         {
             using var run = workspace.CreateRun();
-            testFileFactory.Write(run.HostPath, files, testCode, gradingLanguage);
+            testFileFactory.Write(
+                run.HostPath,
+                files,
+                testCode,
+                gradingLanguage,
+                isHtmlWorkspace: language.Equals("html", StringComparison.OrdinalIgnoreCase));
 
             var execution = await graderContainer.ExecuteAsync(
                 run.ContainerPath,

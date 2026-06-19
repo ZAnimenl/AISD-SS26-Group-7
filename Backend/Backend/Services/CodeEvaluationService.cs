@@ -129,7 +129,7 @@ public sealed class CodeEvaluationService
             return ExecutionStatuses.TimeLimitExceeded;
         }
 
-        return !string.IsNullOrWhiteSpace(execution.Stderr) || LooksLikeRuntimeError(execution.Stderr)
+        return LooksLikeRuntimeError(execution.Stderr)
             ? ExecutionStatuses.RuntimeError
             : ExecutionStatuses.Failed;
     }

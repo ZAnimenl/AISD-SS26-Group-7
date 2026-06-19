@@ -53,7 +53,7 @@ public static class QuestionEndpoints
             TaskType = NormalizeTaskType(request.TaskType),
             Difficulty = NormalizeDifficulty(request.Difficulty),
             VerificationMode = NormalizeVerificationMode(request.VerificationMode, request.TaskType),
-            StarterPrototypeReference = NormalizeOptionalText(request.StarterPrototypeReference),
+            StarterPrototypeReference = PrototypeDefaults.TodoListReference,
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(request.LanguageConstraints),
             StarterCodeJson = JsonDocumentSerializer.Serialize(request.StarterCode),
             StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(request.StarterFilesMetadata ?? new Dictionary<string, Dictionary<string, string>>()),
@@ -99,7 +99,7 @@ public static class QuestionEndpoints
         question.TaskType = NormalizeTaskType(request.TaskType);
         question.Difficulty = NormalizeDifficulty(request.Difficulty);
         question.VerificationMode = NormalizeVerificationMode(request.VerificationMode, request.TaskType);
-        question.StarterPrototypeReference = NormalizeOptionalText(request.StarterPrototypeReference);
+        question.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
         question.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(request.LanguageConstraints);
         question.StarterCodeJson = JsonDocumentSerializer.Serialize(request.StarterCode);
         question.StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(request.StarterFilesMetadata ?? new Dictionary<string, Dictionary<string, string>>());

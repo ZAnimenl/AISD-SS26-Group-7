@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, Save, Trash2, Wand2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createQuestion,
   createTestCase,
@@ -14,7 +14,6 @@ import {
 import {
   defaultStarterCode,
   defaultTestCode,
-  getDefaultFileNameForLanguage,
   getDefaultLanguagesForTaskType,
   getLanguageLabel,
   normalizeStudentLanguageConstraints,
@@ -57,7 +56,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
+    assessment.questions[0]?.question_id ?? null
+  );
   const hasSeededFirstQuestionRef = useRef(false);
+  const orderedQuestions = useMemo(
+    () => [...assessment.questions].sort((left, right) =>
+      (left.sort_order ?? 0) - (right.sort_order ?? 0)
+      || left.question_id.localeCompare(right.question_id)
+    ),
+    [assessment.questions]
+  );
+  const selectedQuestion = orderedQuestions.find((question) => question.question_id === selectedQuestionId)
+    ?? orderedQuestions[0]
+    ?? null;
 
   const runEditorAction = useCallback(async (action: () => Promise<void>, successMessage: string, nextPendingAction: PendingEditorAction) => {
     if (pendingAction !== null) {
@@ -130,28 +142,20 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     updateQuestionState(questionId, { language_constraints: nextLanguages.length ? nextLanguages : current });
   }
 
-  function getFirstFileContent(files: Record<string, string> | undefined): string {
-    if (!files) return "";
-    const values = Object.values(files);
-    return values[0] ?? "";
-  }
-
-  function updateStarterCode(questionId: string, language: Language, value: string) {
+  function updateStarterFile(questionId: string, language: Language, fileName: string, value: string) {
     const question = assessment.questions.find((item) => item.question_id === questionId);
     if (!question) {
       return;
     }
 
-    const currentFiles = question.starter_code[language] ?? {};
-    const firstFileName = Object.keys(currentFiles)[0] ?? getDefaultFileNameForLanguage(language);
-
-    const starterFiles = Object.keys(currentFiles).length ? currentFiles : defaultStarterCode[language];
-    const starterFileName = Object.keys(starterFiles)[0] ?? firstFileName;
+    const currentFiles = Object.keys(question.starter_code[language] ?? {}).length
+      ? question.starter_code[language]
+      : defaultStarterCode[language];
 
     updateQuestionState(questionId, {
       starter_code: {
         ...question.starter_code,
-        [language]: { ...starterFiles, [starterFileName]: value }
+        [language]: { ...currentFiles, [fileName]: value }
       }
     });
   }
@@ -226,6 +230,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
       question_count: assessment.question_count + 1,
       questions: [...assessment.questions, question]
     });
+    setSelectedQuestionId(question.question_id);
   }, [assessment, onAssessmentChange]);
 
   async function saveQuestion(question: Question) {
@@ -266,11 +271,16 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
 
   async function removeQuestion(questionId: string) {
     await deleteQuestion(questionId);
+    const removedIndex = orderedQuestions.findIndex((question) => question.question_id === questionId);
+    const remainingQuestions = orderedQuestions.filter((question) => question.question_id !== questionId);
+    const nextQuestion = remainingQuestions[Math.min(Math.max(removedIndex, 0), remainingQuestions.length - 1)];
+
     onAssessmentChange({
       ...assessment,
       question_count: Math.max(0, assessment.question_count - 1),
       questions: assessment.questions.filter((question) => question.question_id !== questionId)
     });
+    setSelectedQuestionId(nextQuestion?.question_id ?? null);
   }
 
   async function addTestCase(questionId: string) {
@@ -361,7 +371,39 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
     <section id="questions" className="panel scroll-mt-6">
       <div className="relative">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Questions and test cases</h2>
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <h2 className="text-lg font-semibold">Questions and test cases</h2>
+            {orderedQuestions.length > 0 ? (
+              <div className="flex max-w-full flex-wrap gap-2" role="tablist" aria-label="Assessment tasks">
+                {orderedQuestions.map((question, index) => {
+                  const isSelected = question.question_id === selectedQuestion?.question_id;
+                  return (
+                    <button
+                      key={question.question_id}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                        isSelected
+                          ? "border-cyanGlow/60 bg-cyanGlow/15 text-cyanGlow"
+                          : "border-white/10 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                      }`}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      aria-controls={`question-editor-${question.question_id}`}
+                      title={question.title}
+                      disabled={pendingAction !== null}
+                      onClick={() => {
+                        setSelectedQuestionId(question.question_id);
+                        setStatus(null);
+                        setError(null);
+                      }}
+                    >
+                      Task {index + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
           <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(addQuestion, "Question added.", { key: "add-question", label: "Creating question in backend..." })}>
             {isActionPending("add-question") ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />}
             {isActionPending("add-question") ? "Creating..." : "Add question"}
@@ -371,8 +413,17 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
         {status ? <p className="mt-3 text-sm text-cyanGlow">{status}</p> : null}
         {error ? <p className="mt-3 text-sm text-pinkGlow">{error}</p> : null}
         <div className="mt-4 space-y-4">
-          {assessment.questions.map((question) => (
-            <article key={question.question_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          {selectedQuestion ? (
+            <article
+              id={`question-editor-${selectedQuestion.question_id}`}
+              role="tabpanel"
+              aria-label={`Task ${orderedQuestions.findIndex((question) => question.question_id === selectedQuestion.question_id) + 1}`}
+              className="rounded-2xl border border-white/10 bg-black/20 p-4"
+            >
+              {(() => {
+                const question = selectedQuestion;
+                return (
+                  <>
               <div className="grid gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question editor</p>
@@ -425,11 +476,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     <input className="field w-full" type="number" value={question.max_score ?? 100} onChange={(event) => updateQuestionState(question.question_id, { max_score: Number(event.target.value) })} />
                   </label>
                 </div>
-                <label className="grid gap-2 text-sm text-white/60">
-                  Problem description
-                  <textarea className="field min-h-32" value={question.problem_description_markdown} onChange={(event) => updateQuestionState(question.question_id, { problem_description_markdown: event.target.value })} />
-                </label>
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/60">
                     Task type
                     <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionTaskType(question.question_id, event.target.value as TaskType)}>
@@ -446,6 +493,12 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                       ))}
                     </select>
                   </label>
+                </div>
+                <label className="grid gap-2 text-sm text-white/60">
+                  Problem description
+                  <textarea className="field min-h-32" value={question.problem_description_markdown} onChange={(event) => updateQuestionState(question.question_id, { problem_description_markdown: event.target.value })} />
+                </label>
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/60">
                     Verification mode
                     <select className="field w-full" value={question.verification_mode ?? "automated_test"} onChange={(event) => updateQuestionState(question.question_id, { verification_mode: event.target.value as VerificationMode })}>
@@ -481,12 +534,18 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   <textarea className="field min-h-20" value={question.admin_notes ?? ""} onChange={(event) => updateQuestionState(question.question_id, { admin_notes: event.target.value })} />
                 </label>
                 <div className="grid gap-3 lg:grid-cols-2">
-                  {normalizeStudentLanguageConstraints(question.language_constraints, question.task_type).map((language) => (
-                    <label key={language} className="grid gap-2 text-sm text-white/60">
-                      {getLanguageLabel(language)} starter code
-                      <textarea className="field min-h-32 font-mono" value={getFirstFileContent(question.starter_code[language])} onChange={(event) => updateStarterCode(question.question_id, language, event.target.value)} />
-                    </label>
-                  ))}
+                  {normalizeStudentLanguageConstraints(question.language_constraints, question.task_type).flatMap((language) => {
+                    const files = Object.keys(question.starter_code[language] ?? {}).length
+                      ? question.starter_code[language]
+                      : defaultStarterCode[language];
+
+                    return Object.entries(files).map(([fileName, content]) => (
+                      <label key={`${language}-${fileName}`} className="grid gap-2 text-sm text-white/60">
+                        {getLanguageLabel(language)} starter file: {fileName}
+                        <textarea className="field min-h-32 font-mono" value={content} onChange={(event) => updateStarterFile(question.question_id, language, fileName, event.target.value)} />
+                      </label>
+                    ));
+                  })}
                 </div>
               </div>
 
@@ -550,8 +609,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   ))}
                 </div>
               </div>
+                  </>
+                );
+              })()}
             </article>
-          ))}
+          ) : null}
         </div>
       </div>
     </section>

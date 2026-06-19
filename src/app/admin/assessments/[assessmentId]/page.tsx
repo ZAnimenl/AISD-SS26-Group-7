@@ -7,6 +7,7 @@ import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEdito
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { deleteAssessment, getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
+import { toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage() {
@@ -19,11 +20,15 @@ export default function EditAssessmentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [startMode, setStartMode] = useState<"now" | "scheduled">("now");
+  const [scheduledStart, setScheduledStart] = useState(() => toLocalDateTimeInput());
 
   useEffect(() => {
     getAdminAssessment(assessmentId)
       .then((nextAssessment) => {
         setAssessment(nextAssessment);
+        setStartMode(nextAssessment.starts_at ? "scheduled" : "now");
+        setScheduledStart(toLocalDateTimeInput(nextAssessment.starts_at));
         setError(null);
       })
       .catch((exception) => {
@@ -49,6 +54,7 @@ export default function EditAssessmentPage() {
       title: String(form.get("title") ?? assessment.title),
       description: String(form.get("description") ?? assessment.description),
       duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
+      starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : null,
       status: String(form.get("status") ?? assessment.status) as AssessmentStatus,
       ai_enabled: form.get("ai_enabled") === "enabled",
       shared_prototype_reference: assessment.shared_prototype_reference ?? null,
@@ -123,9 +129,33 @@ export default function EditAssessmentPage() {
             <label className="grid gap-2 text-sm text-white/60">Description<textarea className="field min-h-28" name="description" defaultValue={assessment.description} /></label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" name="duration_minutes" type="number" defaultValue={assessment.duration_minutes} /></label>
+              <div className="grid gap-2 text-sm text-white/60">
+                Starts
+                <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-black/20 p-1">
+                  {(["now", "scheduled"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        startMode === mode ? "bg-cyanGlow/15 text-cyanGlow" : "text-white/45 hover:text-white/75"
+                      }`}
+                      aria-pressed={startMode === mode}
+                      onClick={() => setStartMode(mode)}
+                    >
+                      {mode === "now" ? "Now" : "Schedule"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {startMode === "scheduled" ? (
+                <label className="grid gap-2 text-sm text-white/60 sm:col-span-2">
+                  Start date and time
+                  <input className="field [color-scheme:dark]" type="datetime-local" value={scheduledStart} required onChange={(event) => setScheduledStart(event.target.value)} />
+                </label>
+              ) : null}
               <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
+              <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
             </div>
-            <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
             <div className="flex flex-wrap gap-3">
               <button className="btn-primary" disabled={isSaving || isDeleting}>
                 {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}

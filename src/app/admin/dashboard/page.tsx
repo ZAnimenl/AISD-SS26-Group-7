@@ -51,11 +51,11 @@ export default function AdminDashboardPage() {
         action={<Link className="btn-primary" href="/admin/assessments/new">Create assessment</Link>}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={FileText} label="Assessments" value={dashboard.summary.total_assessments} detail={`${dashboard.summary.active_assessments} active`} />
-        <MetricCard icon={Users} label="Students" value={dashboard.summary.total_students} detail="Backend users" />
-        <MetricCard icon={Send} label="Submissions" value={dashboard.summary.total_submissions} detail="All assessments" />
-        <MetricCard icon={BarChart3} label="Average" value={`${dashboard.summary.average_score}%`} detail="Latest submissions" />
-        <MetricCard icon={Brain} label="AI events" value={dashboard.summary.ai_interactions} detail="Usage summaries" />
+        <MetricCard icon={FileText} label="Assessments" value={dashboard.summary.total_assessments} />
+        <MetricCard icon={Users} label="Students" value={dashboard.summary.total_students} />
+        <MetricCard icon={Send} label="Submissions" value={dashboard.summary.total_submissions} />
+        <MetricCard icon={BarChart3} label="Average" value={`${dashboard.summary.average_score}%`} />
+        <MetricCard icon={Brain} label="AI events" value={dashboard.summary.ai_interactions} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <AdminAssessmentTable assessments={assessments.slice(0, 3)} />

@@ -72,6 +72,7 @@ export interface Assessment {
   title: string;
   description: string;
   duration_minutes: number;
+  starts_at?: string | null;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;

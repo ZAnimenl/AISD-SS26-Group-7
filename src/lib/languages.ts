@@ -13,13 +13,31 @@ export const DEFAULT_STUDENT_LANGUAGES: Language[] = ["python", "javascript"];
 const SUPPORTED_STUDENT_LANGUAGE_VALUES = new Set<Language>(STUDENT_LANGUAGE_OPTIONS.map((option) => option.value));
 
 export const defaultStarterCode: Record<Language, Record<string, string>> = {
-  python: { "solution.py": "def solve():\n    pass\n" },
-  javascript: { "solution.js": "function solve() {\n}\n\nmodule.exports = { solve };\n" },
-  typescript: { "solution.ts": "function solve(): unknown {\n  return null;\n}\n" },
-  html: {
-    "index.html": "<!DOCTYPE html>\n<html>\n  <head>\n    <title>Task</title>\n  </head>\n  <body>\n    <main id=\"app\"></main>\n  </body>\n</html>\n"
+  python: {
+    "solution.py": "from services import TodoService\n\n\ndef solve(command=None):\n    return TodoService().execute(command)\n",
+    "models.py": "from dataclasses import dataclass\n\n\n@dataclass\nclass Todo:\n    title: str\n    completed: bool = False\n    priority: str = \"medium\"\n",
+    "services.py": "class TodoService:\n    def execute(self, command=None):\n        raise NotImplementedError(\"Implement the Todo behavior\")\n"
   },
-  sql: { "solution.sql": "-- Write your SQL here\n" }
+  javascript: {
+    "solution.js": "const { TodoService } = require(\"./services.js\");\n\nfunction solve(command) {\n  return new TodoService().execute(command);\n}\n\nmodule.exports = { solve };\n",
+    "models.js": "function createTodo(title, overrides = {}) {\n  return { title, completed: false, priority: \"medium\", ...overrides };\n}\n\nmodule.exports = { createTodo };\n",
+    "services.js": "class TodoService {\n  execute(_command) {\n    throw new Error(\"Implement the Todo behavior\");\n  }\n}\n\nmodule.exports = { TodoService };\n"
+  },
+  typescript: {
+    "solution.ts": "import { TodoService } from \"./services\";\n\nexport function solve(command: unknown): unknown {\n  return new TodoService().execute(command);\n}\n",
+    "types.ts": "export interface Todo {\n  title: string;\n  completed: boolean;\n  priority: \"low\" | \"medium\" | \"high\";\n}\n",
+    "services.ts": "export class TodoService {\n  execute(_command: unknown): unknown {\n    throw new Error(\"Implement the Todo behavior\");\n  }\n}\n"
+  },
+  html: {
+    "index.html": "<!DOCTYPE html>\n<html>\n  <head>\n    <title>Todo List</title>\n    <link rel=\"stylesheet\" href=\"styles.css\" />\n  </head>\n  <body>\n    <main id=\"app\" aria-label=\"Todo application\"></main>\n    <script src=\"app.js\"></script>\n  </body>\n</html>\n",
+    "styles.css": "/* Extend the responsive Todo application interface. */\n",
+    "app.js": "export function initializeTodoApp() {\n  // Implement the Todo prototype behavior.\n}\n\ninitializeTodoApp();\n"
+  },
+  sql: {
+    "schema.sql": "-- Define the supplied relational schema and constraints.\n",
+    "seed.sql": "-- Insert representative data, including edge cases.\n",
+    "solution.sql": "-- Implement the required queries or migration here.\n"
+  }
 };
 
 export const defaultTestCode: Record<Language, string> = {

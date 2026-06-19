@@ -87,3 +87,9 @@ public static class AuthoringSources
     public const string LlmGenerated = "llm_generated";
     public const string AdminEdited = "admin_edited";
 }
+
+public static class PrototypeDefaults
+{
+    public const string TodoListReference = "default-todo-list";
+    public const string TodoListVersion = "1.0";
+}

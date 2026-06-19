@@ -30,7 +30,10 @@ public static class StudentEndpoints
             return error;
         }
 
-        var activeAssessments = await dbContext.Assessments.CountAsync(assessment => assessment.Status == AssessmentStatuses.Active, cancellationToken);
+        var activeAssessments = await dbContext.Assessments
+            .Where(assessment => assessment.Status == AssessmentStatuses.Active)
+            .Include(assessment => assessment.Sessions.Where(session => session.UserId == user!.Id))
+            .ToListAsync(cancellationToken);
         var sessions = await DateTimeOffsetOrdering.ToDescendingListAsync(
             dbContext.AssessmentSessions
                 .Where(session => session.UserId == user!.Id)
@@ -47,7 +50,7 @@ public static class StudentEndpoints
         {
             summary = new
             {
-                available_assessments = activeAssessments,
+                available_assessments = CountAvailableAssessments(activeAssessments, sessionClock, DateTimeOffset.UtcNow),
                 in_progress_attempts = sessions.Count(session => sessionClock.GetEffectiveStatus(session) == SessionStatuses.Active),
                 completed_assessments = sessions.Count(session => session.Status == SessionStatuses.Submitted),
                 average_score = completedScores.Count == 0 ? 0 : completedScores.Average(submission => submission.Score)
@@ -62,6 +65,20 @@ public static class StudentEndpoints
                 session.ExpiresAt
             })
         });
+    }
+
+    internal static int CountAvailableAssessments(
+        IEnumerable<Assessment> activeAssessments,
+        SessionClock sessionClock,
+        DateTimeOffset? now = null)
+    {
+        return activeAssessments.Count(assessment =>
+            AssessmentPolicy.IsAssessmentAvailable(assessment, now)
+            && assessment.Sessions.All(session =>
+            {
+                var status = sessionClock.GetEffectiveStatus(session);
+                return status is not SessionStatuses.Active and not SessionStatuses.Expired;
+            }));
     }
 
     private static async Task<IResult> AssessmentsAsync(
@@ -93,6 +110,7 @@ public static class StudentEndpoints
                 assessment.Title,
                 assessment.Description,
                 duration_minutes = assessment.DurationMinutes,
+                starts_at = assessment.StartsAt,
                 assessment.Status,
                 ai_enabled = assessment.AiEnabled,
                 question_count = assessment.Questions.Count,

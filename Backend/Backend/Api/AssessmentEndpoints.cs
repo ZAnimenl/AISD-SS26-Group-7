@@ -71,8 +71,9 @@ public static class AssessmentEndpoints
             DurationMinutes = request.DurationMinutes,
             Status = NormalizeAssessmentStatus(request.Status),
             AiEnabled = request.AiEnabled,
-            SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference),
-            SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion),
+            StartsAt = request.StartsAt,
+            SharedPrototypeReference = PrototypeDefaults.TodoListReference,
+            SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
             SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -175,8 +176,9 @@ public static class AssessmentEndpoints
                 DurationMinutes = request.DurationMinutes,
                 Status = AssessmentStatuses.Draft,
                 AiEnabled = request.AiEnabled,
-                SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference),
-                SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion),
+                StartsAt = request.StartsAt,
+                SharedPrototypeReference = PrototypeDefaults.TodoListReference,
+                SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
                 SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
                 CreatedAt = DateTimeOffset.UtcNow
             };
@@ -254,8 +256,9 @@ public static class AssessmentEndpoints
         assessment.DurationMinutes = request.DurationMinutes;
         assessment.Status = NormalizeAssessmentStatus(request.Status);
         assessment.AiEnabled = request.AiEnabled;
-        assessment.SharedPrototypeReference = NormalizeOptionalText(request.SharedPrototypeReference);
-        assessment.SharedPrototypeVersion = NormalizeOptionalText(request.SharedPrototypeVersion);
+        assessment.StartsAt = request.StartsAt;
+        assessment.SharedPrototypeReference = PrototypeDefaults.TodoListReference;
+        assessment.SharedPrototypeVersion = PrototypeDefaults.TodoListVersion;
         assessment.SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>());
         await dbContext.SaveChangesAsync(cancellationToken);
         return ApiResults.Success(new { assessment_id = assessment.Id });
