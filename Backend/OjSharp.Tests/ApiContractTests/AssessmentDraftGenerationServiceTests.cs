@@ -13,6 +13,45 @@ namespace OjSharp.Tests.ApiContractTests;
 public sealed class AssessmentDraftGenerationServiceTests
 {
     [Fact]
+    public void Assessment_task_counts_expand_to_the_requested_mix()
+    {
+        var counts = AssessmentDraftGenerationService.NormalizeTaskTypeCounts(new Dictionary<string, int>
+        {
+            [TaskTypes.FrontendUiExtension] = 2,
+            [TaskTypes.RestApiDevelopment] = 1,
+            [TaskTypes.DatabaseQuerySchema] = 0,
+            [TaskTypes.BugFix] = 3
+        });
+
+        var taskTypes = AssessmentDraftGenerationService.BuildRequestedTaskTypes(counts);
+
+        Assert.Equal(6, taskTypes.Length);
+        Assert.Equal(2, taskTypes.Count(type => type == TaskTypes.FrontendUiExtension));
+        Assert.Equal(1, taskTypes.Count(type => type == TaskTypes.RestApiDevelopment));
+        Assert.Equal(0, taskTypes.Count(type => type == TaskTypes.DatabaseQuerySchema));
+        Assert.Equal(3, taskTypes.Count(type => type == TaskTypes.BugFix));
+    }
+
+    [Fact]
+    public void Assessment_task_counts_are_bounded_and_never_empty()
+    {
+        var bounded = AssessmentDraftGenerationService.NormalizeTaskTypeCounts(new Dictionary<string, int>
+        {
+            [TaskTypes.FrontendUiExtension] = 99,
+            [TaskTypes.RestApiDevelopment] = 99,
+            [TaskTypes.DatabaseQuerySchema] = 99,
+            [TaskTypes.BugFix] = 99
+        });
+        var fallback = AssessmentDraftGenerationService.NormalizeTaskTypeCounts(
+            RequiredTaskTypeCounts(0));
+
+        Assert.Equal(12, bounded.Values.Sum());
+        Assert.All(bounded.Values, count => Assert.InRange(count, 0, 5));
+        Assert.Equal(1, fallback.Values.Sum());
+        Assert.Equal(1, fallback[TaskTypes.FrontendUiExtension]);
+    }
+
+    [Fact]
     public async Task Generate_question_draft_reports_provider_truncation_before_json_parse_error()
     {
         var handler = new CapturingHandler(
@@ -46,7 +85,7 @@ public sealed class AssessmentDraftGenerationServiceTests
                 CancellationToken.None));
 
         using var request = JsonDocument.Parse(handler.CapturedBody);
-        Assert.Equal(8192, request.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(16384, request.RootElement.GetProperty("max_tokens").GetInt32());
         Assert.Contains("cut off by the provider output limit", exception.Message);
         Assert.DoesNotContain("not valid JSON", exception.Message);
     }
@@ -129,10 +168,160 @@ public sealed class AssessmentDraftGenerationServiceTests
         Assert.Contains("missing test code for language 'sql'", exception.Message);
     }
 
-    private static AssessmentDraftGenerationService CreateDraftService(CapturingHandler handler)
+    [Fact]
+    public async Task Generate_question_draft_rejects_single_file_tasks()
+    {
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["solution.sql"] = "-- Implement the Todo task reporting queries."
+            })));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "hard",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("at least 3 non-empty starter files", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_accepts_advanced_multi_file_task()
+    {
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+                ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+                ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+            })));
+        var service = CreateDraftService(handler);
+
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.DatabaseQuerySchema,
+                "hard",
+                ["sql"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
+
+        var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
+        Assert.Equal(3, starterCode["sql"].Count);
+        Assert.Equal(4, question.TestCases.Count);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_rejects_verbose_but_tutorial_level_task()
+    {
+        var shallowDescription = string.Join(" ", Enumerable.Repeat(
+            "Build a polished Todo task progress bar that updates when a checkbox changes and make the layout responsive with clear colors and helpful labels.",
+            8));
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["schema.sql"] = "CREATE TABLE tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+                ["seed.sql"] = "INSERT INTO tasks (id, completed) VALUES (1, 0), (2, 1);",
+                ["solution.sql"] = "-- Calculate the percentage of completed tasks."
+            },
+            description: shallowDescription)));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "easy",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("still tutorial-level", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_retries_with_validation_feedback()
+    {
+        var shallowDescription = string.Join(" ", Enumerable.Repeat(
+            "Build a polished Todo task progress bar that updates when a checkbox changes and make the layout responsive with clear colors and helpful labels.",
+            8));
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+            ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+            ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+        };
+        var handler = new SequencedHandler(
+            OpenAiResponse(AdvancedSqlTaskContent(starterFiles, shallowDescription)),
+            OpenAiResponse(AdvancedSqlTaskContent(starterFiles)));
+        var service = CreateDraftService(handler);
+
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.DatabaseQuerySchema,
+                "hard",
+                ["sql"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
+
+        Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Contains("previous draft was rejected", handler.CapturedBodies[1]);
+        Assert.Contains("still tutorial-level", handler.CapturedBodies[1]);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_rejects_unrelated_product_domains()
+    {
+        var unrelatedDescription = string.Join(" ",
+        [
+            "Context: A banking platform requires a transaction reconciliation engine with concurrency control and audit logging.",
+            "Deliverables include schema migrations, idempotent payment processing, rollback behavior, caching, and conflict resolution.",
+            "Functional requirements cover account transfers, authorization, duplicate payment detection, transaction history, window-function reports, and failure recovery.",
+            "Constraints require stable banking APIs, consistent errors, safe retries, and backward compatibility.",
+            "Edge cases include concurrent transfers, missing account owners, duplicate requests, partial failures, and null references.",
+            "Acceptance criteria require all modules and public and hidden tests to pass without changing existing payment interfaces."
+        ]);
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["schema.sql"] = "CREATE TABLE bank_accounts (id INTEGER PRIMARY KEY, balance INTEGER NOT NULL);",
+            ["seed.sql"] = "INSERT INTO bank_accounts (id, balance) VALUES (1, 100);",
+            ["solution.sql"] = "-- Implement banking reconciliation."
+        };
+        var handler = new CapturingHandler(OpenAiResponse(
+            AdvancedSqlTaskContent(starterFiles, unrelatedDescription)));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "hard",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("not anchored to the default Todo List prototype", exception.Message);
+    }
+
+    private static AssessmentDraftGenerationService CreateDraftService(HttpMessageHandler handler)
     {
         var completionService = new AiCompletionService(
-            new SingleClientFactory(new HttpClient(handler)),
+            new SingleClientFactory(handler),
             new StaticOptionsMonitor<DeepseekOptions>(new DeepseekOptions { Enabled = false }),
             new StaticOptionsMonitor<LocalLlmOptions>(new LocalLlmOptions
             {
@@ -143,6 +332,17 @@ public sealed class AssessmentDraftGenerationServiceTests
             NullLogger<AiCompletionService>.Instance);
 
         return new AssessmentDraftGenerationService(completionService);
+    }
+
+    private static Dictionary<string, int> RequiredTaskTypeCounts(int count)
+    {
+        return new Dictionary<string, int>
+        {
+            [TaskTypes.FrontendUiExtension] = count,
+            [TaskTypes.RestApiDevelopment] = count,
+            [TaskTypes.DatabaseQuerySchema] = count,
+            [TaskTypes.BugFix] = count
+        };
     }
 
     private static string OpenAiResponse(string content)
@@ -168,18 +368,84 @@ public sealed class AssessmentDraftGenerationServiceTests
         });
     }
 
+    private static string AdvancedSqlTaskContent(
+        Dictionary<string, string> starterFiles,
+        string? description = null)
+    {
+        description ??= string.Join(" ",
+        [
+            "Context: The default Todo List application needs a transaction-safe task history and reconciliation module spanning schema, seed data, and reporting logic.",
+            "Deliverables: complete all supplied SQL files while preserving the public todo, assignee, dependency, and audit view contracts.",
+            "Functional requirements: enforce task ownership; prevent invalid completion transitions; record immutable todo audit entries; calculate running completion metrics with window functions; produce daily assignee summaries; identify duplicate update requests idempotently; support nullable due dates; and expose failed dependency reconciliations.",
+            "Constraints: use portable SQL, keep supplied Todo prototype names stable, preserve referential integrity, avoid destructive data loss, and make every migration safe to rerun.",
+            "Edge cases: duplicate task updates, null due dates, dependency cycles, concurrent completion changes, orphaned audit rows, and ties in timestamps must behave deterministically.",
+            "Acceptance criteria: all public and hidden checks pass, constraints reject invalid todo writes, aggregates remain correct after retries, and existing Todo prototype consumers continue to query the original views without changes."
+        ]);
+        var testCases = new[]
+        {
+            BuildSqlTestCase("Public schema contracts", TestCaseVisibilities.Public, "schema.sql"),
+            BuildSqlTestCase("Public reconciliation view", TestCaseVisibilities.Public, "solution.sql"),
+            BuildSqlTestCase("Hidden idempotency constraints", TestCaseVisibilities.Hidden, "schema.sql"),
+            BuildSqlTestCase("Hidden edge-case aggregation", TestCaseVisibilities.Hidden, "solution.sql")
+        };
+
+        return JsonSerializer.Serialize(new
+        {
+            tasks = new[]
+            {
+                new
+                {
+                    title = "Transaction-Safe Todo Audit Reconciliation",
+                    task_type = TaskTypes.DatabaseQuerySchema,
+                    difficulty = "hard",
+                    verification_mode = VerificationModes.DatabaseResultCheck,
+                    starter_prototype_reference = (string?)null,
+                    problem_description_markdown = description,
+                    language_constraints = new[] { "sql" },
+                    starter_code = new Dictionary<string, Dictionary<string, string>>
+                    {
+                        ["sql"] = starterFiles
+                    },
+                    starter_files_metadata = new Dictionary<string, Dictionary<string, string>>
+                    {
+                        ["sql"] = starterFiles.Keys.ToDictionary(fileName => fileName, _ => "editable")
+                    },
+                    verification_metadata = new { primary_view = VerificationModes.DatabaseResultCheck },
+                    grading_configuration = new { runner = "automated_tests", requires_student_install = "false" },
+                    traceability_metadata = new { requirements = "REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j" },
+                    max_score = 25,
+                    test_cases = testCases
+                }
+            }
+        });
+    }
+
+    private static object BuildSqlTestCase(string name, string visibility, string fileName)
+    {
+        return new
+        {
+            name,
+            visibility,
+            test_code = new Dictionary<string, string>
+            {
+                ["sql"] = $"const fs = require('fs'); test('{name}', () => expect(fs.readFileSync('{fileName}', 'utf8').trim().length).toBeGreaterThan(10));"
+            },
+            traceability_metadata = new { requirements = "REQ-52,REQ-53" }
+        };
+    }
+
     private sealed class SingleClientFactory : IHttpClientFactory
     {
-        private readonly HttpClient client;
+        private readonly HttpMessageHandler handler;
 
-        public SingleClientFactory(HttpClient client)
+        public SingleClientFactory(HttpMessageHandler handler)
         {
-            this.client = client;
+            this.handler = handler;
         }
 
         public HttpClient CreateClient(string name)
         {
-            return client;
+            return new HttpClient(handler, disposeHandler: false);
         }
     }
 
@@ -205,6 +471,34 @@ public sealed class AssessmentDraftGenerationServiceTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
+            };
+        }
+    }
+
+    private sealed class SequencedHandler : HttpMessageHandler
+    {
+        private readonly Queue<string> responseBodies;
+
+        public SequencedHandler(params string[] responseBodies)
+        {
+            this.responseBodies = new Queue<string>(responseBodies);
+        }
+
+        public int CallCount => CapturedBodies.Count;
+
+        public List<string> CapturedBodies { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            CapturedBodies.Add(request.Content is null
+                ? ""
+                : await request.Content.ReadAsStringAsync(cancellationToken));
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseBodies.Dequeue(), Encoding.UTF8, "application/json")
             };
         }
     }

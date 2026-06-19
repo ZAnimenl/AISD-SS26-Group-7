@@ -14,7 +14,49 @@ public sealed class AiDraftGenerationException : Exception
 
 public sealed class AssessmentDraftGenerationService
 {
-    private const int DraftMaxTokens = 8192;
+    private const int DraftMaxTokens = 16384;
+    private const int MinimumStarterFilesPerLanguage = 3;
+    private const int MinimumTaskDescriptionLength = 600;
+    private const int MinimumPublicTestCases = 2;
+    private const int MinimumHiddenTestCases = 2;
+    private const int MinimumAdvancedConcerns = 3;
+    private const int MaximumDraftAttempts = 3;
+    private const int MaximumTasksPerType = 5;
+    private const int MaximumAssessmentTasks = 12;
+    private static readonly string[] TodoPrototypeTerms =
+    [
+        "todo", "to-do", "task", "due date", "priority", "assignee", "completion", "dependency"
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string[]> AdvancedConcernTerms =
+        new Dictionary<string, string[]>
+        {
+            [TaskTypes.FrontendUiExtension] =
+            [
+                "asynchronous", "async", "persistence", "localstorage", "indexeddb",
+                "state machine", "optimistic", "rollback", "debounce", "race condition",
+                "accessibility", "keyboard navigation", "error recovery", "offline",
+                "caching", "undo", "redo", "conflict resolution"
+            ],
+            [TaskTypes.RestApiDevelopment] =
+            [
+                "idempotency", "pagination", "authorization", "authentication", "transaction",
+                "concurrency", "optimistic locking", "rate limit", "caching", "audit",
+                "versioning", "validation", "rollback", "partial failure", "dependency"
+            ],
+            [TaskTypes.DatabaseQuerySchema] =
+            [
+                "transaction", "window function", "recursive", "constraint", "migration",
+                "idempotent", "concurrency", "rollback", "audit", "aggregation",
+                "deduplication", "referential integrity", "null", "duplicate"
+            ],
+            [TaskTypes.BugFix] =
+            [
+                "race condition", "asynchronous", "caching", "state", "regression",
+                "backward compatibility", "transaction", "concurrency", "memory",
+                "validation", "error recovery", "partial failure", "dependency", "invariant"
+            ]
+        };
 
     private static readonly string[] RequiredTaskTypes =
     [
@@ -36,19 +78,25 @@ public sealed class AssessmentDraftGenerationService
         AssessmentRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await completionService.GenerateAsync(
-            BuildDraftSystemPrompt(),
-            BuildAssessmentDraftPrompt(request),
-            AiResponseFormat.Json,
-            cancellationToken,
-            DraftMaxTokens);
-        EnsureDraftCompletionWasNotTruncated(result);
-        var tasks = ParseTasks(result.Content, assessmentId, expectedTaskTypes: RequiredTaskTypes);
+        var taskTypeCounts = NormalizeTaskTypeCounts(request.TaskTypeCounts);
+        var requestedTaskTypes = BuildRequestedTaskTypes(taskTypeCounts);
+        var difficulty = NormalizeDifficulty(request.Difficulty);
+        var tasks = new List<Question>(requestedTaskTypes.Length);
 
-        for (var index = 0; index < tasks.Count; index += 1)
+        for (var index = 0; index < requestedTaskTypes.Length; index += 1)
         {
-            tasks[index].SortOrder = index + 1;
-            tasks[index].MaxScore = tasks[index].MaxScore <= 0 ? 25 : tasks[index].MaxScore;
+            var taskType = requestedTaskTypes[index];
+            var generated = await GenerateValidatedTasksAsync(
+                assessmentId,
+                BuildAssessmentTaskPrompt(request, taskType, difficulty, index + 1, requestedTaskTypes.Length),
+                [taskType],
+                cancellationToken);
+            var task = generated.Single();
+            task.SortOrder = index + 1;
+            task.Difficulty = difficulty;
+            task.MaxScore = 100 / requestedTaskTypes.Length + (index < 100 % requestedTaskTypes.Length ? 1 : 0);
+            task.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
+            tasks.Add(task);
         }
 
         return tasks;
@@ -62,21 +110,58 @@ public sealed class AssessmentDraftGenerationService
         CancellationToken cancellationToken)
     {
         var taskType = NormalizeTaskType(request.TaskType);
-        var result = await completionService.GenerateAsync(
-            BuildDraftSystemPrompt(),
+        var tasks = await GenerateValidatedTasksAsync(
+            assessmentId,
             BuildSingleTaskDraftPrompt(request, taskType, sharedPrototypeReference),
-            AiResponseFormat.Json,
-            cancellationToken,
-            DraftMaxTokens);
-        EnsureDraftCompletionWasNotTruncated(result);
-        var tasks = ParseTasks(result.Content, assessmentId, expectedTaskTypes: [taskType]);
+            [taskType],
+            cancellationToken);
         var draft = tasks.Single();
         draft.SortOrder = sortOrder;
         draft.Difficulty = NormalizeDifficulty(request.Difficulty);
         draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages, taskType));
-        draft.StarterPrototypeReference = NormalizeOptionalText(request.StarterPrototypeReference)
-            ?? NormalizeOptionalText(sharedPrototypeReference);
+        draft.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
         return draft;
+    }
+
+    private async Task<List<Question>> GenerateValidatedTasksAsync(
+        Guid assessmentId,
+        string basePrompt,
+        IReadOnlyCollection<string> expectedTaskTypes,
+        CancellationToken cancellationToken)
+    {
+        string? previousFailure = null;
+
+        for (var attempt = 1; attempt <= MaximumDraftAttempts; attempt += 1)
+        {
+            var prompt = previousFailure is null
+                ? basePrompt
+                : string.Join("\n",
+                [
+                    basePrompt,
+                    "",
+                    $"The previous draft was rejected: {previousFailure}",
+                    "Correct that exact failure. Increase architectural depth instead of merely adding more prose.",
+                    $"Correction attempt: {attempt}-{Guid.NewGuid():N}"
+                ]);
+            var result = await completionService.GenerateAsync(
+                BuildDraftSystemPrompt(),
+                prompt,
+                AiResponseFormat.Json,
+                cancellationToken,
+                DraftMaxTokens);
+            EnsureDraftCompletionWasNotTruncated(result);
+
+            try
+            {
+                return ParseTasks(result.Content, assessmentId, expectedTaskTypes);
+            }
+            catch (AiDraftGenerationException exception) when (attempt < MaximumDraftAttempts)
+            {
+                previousFailure = exception.Message;
+            }
+        }
+
+        throw new AiDraftGenerationException(previousFailure ?? "AI draft generation failed validation.");
     }
 
     private static string BuildDraftSystemPrompt()
@@ -88,8 +173,24 @@ public sealed class AssessmentDraftGenerationService
             "The administrator must review every generated task and test before publication.",
             "Do not include provider secrets, hidden grading explanations, or any student-specific data.",
             "Generated tasks must be practical browser-workspace tasks, not algorithm puzzle tasks.",
+            "Every task must be a focused extension, backend capability, schema change, or bug fix for the same default Todo List application. Never invent a separate product domain such as collaborative documents, e-commerce, banking, libraries, social media, or generic dashboards.",
+            "The shared Todo prototype includes tasks/todos with title, description, completion status, priority, due date, assignee, tags, dependencies, and audit history. Build advanced requirements around this domain.",
+            "Set the challenge level substantially above a tutorial or basic CRUD exercise. Even easy tasks must require non-trivial reasoning across modules; hard tasks should resemble a compact senior-level take-home exercise.",
+            "Reject trivial themes such as a static card, simple list/filter/sort, one-endpoint CRUD, one-query lookup, or an isolated one-line bug.",
+            "Every task must require coordinated changes across at least three editable starter files for every supported language.",
+            "Do not generate progress bars, profile cards, theme toggles, basic forms, simple filters/sorts, static dashboards, counters, or isolated CRUD handlers.",
+            "Use flat file names without directories so the browser workspace and sandbox can execute them directly.",
+            "Starter files must contain a realistic incomplete codebase with existing contracts, partial implementations, and TODOs. Do not provide the completed solution.",
+            "The problem description must be at least 600 characters and include: context, required deliverables, at least six functional requirements, constraints, edge cases, and acceptance criteria.",
+            "Require cross-file behavior, input validation, error handling, state or data-flow consistency, and at least one backward-compatibility or regression constraint.",
+            "Name and require at least four advanced engineering concerns appropriate to the task type, such as asynchronous coordination, persistence, state machines, idempotency, authorization, pagination, concurrency, transactions, migrations, rollback, caching, accessibility, auditability, or conflict resolution.",
+            "Every task must include at least two public and two hidden test cases. Tests must exercise behavior across the provided files, including edge cases and failure paths.",
             "Supported student languages are python, javascript, typescript, html, and sql.",
             "Use html for frontend_ui_extension tasks and sql for database_query_schema tasks unless the administrator explicitly asks for another supported language.",
+            "For frontend_ui_extension, use at least index.html, styles.css, and app.js and require accessible interactions, persistent or derived state, responsive behavior, and robust empty/error states.",
+            "For rest_api_development, extend Todo task endpoints using at least an entry module, a domain/service module, and a validation or repository module. Require multiple related endpoints, validation, consistent errors, and concurrency/idempotency or pagination/filtering concerns.",
+            "For database_query_schema, extend the Todo task schema using at least schema.sql, seed.sql, and solution.sql. Require multiple related queries or migrations, constraints, transactions, aggregation/window logic, and correctness for nulls/duplicates.",
+            "For bug_fix, provide at least three interacting Todo application modules and require diagnosing several related defects while preserving public interfaces and preventing regressions.",
             "Every test case must include non-empty test_code for every language in the task's language_constraints.",
             "For database_query_schema tasks, every public and hidden test case must include a non-empty sql test_code entry that verifies the student's solution.sql file.",
             "",
@@ -104,8 +205,8 @@ public sealed class AssessmentDraftGenerationService
             "      \"starter_prototype_reference\": \"string or null\",",
             "      \"problem_description_markdown\": \"string\",",
             "      \"language_constraints\": [\"python\", \"javascript\", \"typescript\", \"html\", \"sql\"],",
-            "      \"starter_code\": { \"python\": {\"file.py\":\"code\"}, \"javascript\": {\"file.js\":\"code\"}, \"typescript\": {\"file.ts\":\"code\"}, \"html\": {\"index.html\":\"code\"}, \"sql\": {\"solution.sql\":\"code\"} },",
-            "      \"starter_files_metadata\": { \"python\": {\"file.py\":\"editable\"}, \"javascript\": {\"file.js\":\"editable\"}, \"typescript\": {\"file.ts\":\"editable\"}, \"html\": {\"index.html\":\"editable\"}, \"sql\": {\"solution.sql\":\"editable\"} },",
+            "      \"starter_code\": { \"python\": {\"solution.py\":\"code\", \"models.py\":\"code\", \"services.py\":\"code\"}, \"javascript\": {\"solution.js\":\"code\", \"models.js\":\"code\", \"services.js\":\"code\"}, \"typescript\": {\"solution.ts\":\"code\", \"types.ts\":\"code\", \"services.ts\":\"code\"}, \"html\": {\"index.html\":\"code\", \"styles.css\":\"code\", \"app.js\":\"code\"}, \"sql\": {\"schema.sql\":\"code\", \"seed.sql\":\"code\", \"solution.sql\":\"code\"} },",
+            "      \"starter_files_metadata\": { \"language\": {\"file1\":\"editable\", \"file2\":\"editable\", \"file3\":\"editable\"} },",
             "      \"verification_metadata\": {\"primary_view\":\"string\"},",
             "      \"grading_configuration\": {\"runner\":\"automated_tests\", \"requires_student_install\":\"false\"},",
             "      \"traceability_metadata\": {\"requirements\":\"REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j\"},",
@@ -122,7 +223,7 @@ public sealed class AssessmentDraftGenerationService
             "  ]",
             "}",
             "",
-            "Every task must include at least one public test case and one hidden test case."
+            "Every task must include at least two public test cases and two hidden test cases."
         ]);
     }
 
@@ -135,19 +236,27 @@ public sealed class AssessmentDraftGenerationService
         }
     }
 
-    private static string BuildAssessmentDraftPrompt(AssessmentRequest request)
+    private static string BuildAssessmentTaskPrompt(
+        AssessmentRequest request,
+        string taskType,
+        string difficulty,
+        int taskNumber,
+        int totalTasks)
     {
         return string.Join("\n",
         [
-            "Generate one complete draft assessment with exactly four tasks.",
-            "The four task types must be exactly: frontend_ui_extension, rest_api_development, database_query_schema, bug_fix.",
-            "Use the provided assessment information and shared prototype context.",
+            "Generate exactly one task for a larger assessment draft.",
+            $"Task position: {taskNumber} of {totalTasks}",
+            $"Required task type: {taskType}",
+            $"Required difficulty: {difficulty}",
+            "Keep this task inside the default Todo List prototype and its shared data model.",
+            "Make it distinct from other likely tasks of the same category by choosing a focused Todo subsystem or engineering concern.",
             "",
             $"Assessment title: {request.Title}",
             $"Assessment description: {request.Description}",
             $"Duration minutes: {request.DurationMinutes}",
-            $"Shared prototype reference: {NormalizeOptionalText(request.SharedPrototypeReference) ?? "(none supplied)"}",
-            $"Shared prototype version: {NormalizeOptionalText(request.SharedPrototypeVersion) ?? "(none supplied)"}",
+            $"Shared prototype reference: {PrototypeDefaults.TodoListReference}",
+            $"Shared prototype version: {PrototypeDefaults.TodoListVersion}",
             $"Shared prototype metadata: {JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>())}"
         ]);
     }
@@ -164,9 +273,50 @@ public sealed class AssessmentDraftGenerationService
             $"Task type: {taskType}",
             $"Difficulty: {NormalizeDifficulty(request.Difficulty)}",
             $"Supported languages: {string.Join(", ", languages)}",
-            $"Shared prototype reference: {NormalizeOptionalText(request.StarterPrototypeReference) ?? NormalizeOptionalText(sharedPrototypeReference) ?? "(internal default prototype: to-do list web app)"}",
+            $"Shared prototype reference: {PrototypeDefaults.TodoListReference}",
+            "The generated task must modify the default Todo List application; unrelated product domains are invalid.",
             $"Administrator guidance: {NormalizeOptionalText(request.ProblemDescriptionMarkdown) ?? "(none supplied)"}"
         ]);
+    }
+
+    internal static Dictionary<string, int> NormalizeTaskTypeCounts(Dictionary<string, int>? requestedCounts)
+    {
+        var normalized = RequiredTaskTypes.ToDictionary(
+            taskType => taskType,
+            taskType => Math.Clamp(requestedCounts?.GetValueOrDefault(taskType) ?? 1, 0, MaximumTasksPerType));
+        var total = normalized.Values.Sum();
+
+        if (total == 0)
+        {
+            normalized[TaskTypes.FrontendUiExtension] = 1;
+            total = 1;
+        }
+
+        if (total <= MaximumAssessmentTasks)
+        {
+            return normalized;
+        }
+
+        var overflow = total - MaximumAssessmentTasks;
+        foreach (var taskType in RequiredTaskTypes.Reverse())
+        {
+            var removable = Math.Min(normalized[taskType], overflow);
+            normalized[taskType] -= removable;
+            overflow -= removable;
+            if (overflow == 0)
+            {
+                break;
+            }
+        }
+
+        return normalized;
+    }
+
+    internal static string[] BuildRequestedTaskTypes(IReadOnlyDictionary<string, int> taskTypeCounts)
+    {
+        return RequiredTaskTypes
+            .SelectMany(taskType => Enumerable.Repeat(taskType, taskTypeCounts.GetValueOrDefault(taskType)))
+            .ToArray();
     }
 
     private static List<Question> ParseTasks(string json, Guid assessmentId, IReadOnlyCollection<string> expectedTaskTypes)
@@ -214,14 +364,16 @@ public sealed class AssessmentDraftGenerationService
         var testCases = RequiredArray(element, "test_cases")
             .Select(ParseTestCase)
             .ToList();
-
-        if (!testCases.Any(testCase => testCase.Visibility == TestCaseVisibilities.Public)
-            || !testCases.Any(testCase => testCase.Visibility == TestCaseVisibilities.Hidden))
-        {
-            throw new AiDraftGenerationException($"Generated task '{title}' must include public and hidden tests.");
-        }
+        var problemDescription = RequiredString(element, "problem_description_markdown");
 
         ValidateTestCodeCoverage(title, languageConstraints, testCases);
+        ValidateAdvancedTaskStructure(
+            title,
+            taskType,
+            problemDescription,
+            languageConstraints,
+            starterCode,
+            testCases);
 
         foreach (var testCase in testCases)
         {
@@ -237,7 +389,7 @@ public sealed class AssessmentDraftGenerationService
             Difficulty = NormalizeDifficulty(OptionalString(element, "difficulty")),
             VerificationMode = verificationMode,
             StarterPrototypeReference = NormalizeOptionalText(OptionalString(element, "starter_prototype_reference")),
-            ProblemDescriptionMarkdown = RequiredString(element, "problem_description_markdown"),
+            ProblemDescriptionMarkdown = problemDescription,
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(languageConstraints),
             StarterCodeJson = JsonDocumentSerializer.Serialize(starterCode),
             StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(
@@ -321,6 +473,65 @@ public sealed class AssessmentDraftGenerationService
         return language == "html"
             && testCode.TryGetValue("javascript", out var javascript)
             && !string.IsNullOrWhiteSpace(javascript);
+    }
+
+    private static void ValidateAdvancedTaskStructure(
+        string title,
+        string taskType,
+        string problemDescription,
+        IReadOnlyCollection<string> languageConstraints,
+        IReadOnlyDictionary<string, Dictionary<string, string>> starterCode,
+        IReadOnlyCollection<TestCase> testCases)
+    {
+        if (problemDescription.Trim().Length < MinimumTaskDescriptionLength)
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' is too shallow. Its problem description must be at least {MinimumTaskDescriptionLength} characters and specify requirements, constraints, edge cases, and acceptance criteria.");
+        }
+
+        var normalizedDescription = problemDescription.ToLowerInvariant();
+        if (!TodoPrototypeTerms.Any(term => normalizedDescription.Contains(term, StringComparison.Ordinal)))
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' is not anchored to the default Todo List prototype.");
+        }
+
+        var normalizedStarterCode = string.Join(
+            "\n",
+            starterCode.Values.SelectMany(files => files.Values))
+            .ToLowerInvariant();
+        if (!TodoPrototypeTerms.Any(term => normalizedStarterCode.Contains(term, StringComparison.Ordinal)))
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' starter files are not derived from the default Todo List prototype.");
+        }
+
+        var advancedConcernCount = AdvancedConcernTerms[taskType]
+            .Count(term => normalizedDescription.Contains(term, StringComparison.Ordinal));
+        if (advancedConcernCount < MinimumAdvancedConcerns)
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' is still tutorial-level. It must explicitly require at least {MinimumAdvancedConcerns} advanced {taskType} concerns such as concurrency, persistence, transactions, rollback, accessibility, caching, or conflict handling.");
+        }
+
+        foreach (var language in languageConstraints)
+        {
+            if (!starterCode.TryGetValue(language, out var files)
+                || files.Count < MinimumStarterFilesPerLanguage
+                || files.Any(file => string.IsNullOrWhiteSpace(file.Key) || string.IsNullOrWhiteSpace(file.Value)))
+            {
+                throw new AiDraftGenerationException(
+                    $"Generated task '{title}' must provide at least {MinimumStarterFilesPerLanguage} non-empty starter files for language '{language}'.");
+            }
+        }
+
+        var publicCount = testCases.Count(testCase => testCase.Visibility == TestCaseVisibilities.Public);
+        var hiddenCount = testCases.Count(testCase => testCase.Visibility == TestCaseVisibilities.Hidden);
+        if (publicCount < MinimumPublicTestCases || hiddenCount < MinimumHiddenTestCases)
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' must include at least {MinimumPublicTestCases} public and {MinimumHiddenTestCases} hidden test cases.");
+        }
     }
 
     private static Dictionary<string, string> AddDraftTraceability(Dictionary<string, string>? metadata)

@@ -14,7 +14,7 @@ public sealed class CodeEvaluationServiceTests
         var runner = new RecordingCodeRunner([
             new CodeRunResult("1", null, 0, false),
             new CodeRunResult("wrong", null, 0, false),
-            new CodeRunResult(string.Empty, "boom", 1, false)
+            new CodeRunResult(string.Empty, "TypeError: boom", 1, false)
         ]);
         var service = new CodeEvaluationService(runner);
         var testCases = new[]
@@ -214,6 +214,37 @@ public sealed class CodeEvaluationServiceTests
             Assert.True(File.Exists(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
             Assert.Contains("EXPLICIT = True", File.ReadAllText(Path.Combine(directory.FullName, "TodoSummaryPanel.py")));
             Assert.True(File.Exists(Path.Combine(directory.FullName, "AlreadyNamed.py")));
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Html_grader_test_files_initialize_dom_and_websocket_dependencies()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-html-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["index.html"] = "<!doctype html><html><body><textarea id=\"doc\"></textarea><script src=\"app.js\"></script></body></html>",
+                    ["app.js"] = "document.getElementById('doc').addEventListener('input', () => {});"
+                },
+                "require('./app.js');\nws.send({ type: 'insert' });\ndocument.getElementById('doc').value = 'Hello';\nconst saved = JSON.parse(localStorage.getItem('docState'));\n",
+                GradingLanguage.JavaScript,
+                isHtmlWorkspace: true);
+
+            var testFile = File.ReadAllText(Path.Combine(directory.FullName, "solution.test.js"));
+            Assert.Contains("document.write(html)", testFile);
+            Assert.Contains("globalThis.ws", testFile);
+            Assert.Contains("require('./app.js')", testFile);
+            Assert.Contains("test('generated public check'", testFile);
+            Assert.Contains("localStorage.getItem('docState') ?? '{}'", testFile);
         }
         finally
         {

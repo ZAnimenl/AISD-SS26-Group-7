@@ -1135,7 +1135,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             <span className="hidden sm:inline">Hide</span>
           </button>
           {assessment.ai_enabled ? (
-            <div className="w-full rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-2 sm:w-auto sm:min-w-[138px] sm:text-right">
+            <div className="grid w-full place-items-center rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-2 text-center sm:w-auto sm:min-w-[138px]">
               <p className="text-[10px] uppercase tracking-[0.14em] text-white/35">Tokens used</p>
               <p className="font-mono text-sm font-semibold text-cyanGlow">
                 {aiUsageSummary ? formatTokenCount(aiUsageSummary.total_tokens) : "0"}

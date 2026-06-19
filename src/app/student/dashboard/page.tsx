@@ -57,10 +57,10 @@ export default function StudentDashboardPage() {
         action={<Link className="btn-primary" href="/student/assessments">Open assessments</Link>}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={FileCode2} label="Available" value={dashboard.summary.available_assessments} detail="Ready to start" />
-        <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} detail="Active backend sessions" />
-        <MetricCard icon={CheckCircle2} label="Completed" value={dashboard.summary.completed_assessments} detail="Submitted assessments" />
-        <MetricCard icon={BarChart3} label="Average score" value={`${dashboard.summary.average_score}%`} detail="Published results" />
+        <MetricCard icon={FileCode2} label="Available" value={dashboard.summary.available_assessments} />
+        <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} />
+        <MetricCard icon={CheckCircle2} label="Completed" value={dashboard.summary.completed_assessments} />
+        <MetricCard icon={BarChart3} label="Average score" value={`${dashboard.summary.average_score}%`} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <div>

@@ -109,7 +109,7 @@ export default function StudentAssessmentReviewPage() {
       />
       <div className="grid gap-4 md:grid-cols-3">
         <section className="metric-card">
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><CheckCircle2 size={20} /></span>
             <div>
               <p className="text-sm text-white/45">Status</p>
@@ -118,7 +118,7 @@ export default function StudentAssessmentReviewPage() {
           </div>
         </section>
         <section className="metric-card">
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><BarChart3 size={20} /></span>
             <div>
               <p className="text-sm text-white/45">Score</p>
@@ -127,7 +127,7 @@ export default function StudentAssessmentReviewPage() {
           </div>
         </section>
         <section className="metric-card">
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex flex-col items-center gap-3 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><FileCode2 size={20} /></span>
             <div>
               <p className="text-sm text-white/45">Questions</p>

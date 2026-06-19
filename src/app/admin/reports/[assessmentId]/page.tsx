@@ -55,12 +55,12 @@ export default function ReportDetailPage() {
           <div className="relative">
             <h2 className="text-lg font-semibold">Aggregate metrics</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-cyanGlow">{report.average_score}%</p><p className="text-sm text-white/45">Average score</p></div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-purpleGlow">{report.completion_count}/{report.participant_count}</p><p className="text-sm text-white/45">Completed</p></div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-cyanGlow">{report.ai_usage_summary.total_tokens.toLocaleString()}</p><p className="text-sm text-white/45">AI tokens</p></div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-3xl text-purpleGlow">{report.ai_usage_summary.average_tokens_per_interaction}</p><p className="text-sm text-white/45">Avg tokens / interaction</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"><p className="text-3xl text-cyanGlow">{report.average_score}%</p><p className="text-sm text-white/45">Average score</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"><p className="text-3xl text-purpleGlow">{report.completion_count}/{report.participant_count}</p><p className="text-sm text-white/45">Completed</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"><p className="text-3xl text-cyanGlow">{report.ai_usage_summary.total_tokens.toLocaleString()}</p><p className="text-sm text-white/45">AI tokens</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"><p className="text-3xl text-purpleGlow">{report.ai_usage_summary.average_tokens_per_interaction}</p><p className="text-sm text-white/45">Avg tokens / interaction</p></div>
             </div>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
               <p className="text-xs uppercase tracking-[0.14em] text-white/35">Assessment token efficiency</p>
               <p className="mt-2 text-lg font-semibold text-cyanGlow">{formatEfficiency(report.ai_usage_summary.token_efficiency_indicator)}</p>
               <p className="mt-1 text-sm text-white/45">

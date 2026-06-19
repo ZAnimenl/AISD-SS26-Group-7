@@ -62,6 +62,14 @@ public static class SessionEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
+        if (!AssessmentPolicy.HasAssessmentStarted(assessment, now))
+        {
+            return ApiResults.Error(
+                "ASSESSMENT_NOT_STARTED",
+                $"This assessment opens at {assessment.StartsAt:O}.",
+                StatusCodes.Status409Conflict);
+        }
+
         var studentSessions = dbContext.AssessmentSessions
             .Where(item => item.AssessmentId == assessmentId
                            && item.UserId == student.Id);

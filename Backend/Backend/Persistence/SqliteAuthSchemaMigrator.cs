@@ -87,5 +87,24 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
                 "UPDATE users SET Username = FullName WHERE Username = '';",
                 cancellationToken);
         }
+
+        var assessmentColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA table_info(assessments);";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                assessmentColumns.Add(reader.GetString(1));
+            }
+        }
+
+        if (assessmentColumns.Count > 0 && !assessmentColumns.Contains("StartsAt"))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE assessments ADD COLUMN StartsAt TEXT NULL;",
+                cancellationToken);
+            logger.LogInformation("Added assessments.StartsAt column to local SQLite database.");
+        }
     }
 }

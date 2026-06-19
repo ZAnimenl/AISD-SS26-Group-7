@@ -34,9 +34,12 @@ public sealed record AssessmentRequest(
     int DurationMinutes,
     string Status,
     bool AiEnabled,
+    DateTimeOffset? StartsAt = null,
     string? SharedPrototypeReference = null,
     string? SharedPrototypeVersion = null,
-    Dictionary<string, string>? SharedPrototypeMetadata = null);
+    Dictionary<string, string>? SharedPrototypeMetadata = null,
+    Dictionary<string, int>? TaskTypeCounts = null,
+    string? Difficulty = null);
 
 public sealed record GenerateQuestionDraftRequest(
     string TaskType,

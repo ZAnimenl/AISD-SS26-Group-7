@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Clock, Eye, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
+import { CalendarClock, Clock, Eye, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { formatAssessmentStart, hasAssessmentStarted } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
   const attemptExpired = assessment.attempt_status === "expired";
-  const canStartAttempt = assessment.status === "active" && assessment.attempt_status !== "active" && !attemptExpired;
+  const hasStarted = hasAssessmentStarted(assessment.starts_at);
+  const canStartAttempt = assessment.status === "active" && hasStarted && assessment.attempt_status !== "active" && !attemptExpired;
   const hasSubmittedResult = assessment.attempt_status === "submitted";
   const actionHref =
     assessment.attempt_status === "active"
@@ -36,6 +38,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
         </div>
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/50">
           <span className="badge"><Clock size={13} /> {assessment.duration_minutes} min</span>
+          <span className="badge"><CalendarClock size={13} /> {formatAssessmentStart(assessment.starts_at)}</span>
           <span className="badge">{assessment.question_count} questions</span>
           <span className="badge">{assessment.ai_enabled ? <Sparkles size={13} /> : null}{assessment.ai_enabled ? "AI enabled" : "AI disabled"}</span>
         </div>
@@ -46,7 +49,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
           />
         </div>
         <div className="mt-5 flex items-center justify-between">
-          <p className="text-xs text-white/40">Closes {new Date(assessment.closes_at).toLocaleDateString()}</p>
+          <p className="text-xs text-white/40">{hasStarted ? `Closes ${new Date(assessment.closes_at).toLocaleDateString()}` : `Opens ${formatAssessmentStart(assessment.starts_at)}`}</p>
           <div className="flex flex-wrap justify-end gap-2">
             {hasSubmittedResult && canStartAttempt ? (
               <Link className="btn-secondary" href={`/student/assessments/${assessment.assessment_id}/review`}>

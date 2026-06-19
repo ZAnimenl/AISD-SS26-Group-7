@@ -14,6 +14,8 @@ public sealed class Assessment
 
     public bool AiEnabled { get; set; }
 
+    public DateTimeOffset? StartsAt { get; set; }
+
     public string? SharedPrototypeReference { get; set; }
 
     public string? SharedPrototypeVersion { get; set; }

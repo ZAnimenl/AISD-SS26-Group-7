@@ -204,23 +204,7 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
         ) : null}
 
         {isBrowserPreview ? (
-          <>
-            <BrowserPreviewFrame
-              runResult={runResult}
-            />
-            <div className="mt-3 rounded-xl border border-white/10 bg-[#0e1726] p-3">
-              <div className="flex items-start gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyanGlow/15 bg-[#07111d] text-cyanGlow">
-                  <SemanticIcon name="file" size={16} />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-medium text-white">{question?.title ?? "Selected task"}</p>
-                  <p className="mt-1 text-xs leading-5 text-white/50">{getVerificationCopy(question)}</p>
-                  {metadata ? <p className="mt-2 font-mono text-xs text-cyanGlow/80">{metadata}</p> : null}
-                </div>
-              </div>
-            </div>
-          </>
+          <BrowserPreviewFrame runResult={runResult} />
         ) : (
           <div className="rounded-xl border border-white/10 bg-[#0e1726] p-4">
             <div className="flex items-start gap-3">

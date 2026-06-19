@@ -12,6 +12,17 @@ public static class AssessmentPolicy
         return assessment?.Status == AssessmentStatuses.Active;
     }
 
+    public static bool IsAssessmentAvailable(Assessment? assessment, DateTimeOffset? now = null)
+    {
+        return IsAssessmentActive(assessment) && HasAssessmentStarted(assessment, now);
+    }
+
+    public static bool HasAssessmentStarted(Assessment? assessment, DateTimeOffset? now = null)
+    {
+        return assessment is not null
+               && (assessment.StartsAt is null || assessment.StartsAt <= (now ?? DateTimeOffset.UtcNow));
+    }
+
     public static string[] GetSupportedStudentLanguages(Question question)
     {
         var configuredLanguages = JsonDocumentSerializer.Deserialize(question.LanguageConstraintsJson, Array.Empty<string>());

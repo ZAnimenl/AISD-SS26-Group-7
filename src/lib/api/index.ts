@@ -454,11 +454,14 @@ export async function createAssessment(input: {
   title: string;
   description: string;
   duration_minutes: number;
+  starts_at?: string | null;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;
   shared_prototype_version?: string | null;
   shared_prototype_metadata?: Record<string, string>;
+  task_type_counts?: Partial<Record<TaskType, number>>;
+  difficulty?: Difficulty;
 }) {
   return apiRequest<{ assessment_id: string }>("/admin/assessments", {
     method: "POST",
@@ -470,11 +473,14 @@ export async function generateAssessment(input: {
   title: string;
   description: string;
   duration_minutes: number;
+  starts_at?: string | null;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;
   shared_prototype_version?: string | null;
   shared_prototype_metadata?: Record<string, string>;
+  task_type_counts?: Partial<Record<TaskType, number>>;
+  difficulty?: Difficulty;
 }) {
   return apiRequest<{ assessment_id: string }>("/admin/assessments/generate", {
     method: "POST",
@@ -493,6 +499,7 @@ export async function updateAssessment(input: Assessment) {
       title: input.title,
       description: input.description,
       duration_minutes: input.duration_minutes,
+      starts_at: input.starts_at ?? null,
       status: input.status,
       ai_enabled: input.ai_enabled,
       shared_prototype_reference: input.shared_prototype_reference ?? null,
@@ -831,6 +838,7 @@ function normalizeAssessment(raw: any): Assessment {
     title: raw.title ?? raw.assessment_title ?? "Assessment",
     description: raw.description ?? "",
     duration_minutes: raw.duration_minutes ?? 0,
+    starts_at: raw.starts_at ?? null,
     status: (raw.status ?? "active") as AssessmentStatus,
     ai_enabled: Boolean(raw.ai_enabled),
     shared_prototype_reference: raw.shared_prototype_reference ?? null,

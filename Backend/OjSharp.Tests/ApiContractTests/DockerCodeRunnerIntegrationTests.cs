@@ -200,6 +200,51 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Html_workspace_harness_provides_dom_and_websocket_globals()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "",
+            """
+            require('./app.js');
+
+            test('generated browser dependencies are available', () => {
+              ws.send({ type: 'insert', position: 0, text: 'A' });
+              document.getElementById('doc').value = 'Hello';
+              document.getElementById('doc').dispatchEvent(new Event('input'));
+
+              expect(ws.sent).toHaveLength(1);
+              expect(JSON.parse(localStorage.getItem('docState')).content).toBe('Hello');
+            });
+            """
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<!doctype html><html><body><textarea id=\"doc\"></textarea><script src=\"app.js\"></script></body></html>",
+                ["app.js"] = """
+                const doc = document.getElementById('doc');
+                doc.addEventListener('input', () => {
+                  localStorage.setItem('docState', JSON.stringify({ content: doc.value }));
+                });
+                """
+            },
+            "html",
+            testCase,
+            CancellationToken.None
+        );
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task Snake_case_python_starter_file_can_satisfy_legacy_pascal_case_import()
     {
         if (!IsDockerAvailable())

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Edit3, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { formatAssessmentStart } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 interface AdminAssessmentTableProps {
@@ -19,12 +20,13 @@ export function AdminAssessmentTable({
   return (
     <section className="panel">
       <div className="relative overflow-x-auto">
-        <table className="w-full min-w-[840px] text-left text-sm">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="text-xs uppercase tracking-[0.14em] text-white/35">
             <tr>
               <th className="pb-3">Assessment</th>
               <th className="pb-3">Status</th>
               <th className="pb-3">Duration</th>
+              <th className="pb-3">Starts</th>
               <th className="pb-3">Questions</th>
               <th className="pb-3">AI</th>
               <th className="pb-3">Action</th>
@@ -39,6 +41,7 @@ export function AdminAssessmentTable({
                 </td>
                 <td className="py-4"><StatusBadge status={assessment.status} /></td>
                 <td className="py-4 text-white/60">{assessment.duration_minutes} min</td>
+                <td className="py-4 text-white/60">{formatAssessmentStart(assessment.starts_at)}</td>
                 <td className="py-4 text-white/60">{assessment.question_count}</td>
                 <td className="py-4 text-white/60">{assessment.ai_enabled ? "Enabled" : "Disabled"}</td>
                 <td className="py-4">
