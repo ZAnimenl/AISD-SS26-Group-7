@@ -35,16 +35,13 @@ public sealed class ReportAiUsageSummaryTests
                 Interaction(firstQuestionId, inputTokens: 80, outputTokens: 40, "debugging", "frontend"),
                 Interaction(secondQuestionId, inputTokens: 50, outputTokens: 30, "debugging", "api")
             ],
-            questions,
-            score: 90,
-            maxScore: 100);
+            questions);
 
         Assert.Equal(3, summary.TotalInteractions);
         Assert.Equal(230, summary.TotalInputTokens);
         Assert.Equal(130, summary.TotalOutputTokens);
         Assert.Equal(360, summary.TotalTokens);
         Assert.Equal(120, summary.AverageTokensPerInteraction);
-        Assert.Equal("strategic", summary.TokenEfficiencyIndicator);
         Assert.Contains("debugging", summary.MainSemanticTags);
 
         Assert.Collection(
@@ -63,21 +60,6 @@ public sealed class ReportAiUsageSummaryTests
                 Assert.Equal("Fix API route", second.TaskTitle);
                 Assert.Equal(80, second.TotalTokens);
             });
-    }
-
-    [Theory]
-    [InlineData(0, 100, 0, 0, "no_ai_usage")]
-    [InlineData(90, 100, 3000, 5, "token_heavy_success")]
-    [InlineData(40, 100, 3000, 5, "inefficient")]
-    [InlineData(65, 100, 1200, 3, "needs_review")]
-    public void Token_efficiency_indicator_classifies_usage(
-        int score,
-        int maxScore,
-        int totalTokens,
-        int totalInteractions,
-        string expected)
-    {
-        Assert.Equal(expected, ReportEndpoints.BuildTokenEfficiencyIndicator(score, maxScore, totalTokens, totalInteractions));
     }
 
     private static AiInteraction Interaction(

@@ -68,6 +68,30 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "PublicMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "AdminMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS "Username" character varying(80) NOT NULL DEFAULT '';
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "ReflectionText" text NOT NULL DEFAULT '';
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "ReflectionWordCount" integer NOT NULL DEFAULT 0;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "ReflectionDeadline" timestamp with time zone;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "ReflectionSubmittedAt" timestamp with time zone;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "ReflectionSubmissionReason" character varying(40);
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradingStatus" character varying(40) NOT NULL DEFAULT 'not_required';
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiUsageScore" integer;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradingDetailsJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradingModel" character varying(120);
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiRubricVersion" character varying(80);
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradingSummary" text;
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradingConfidence" character varying(40);
+                ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS "AiGradedAt" timestamp with time zone;
+
+                CREATE TABLE IF NOT EXISTS ai_interaction_events (
+                    "Id" uuid PRIMARY KEY,
+                    "InteractionId" uuid NOT NULL REFERENCES ai_interactions ("Id") ON DELETE CASCADE,
+                    "SessionId" uuid NOT NULL,
+                    "EventType" character varying(80) NOT NULL,
+                    "ElapsedMilliseconds" integer,
+                    "AppliedUnchanged" boolean NOT NULL DEFAULT false,
+                    "MetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                    "CreatedAt" timestamp with time zone NOT NULL
+                );
 
                 IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='test_cases' AND column_name='Input') THEN
                     ALTER TABLE test_cases ALTER COLUMN "Input" DROP NOT NULL;
@@ -133,9 +157,16 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_workspace_question_states_SessionId_QuestionId"
             ON workspace_question_states ("SessionId", "QuestionId");
 
+            CREATE INDEX IF NOT EXISTS "IX_ai_interaction_events_SessionId_CreatedAt"
+            ON ai_interaction_events ("SessionId", "CreatedAt");
+
             UPDATE users
             SET "Username" = "FullName"
             WHERE "Username" IS NULL OR "Username" = '';
+
+            UPDATE assessments
+            SET "StartsAt" = "CreatedAt"
+            WHERE "StartsAt" IS NULL;
             """,
             cancellationToken);
 

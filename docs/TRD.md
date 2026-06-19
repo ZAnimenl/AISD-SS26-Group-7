@@ -12,13 +12,13 @@
 ## Module Boundaries
 
 - Module 1 owns identity, assessment, attempt, workspace persistence,
-  submission, result, report, and database state.
+  submission, reflection, score, result, report, and database state.
 - Module 2 owns UI, frontend routes, API client behavior, workspace display, and
-  preview/verification surfaces.
+  preview/verification surfaces, suggestion event capture, and reflection UI.
 - Module 3 owns untrusted code execution, resource limits, test execution, and
   safe result schemas.
 - Module 4 owns AI provider access, system prompts, telemetry, token tracking,
-  and AI response safety.
+  automatic AI usage grading, rubric versioning, and AI response safety.
 
 ## API Rules
 
@@ -37,6 +37,11 @@
 - Frontend does not call the database, sandbox, or external AI providers.
 - Backend AI assistance uses configured provider-backed completion or returns a
   structured provider-unavailable error.
+- Automatic AI grading uses a configured provider, fixed rubric version,
+  validated structured output, and criterion-level evidence.
+- AI grading provider, timeout, or schema failures preserve the functional
+  submission and produce a retryable pending or failed grading state rather
+  than a zero score.
 - AI-generated assessment and question drafts use configured provider-backed JSON
   output or return a structured generation error.
 - Local one-command startup restores project dependencies, creates a
@@ -79,6 +84,29 @@
 - Student code is never executed in frontend JavaScript or normal backend
   request handlers.
 - Secrets remain out of tracked files.
+
+## AI-Enabled Submission Requirements
+
+- The backend owns the transition from active attempt to frozen code,
+  reflection pending, AI grading pending, and completed.
+- AI-enabled final submission requires at least one successfully persisted AI
+  interaction.
+- The backend starts and enforces the ten-minute reflection deadline after
+  final code is frozen.
+- Reflection drafts are autosaved, limited to 100 words, and automatically
+  finalized at the backend deadline.
+- The frontend records response-visible and suggestion-decision events,
+  including elapsed monotonic time, while the backend records authoritative
+  receipt timestamps.
+- A rapid unchanged acceptance within three seconds is stored as objective
+  grading evidence, with the bounded deduction defined in
+  `docs/design/automatic-ai-usage-scoring.md`.
+- Deterministic repetition metrics are calculated by platform logic. The
+  grading LLM may explain but may not override those fixed measurements.
+- Functional and AI usage grading remain separate. Module 4 cannot modify the
+  Functional Score produced from Module 3 evaluation results.
+- No absolute token cutoff or cohort-relative token measure contributes to the
+  AI Usage Score.
 
 ## Verification Requirements
 

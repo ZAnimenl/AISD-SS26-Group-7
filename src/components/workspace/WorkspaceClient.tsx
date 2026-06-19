@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen, ChevronDown, ChevronRight } from "lucide-react";
-import { finalizeSubmission, getAiResponse, getAiUsage, runCode, saveWorkspace } from "@/lib/api";
+import { finalizeSubmission, getAiResponse, getAiUsage, recordAiInteractionEvent, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
 import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass } from "@/components/workspace/ConsolePanel";
@@ -23,6 +23,8 @@ type SaveState = "saved" | "unsaved" | "saving";
 
 type AiChatMessage = {
   clientId?: string;
+  interactionId?: string;
+  responseVisibleAt?: number;
   role: "assistant" | "student";
   text: string;
   status?: "pending" | "failed";
@@ -73,6 +75,17 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
 };
 
 const SANDBOX_UNAVAILABLE_MESSAGE = "Run environment unavailable. The sandbox grader is not reachable from the backend right now.";
+const MAX_PROBLEM_STATEMENT_WORDS = 150;
+
+function limitProblemStatement(markdown: string) {
+  const words = Array.from(markdown.matchAll(/\S+/g));
+  if (words.length <= MAX_PROBLEM_STATEMENT_WORDS) {
+    return markdown;
+  }
+
+  const finalWord = words[MAX_PROBLEM_STATEMENT_WORDS - 1];
+  return `${markdown.slice(0, (finalWord.index ?? 0) + finalWord[0].length).trimEnd()}…`;
+}
 
 function getMessageReplaceFileActions(message: AiChatMessage, fallbackFile: string, fallbackLanguage: Language): AiWorkspaceAction[] {
   const actions = message.workspaceActions?.filter((item) => item.type === "replace_file" && item.replacement_code) ?? [];
@@ -102,7 +115,8 @@ function AiMessageActionButtons({
   isApplying,
   isRunning,
   canRun,
-  onExecute
+  onExecute,
+  onReject
 }: {
   message: AiChatMessage;
   activeFile: string;
@@ -110,7 +124,8 @@ function AiMessageActionButtons({
   isApplying: boolean;
   isRunning: boolean;
   canRun: boolean;
-  onExecute: (runAfterApply: boolean) => void;
+  onExecute: (runAfterApply: boolean, eventTimestamp: number) => void;
+  onReject: (eventTimestamp: number) => void;
 }) {
   const replaceActions = getMessageReplaceFileActions(message, activeFile, language);
   const hasReplaceActions = replaceActions.length > 0;
@@ -118,10 +133,6 @@ function AiMessageActionButtons({
   if (!hasReplaceActions && !canRunFromAgent) {
     return null;
   }
-  const firstReplaceAction = replaceActions[0];
-  const applyLabel = replaceActions.length === 1
-    ? firstReplaceAction.label ?? `Apply to ${firstReplaceAction.target_file ?? activeFile}`
-    : `Apply ${replaceActions.length} edits`;
   const targetLabel = replaceActions
     .map((action) => action.target_file)
     .filter((targetFile): targetFile is string => Boolean(targetFile))
@@ -130,14 +141,29 @@ function AiMessageActionButtons({
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
       {hasReplaceActions ? (
+        <>
+          <p className="w-full text-xs leading-5 text-white/50">
+            Review the proposed file changes before choosing whether to apply them.
+          </p>
+          <button
+            type="button"
+            className="btn-primary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={isApplying}
+            onClick={(event) => onExecute(false, event.timeStamp)}
+          >
+            <SemanticIcon name="file" size={13} />
+            Apply changes
+          </button>
+        </>
+      ) : null}
+      {hasReplaceActions ? (
         <button
           type="button"
-          className="btn-primary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+          className="btn-secondary px-3 py-2 text-xs"
           disabled={isApplying}
-          onClick={() => onExecute(false)}
+          onClick={(event) => onReject(event.timeStamp)}
         >
-          <SemanticIcon name="file" size={13} />
-          {applyLabel}
+          Reject suggestion
         </button>
       ) : null}
       {canRunFromAgent ? (
@@ -145,7 +171,7 @@ function AiMessageActionButtons({
           type="button"
           className="btn-secondary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
           disabled={isApplying || isRunning || !canRun}
-          onClick={() => onExecute(hasReplaceActions)}
+          onClick={(event) => onExecute(hasReplaceActions, event.timeStamp)}
         >
           <SemanticIcon name="play" size={13} />
           {canRun ? (hasReplaceActions ? "Apply & run" : "Run public checks") : "Run unavailable"}
@@ -411,6 +437,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [aiUsageSummary, setAiUsageSummary] = useState<WorkspaceAiUsageSummary | null>(null);
   const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const aiRequestCounterRef = useRef(0);
+  const appliedSuggestionRef = useRef<{ interactionId: string; code: string; appliedAt: number } | null>(null);
   const [messages, setMessages] = useState<AiChatMessage[]>([
     { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
   ]);
@@ -520,7 +547,18 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     };
   }, [activeQuestionId, assessment.assessment_id, assessment.questions, persistCurrentCode]);
 
-  function updateCode(nextCode: string) {
+  function updateCode(nextCode: string, eventTimestamp: number) {
+    const appliedSuggestion = appliedSuggestionRef.current;
+    if (appliedSuggestion && nextCode !== appliedSuggestion.code) {
+      void recordAiInteractionEvent({
+        assessment_id: assessment.assessment_id,
+        interaction_id: appliedSuggestion.interactionId,
+        event_type: "edit",
+        elapsed_milliseconds: Math.max(0, Math.round(eventTimestamp - appliedSuggestion.appliedAt)),
+        applied_unchanged: false
+      }).catch(() => undefined);
+      appliedSuggestionRef.current = null;
+    }
     setSaveState("unsaved");
     setCode(nextCode);
     setQuestionStates((current) => {
@@ -696,6 +734,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           ? {
             clientId: pendingAssistantId,
             role: "assistant",
+            interactionId: response.interaction_id,
+            responseVisibleAt: performance.now(),
             text: response.response_markdown,
             suggestedCode: suggestion?.replacement_code ?? undefined,
             suggestedLanguage: suggestion ? suggestion.language : undefined,
@@ -706,6 +746,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           }
           : item
       ));
+      void recordAiInteractionEvent({
+        assessment_id: assessment.assessment_id,
+        interaction_id: response.interaction_id,
+        event_type: "response_visible"
+      }).catch(() => undefined);
     } catch (exception) {
       const message = exception instanceof Error ? exception.message : "AI request failed.";
       setMessages((current) => current.map((item) =>
@@ -803,7 +848,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     };
   }
 
-  async function executeAiWorkspaceActions(message: AiChatMessage, runAfterApply: boolean) {
+  async function executeAiWorkspaceActions(message: AiChatMessage, runAfterApply: boolean, eventTimestamp: number) {
     if (agentActionState === "applying") {
       return;
     }
@@ -828,6 +873,22 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     }
 
     const { nextQuestionStates, updatedQuestionState, targetFile, targetLanguage, replacementCode } = replacement;
+    if (message.interactionId) {
+      appliedSuggestionRef.current = {
+        interactionId: message.interactionId,
+        code: replacementCode,
+        appliedAt: eventTimestamp
+      };
+      void recordAiInteractionEvent({
+        assessment_id: assessment.assessment_id,
+        interaction_id: message.interactionId,
+        event_type: "apply",
+        elapsed_milliseconds: Math.max(0, Math.round(eventTimestamp - (message.responseVisibleAt ?? eventTimestamp))),
+        applied_unchanged: true,
+        metadata: { run_after_apply: String(runAfterApply) }
+      }).catch(() => undefined);
+    }
+
     const updatedStates = {
       ...nextQuestionStates,
       [activeQuestionId]: updatedQuestionState
@@ -860,6 +921,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     }
   }
 
+  function rejectAiSuggestion(message: AiChatMessage, eventTimestamp: number) {
+    if (message.interactionId) {
+      void recordAiInteractionEvent({
+        assessment_id: assessment.assessment_id,
+        interaction_id: message.interactionId,
+        event_type: "reject",
+        elapsed_milliseconds: Math.max(0, Math.round(eventTimestamp - (message.responseVisibleAt ?? eventTimestamp)))
+      }).catch(() => undefined);
+    }
+    setMessages((current) => current.map((item) =>
+      item === message ? { ...item, workspaceActions: [], suggestedCode: undefined } : item
+    ));
+  }
+
   async function submitFinal() {
     if (isSubmitPending) {
       return;
@@ -885,8 +960,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       ));
       setSaveState("saved");
       setSubmitState("submitting");
-      await finalizeSubmission(assessment.assessment_id);
-      router.push(`/student/assessments/${assessment.assessment_id}/review`);
+      const submission = await finalizeSubmission(assessment.assessment_id);
+      router.push(submission.reflection_required
+        ? `/student/assessments/${assessment.assessment_id}/reflection`
+        : `/student/assessments/${assessment.assessment_id}/review?submissionId=${submission.submission_id}`);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Submission failed.");
       setSaveState("unsaved");
@@ -979,27 +1056,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             <span className="badge">Difficulty: {formatDifficulty(activeQuestion?.difficulty)}</span>
             <span className="badge">Run: {formatVerificationMode(activeQuestion?.verification_mode)}</span>
           </div>
-          <div className="mt-4 space-y-3 text-sm text-white/80 [&_p]:leading-relaxed [&_li]:leading-relaxed [&_code]:rounded [&_code]:bg-white/8 [&_code]:px-1 [&_code]:py-0.5">{renderMarkdown(activeQuestion?.problem_description_markdown ?? "")}</div>
-          <h4 className="mt-5 text-xs font-semibold uppercase tracking-wider text-cyanGlow">Constraints</h4>
-          {activeQuestion?.constraints.length ? (
-            <ul className="mt-2 space-y-1.5 text-sm text-white/55">
-              {activeQuestion.constraints.map((constraint) => <li key={constraint}>- {constraint}</li>)}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-white/40">No extra constraints listed.</p>
-          )}
-          <h4 className="mt-5 text-xs font-semibold uppercase tracking-wider text-cyanGlow">Public examples</h4>
-          {activeQuestion?.public_examples.length ? (
-            <div className="mt-2 space-y-2">
-              {activeQuestion.public_examples.map((example) => (
-                <div key={example.test_case_id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs">
-                  <p className="text-white/80">{example.name}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-white/40">No public examples listed.</p>
-          )}
+          <div className="mt-4 space-y-3 text-sm text-white/80 [&_p]:leading-relaxed [&_li]:leading-relaxed [&_code]:rounded [&_code]:bg-white/8 [&_code]:px-1 [&_code]:py-0.5">
+            {renderMarkdown(limitProblemStatement(activeQuestion?.problem_description_markdown ?? ""))}
+          </div>
         </div>
           </>
         )}
@@ -1184,7 +1243,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                   isApplying={agentActionState === "applying"}
                   isRunning={runState === "running"}
                   canRun={sandboxAvailable}
-                  onExecute={(runAfterApply) => void executeAiWorkspaceActions(message, runAfterApply)}
+                  onExecute={(runAfterApply, eventTimestamp) => void executeAiWorkspaceActions(message, runAfterApply, eventTimestamp)}
+                  onReject={(eventTimestamp) => rejectAiSuggestion(message, eventTimestamp)}
                 />
               ) : null}
               {message.role === "assistant" && message.tokenUsage ? (

@@ -116,7 +116,21 @@ Submission history, evaluation results, scores, and failure states must be persi
 
 Administrators must be able to review assessment outcomes by student, assessment, task, submission status, score or result, and execution details that are safe for administrator views.
 
-Reports must include AI usage summaries, total token consumption, number of AI interactions, average tokens per interaction, per-task token totals, per-assessment token totals, and a token-efficiency indicator that helps administrators judge whether AI was used strategically or wastefully.
+AI-disabled reports must show only the Functional Score. AI-enabled reports must
+show a `0-100` Functional Score, a separate `0-100` AI Usage Score, and a Final
+Score equal to their arithmetic mean.
+
+The AI Usage Score must use Prompt quality and context 30%, Token and
+interaction efficiency 40%, Critical evaluation and adaptation 20%, and
+Reflection quality and consistency 10%. Token and interaction efficiency must
+contain a 30-point structured LLM behavioral assessment and 10 points of
+objective repetition metrics.
+
+Reports must include criterion-level grading evidence, reflection and
+consistency assessment, total token consumption, number of AI interactions,
+average tokens per interaction, per-task token totals, and per-assessment token
+totals. Raw token totals are descriptive evidence; grading must not use a fixed
+token threshold or cohort-relative token usage.
 
 Reports must remain compatible with per-task grading results and AI telemetry. Student-facing reports must not expose hidden test details or administrator-only notes.
 
@@ -130,7 +144,24 @@ The agent may suggest code edits, explain concepts, assist with debugging, and a
 
 The frontend must call only the platform backend AI API. It must never call an external LLM provider directly.
 
-The backend AI service must own provider integration, prompt construction, safety filtering, structured responses, provider error handling, rate-limit hooks where applicable, and AI telemetry logging.
+The backend AI service must own provider integration, prompt construction,
+safety filtering, structured responses, provider error handling, rate-limit
+hooks where applicable, AI telemetry logging, automatic AI usage grading,
+rubric versioning, and grading evidence.
+
+For AI-enabled assessments, final submission must require at least one logged AI
+interaction. After code is frozen, the student must complete the consolidated
+maximum-100-word reflection within a backend-owned ten-minute window. The draft
+must autosave and finalize automatically at timeout.
+
+The platform must record suggestion response visibility and student apply,
+edit, reject, dismiss, and undo decisions. Applying an actionable suggestion
+unchanged within three seconds contributes the bounded rapid-accept deduction
+defined in `docs/design/automatic-ai-usage-scoring.md`.
+
+Automatic AI grading must use a fixed versioned rubric and structured
+criterion-level evidence. Provider or schema failure must preserve the
+Functional Score and result in pending or failed AI grading, not zero.
 
 `anomalyco/opencode` is the reference direction for the embedded coding-agent experience and architecture where feasible. It is an open-source AI coding agent reference, but it must not override project requirements, module boundaries, security rules, or the existing Next.js/.NET/PostgreSQL stack. Use it as inspiration for context-aware coding assistance, agent modes, and controlled tool/context design, not as permission to expose hidden assessment material or collapse frontend/backend/provider boundaries.
 
@@ -157,7 +188,10 @@ Module 2, Interactive Browser-Based Workspace and Frontend IDE, owns the Next.js
 
 Module 3, Sandboxed Code Execution and Evaluation Engine, owns isolated execution, resource limits, stdout/stderr capture, public and hidden test execution, grading result schemas, execution lifecycle, cleanup, and platform-managed runtime setup.
 
-Module 4, AI Telemetry and Assistance Service, owns secure AI proxying, provider adapters, server-side prompts, prompt/context safety, structured AI responses, AI interaction logging, token counting, semantic tags, token-efficiency metrics, and AI provider error handling.
+Module 4, AI Telemetry and Assistance Service, owns secure AI proxying, provider
+adapters, server-side prompts, prompt/context safety, structured AI responses,
+AI interaction logging, token counting, semantic tags, automatic AI usage
+grading, rubric versioning, grading evidence, and AI provider error handling.
 
 Cross-module changes must preserve API contracts, authentication flow, attempt/session ownership, hidden-test protection, sandbox isolation, and frontend/backend separation.
 
@@ -196,7 +230,11 @@ The implementation is complete only when the platform satisfies the updated `SPE
 - embedded AI assistance is available inside the workspace when enabled
 - AI interactions are logged with token counts and assessment/task context
 - per-task and per-assessment token totals are reported
-- token-efficiency indicators are visible to administrators
+- AI-enabled assessments complete the timed reflection workflow
+- automatic AI Usage Score follows the 30/40/20/10 rubric
+- reports display Functional, AI Usage, and Final scores for AI-enabled attempts
+- AI-disabled reports display only the Functional Score
+- token metrics remain visible without a fixed or cohort-relative grading threshold
 - no module boundary or security constraint is violated
 
 Recommended verification commands for future implementation completion:

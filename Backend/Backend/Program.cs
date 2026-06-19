@@ -70,6 +70,8 @@ builder.Services.Configure<LocalLlmOptions>(builder.Configuration.GetSection(Loc
 builder.Services.Configure<DeepseekOptions>(builder.Configuration.GetSection(DeepseekOptions.SectionName));
 builder.Services.AddSingleton<AiCompletionService>();
 builder.Services.AddSingleton<AiAssistantService>();
+builder.Services.AddScoped<AiUsageGradingService>();
+builder.Services.AddHostedService<ReflectionDeadlineWorker>();
 builder.Services.AddSingleton<AssessmentDraftGenerationService>();
 builder.Services.AddScoped<SeedAdminSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();
@@ -142,6 +144,7 @@ WorkspaceEndpoints.Map(api);
 ExecutionEndpoints.Map(api);
 SubmissionEndpoints.Map(api);
 AiEndpoints.Map(api);
+ReflectionEndpoints.Map(api);
 ReportEndpoints.Map(api);
 
 app.Run();

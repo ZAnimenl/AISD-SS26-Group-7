@@ -9,7 +9,7 @@ export type TaskType = "frontend_ui_extension" | "rest_api_development" | "datab
 export type Difficulty = "easy" | "medium" | "hard";
 export type VerificationMode = "browser_ui_preview" | "api_response_check" | "database_result_check" | "automated_test" | "regression_test";
 export type AuthoringSource = "manual" | "llm_generated" | "admin_edited";
-export type TokenEfficiencyIndicator = "no_ai_usage" | "strategic" | "token_heavy_success" | "inefficient" | "needs_review";
+export type AiGradingStatus = "not_required" | "reflection_pending" | "pending" | "completed" | "failed";
 export type Metadata = Record<string, string>;
 
 export interface AuthUser {
@@ -85,6 +85,12 @@ export interface Assessment {
   attempt_status?: AttemptStatus;
   progress_percent?: number;
   score?: number;
+  functional_score?: number;
+  ai_usage_score?: number | null;
+  final_score?: number | null;
+  ai_grading_status?: AiGradingStatus;
+  reflection_text?: string;
+  reflection_submitted_at?: string | null;
   questions: Question[];
   submission_id?: string;
 }
@@ -142,6 +148,7 @@ export interface AiWorkspaceAction {
 }
 
 export interface AiAssistantResponse {
+  interaction_id: string;
   response_markdown: string;
   semantic_tags: string[];
   suggestion?: AiCodeSuggestion | null;
@@ -158,6 +165,12 @@ export interface SubmissionResult {
   evaluation_status: SubmissionStatus;
   score: number;
   max_score: number;
+  functional_score: number;
+  functional_max_score: number;
+  ai_enabled: boolean;
+  submission_state: AiGradingStatus | "completed";
+  reflection_required: boolean;
+  reflection_deadline: string | null;
   stdout: string;
   stderr: string | null;
   submitted_at: string;
@@ -206,6 +219,10 @@ export interface ReportListItem {
   assessment_id: string;
   assessment_title: string;
   average_score: number;
+  ai_enabled: boolean;
+  average_functional_score: number;
+  average_ai_usage_score: number;
+  average_final_score: number;
   completion_count: number;
   participant_count: number;
   ai_interactions: number;
@@ -229,7 +246,6 @@ export interface AiUsageSummary {
   total_input_tokens: number;
   total_output_tokens: number;
   average_tokens_per_interaction: number;
-  token_efficiency_indicator: TokenEfficiencyIndicator;
   main_semantic_tags: string[];
   per_task_token_totals: AiTaskTokenTotal[];
 }
@@ -246,7 +262,38 @@ export interface AggregateReport extends ReportListItem {
     submission_status: SubmissionStatus;
     score: number;
     max_score: number;
+    functional_score: number;
+    ai_usage_score: number | null;
+    final_score: number | null;
     submitted_at: string;
+    reflection: {
+      text: string;
+      word_count: number;
+      submitted_at: string | null;
+      submitted_by: string | null;
+    };
+    ai_grading: {
+      status: AiGradingStatus;
+      score: number | null;
+      rubric_version: string | null;
+      model: string | null;
+      summary: string | null;
+      confidence: string | null;
+      graded_at: string | null;
+      details: Record<string, unknown>;
+    };
     ai_usage_summary: AiUsageSummary;
   }>;
+}
+
+export interface ReflectionState {
+  assessment_id: string;
+  reflection_text: string;
+  word_count: number;
+  reflection_deadline: string;
+  reflection_submitted_at: string | null;
+  reflection_submission_reason: string | null;
+  grading_status: AiGradingStatus;
+  ai_usage_score: number | null;
+  grading_summary: string | null;
 }

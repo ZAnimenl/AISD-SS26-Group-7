@@ -16,7 +16,8 @@ public sealed class AssessmentDraftGenerationService
 {
     private const int DraftMaxTokens = 16384;
     private const int MinimumStarterFilesPerLanguage = 3;
-    private const int MinimumTaskDescriptionLength = 600;
+    private const int MinimumTaskDescriptionLength = 300;
+    private const int MaximumTaskDescriptionWords = 150;
     private const int MinimumPublicTestCases = 2;
     private const int MinimumHiddenTestCases = 2;
     private const int MinimumAdvancedConcerns = 3;
@@ -42,7 +43,9 @@ public sealed class AssessmentDraftGenerationService
             [
                 "idempotency", "pagination", "authorization", "authentication", "transaction",
                 "concurrency", "optimistic locking", "rate limit", "caching", "audit",
-                "versioning", "validation", "rollback", "partial failure", "dependency"
+                "versioning", "versioned update", "version token", "row version", "etag", "if-match",
+                "validation", "rollback", "partial failure", "dependency", "conflict resolution",
+                "conflict handling", "compare-and-swap", "atomic update", "retry"
             ],
             [TaskTypes.DatabaseQuerySchema] =
             [
@@ -181,7 +184,8 @@ public sealed class AssessmentDraftGenerationService
             "Do not generate progress bars, profile cards, theme toggles, basic forms, simple filters/sorts, static dashboards, counters, or isolated CRUD handlers.",
             "Use flat file names without directories so the browser workspace and sandbox can execute them directly.",
             "Starter files must contain a realistic incomplete codebase with existing contracts, partial implementations, and TODOs. Do not provide the completed solution.",
-            "The problem description must be at least 600 characters and include: context, required deliverables, at least six functional requirements, constraints, edge cases, and acceptance criteria.",
+            "Keep the problem description concise: 80 to 150 words maximum.",
+            "State the goal, essential behavior, important edge cases, and acceptance criteria without giving students a copy-ready implementation plan.",
             "Require cross-file behavior, input validation, error handling, state or data-flow consistency, and at least one backward-compatibility or regression constraint.",
             "Name and require at least four advanced engineering concerns appropriate to the task type, such as asynchronous coordination, persistence, state machines, idempotency, authorization, pagination, concurrency, transactions, migrations, rollback, caching, accessibility, auditability, or conflict resolution.",
             "Every task must include at least two public and two hidden test cases. Tests must exercise behavior across the provided files, including edge cases and failure paths.",
@@ -506,12 +510,24 @@ public sealed class AssessmentDraftGenerationService
                 $"Generated task '{title}' starter files are not derived from the default Todo List prototype.");
         }
 
+        // Titles often carry concise architectural requirements because student-facing
+        // descriptions are intentionally limited to 150 words. Validate both fields.
+        var normalizedAdvancedTaskText = $"{title}\n{problemDescription}".ToLowerInvariant();
         var advancedConcernCount = AdvancedConcernTerms[taskType]
-            .Count(term => normalizedDescription.Contains(term, StringComparison.Ordinal));
+            .Count(term => normalizedAdvancedTaskText.Contains(term, StringComparison.Ordinal));
         if (advancedConcernCount < MinimumAdvancedConcerns)
         {
             throw new AiDraftGenerationException(
                 $"Generated task '{title}' is still tutorial-level. It must explicitly require at least {MinimumAdvancedConcerns} advanced {taskType} concerns such as concurrency, persistence, transactions, rollback, accessibility, caching, or conflict handling.");
+        }
+
+        var descriptionWordCount = problemDescription
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Length;
+        if (descriptionWordCount > MaximumTaskDescriptionWords)
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' is too detailed. Its problem description must contain no more than {MaximumTaskDescriptionWords} words.");
         }
 
         foreach (var language in languageConstraints)

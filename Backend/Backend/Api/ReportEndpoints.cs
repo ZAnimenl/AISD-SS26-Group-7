@@ -13,6 +13,7 @@ public static class ReportEndpoints
         api.MapGet("/admin/reports", ListAsync);
         api.MapGet("/reports/aggregate/{assessmentId:guid}", AggregateAsync);
         api.MapGet("/admin/reports/{assessmentId:guid}/students/{studentId:guid}", StudentDetailAsync);
+        api.MapPost("/admin/reports/{assessmentId:guid}/students/{studentId:guid}/ai-grade/retry", RetryAiGradeAsync);
     }
 
     internal sealed record AiUsageSummary(
@@ -21,7 +22,6 @@ public static class ReportEndpoints
         int TotalOutputTokens,
         int TotalTokens,
         int AverageTokensPerInteraction,
-        string TokenEfficiencyIndicator,
         IReadOnlyList<string> MainSemanticTags,
         IReadOnlyList<AiTaskTokenTotal> PerTaskTokenTotals);
 
@@ -59,7 +59,9 @@ public static class ReportEndpoints
                 AssessmentId = submission.Session!.AssessmentId,
                 submission.SessionId,
                 submission.Score,
-                submission.MaxScore
+                submission.MaxScore,
+                submission.Session!.AiUsageScore,
+                submission.Session.AiGradingStatus
             })
             .ToListAsync(cancellationToken);
         var aiSummaries = await dbContext.AiInteractions
@@ -95,7 +97,27 @@ public static class ReportEndpoints
                 assessment_id = assessment.Id,
                 assessment_title = assessment.Title,
                 assessment.Status,
+                ai_enabled = assessment.AiEnabled,
                 average_score = scores.Count == 0 ? 0 : scores.Average(),
+                average_functional_score = scores.Count == 0 ? 0 : scores.Average(),
+                average_ai_usage_score = assessmentSubmissions
+                    .Where(item => item.AiUsageScore.HasValue)
+                    .GroupBy(item => item.SessionId)
+                    .Select(group => group.First().AiUsageScore!.Value)
+                    .DefaultIfEmpty()
+                    .Average(),
+                average_final_score = assessmentSubmissions
+                    .Where(item => item.AiUsageScore.HasValue)
+                    .GroupBy(item => item.SessionId)
+                    .Select(group =>
+                    {
+                        var functional = group.Sum(item => item.MaxScore) == 0
+                            ? 0
+                            : group.Sum(item => item.Score) * 100.0 / group.Sum(item => item.MaxScore);
+                        return (functional + group.First().AiUsageScore!.Value) / 2;
+                    })
+                    .DefaultIfEmpty()
+                    .Average(),
                 participant_count = assessment.Sessions.Count,
                 completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
                 ai_interactions = assessmentAi.Count,
@@ -174,27 +196,54 @@ public static class ReportEndpoints
                 submission_status = summary?.Status ?? "not_submitted",
                 score = summary?.Score ?? 0,
                 max_score = summary?.MaxScore ?? 0,
+                functional_score = summary is not null && summary.MaxScore > 0
+                    ? (int)Math.Round(summary.Score * 100.0 / summary.MaxScore)
+                    : 0,
+                ai_usage_score = session.AiUsageScore,
+                final_score = session.AiUsageScore.HasValue && summary is not null && summary.MaxScore > 0
+                    ? (int?)Math.Round(((summary.Score * 100.0 / summary.MaxScore) + session.AiUsageScore.Value) / 2)
+                    : null,
                 submitted_at = summary?.SubmittedAt,
+                reflection = new
+                {
+                    text = session.ReflectionText,
+                    word_count = session.ReflectionWordCount,
+                    submitted_at = session.ReflectionSubmittedAt,
+                    submitted_by = session.ReflectionSubmissionReason
+                },
+                ai_grading = BuildAiGradingObject(session),
                 ai_usage_summary = BuildAiUsageSummary(
                     sessionInteractions ?? Array.Empty<AiInteraction>(),
-                    questionLookup,
-                    summary?.Score ?? 0,
-                    summary?.MaxScore ?? 0)
+                    questionLookup)
             });
         }
 
         var scores = bySession.Values.Select(summary => summary.MaxScore == 0 ? 0 : summary.Score * 100.0 / summary.MaxScore).ToList();
-        var totalScore = bySession.Values.Sum(summary => summary.Score);
-        var totalMaxScore = bySession.Values.Sum(summary => summary.MaxScore);
         return ApiResults.Success(new
         {
             assessment_id = assessment.Id,
             assessment_title = assessment.Title,
+            ai_enabled = assessment.AiEnabled,
             average_score = scores.Count == 0 ? 0 : scores.Average(),
+            average_functional_score = scores.Count == 0 ? 0 : scores.Average(),
+            average_ai_usage_score = assessment.Sessions
+                .Where(session => session.AiUsageScore.HasValue)
+                .Select(session => session.AiUsageScore!.Value)
+                .DefaultIfEmpty()
+                .Average(),
+            average_final_score = assessment.Sessions
+                .Where(session => session.AiUsageScore.HasValue && bySession.ContainsKey(session.Id) && bySession[session.Id].MaxScore > 0)
+                .Select(session =>
+                {
+                    var summary = bySession[session.Id];
+                    return ((summary.Score * 100.0 / summary.MaxScore) + session.AiUsageScore!.Value) / 2;
+                })
+                .DefaultIfEmpty()
+                .Average(),
             completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
             participant_count = assessment.Sessions.Count,
             ai_interactions = interactions.Count,
-            ai_usage_summary = BuildAiUsageSummary(interactions, questionLookup, totalScore, totalMaxScore),
+            ai_usage_summary = BuildAiUsageSummary(interactions, questionLookup),
             score_distribution = BuildScoreDistribution(scores),
             students
         });
@@ -276,15 +325,69 @@ public static class ReportEndpoints
             attempt_status = session.Status,
             submissions,
             ai_interactions = interactions,
-            ai_usage_summary = BuildAiUsageSummary(aiInteractions, questionLookup, score, maxScore)
+            reflection = new
+            {
+                text = session.ReflectionText,
+                word_count = session.ReflectionWordCount,
+                submitted_at = session.ReflectionSubmittedAt,
+                submitted_by = session.ReflectionSubmissionReason
+            },
+            functional_score = maxScore > 0 ? (int)Math.Round(score * 100.0 / maxScore) : 0,
+            ai_usage_score = session.AiUsageScore,
+            final_score = session.AiUsageScore.HasValue && maxScore > 0
+                ? (int?)Math.Round(((score * 100.0 / maxScore) + session.AiUsageScore.Value) / 2)
+                : null,
+            ai_grading = BuildAiGradingObject(session),
+            ai_usage_summary = BuildAiUsageSummary(aiInteractions, questionLookup)
+        });
+    }
+
+    private static async Task<IResult> RetryAiGradeAsync(
+        Guid assessmentId,
+        Guid studentId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        AiUsageGradingService gradingService,
+        CancellationToken cancellationToken)
+    {
+        var (_, error) = await currentUserAccessor.RequireRoleAsync(
+            httpContext,
+            dbContext,
+            UserRoles.Administrator,
+            cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var sessions = await dbContext.AssessmentSessions
+            .Where(item => item.AssessmentId == assessmentId && item.UserId == studentId)
+            .ToListAsync(cancellationToken);
+        var session = sessions.OrderByDescending(item => item.StartedAt).FirstOrDefault();
+        if (session is null)
+        {
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
+        }
+
+        if (!session.ReflectionSubmittedAt.HasValue)
+        {
+            return ApiResults.Error("REFLECTION_NOT_SUBMITTED", "The reflection must be submitted before AI grading.", StatusCodes.Status409Conflict);
+        }
+
+        await gradingService.GradeAsync(session, cancellationToken);
+        return ApiResults.Success(new
+        {
+            attempt_id = session.Id,
+            grading_status = session.AiGradingStatus,
+            ai_usage_score = session.AiUsageScore,
+            grading_summary = session.AiGradingSummary
         });
     }
 
     internal static AiUsageSummary BuildAiUsageSummary(
         IEnumerable<AiInteraction> interactions,
-        IReadOnlyDictionary<Guid, Question> questions,
-        int score,
-        int maxScore)
+        IReadOnlyDictionary<Guid, Question> questions)
     {
         var interactionList = interactions.ToList();
         var totalInputTokens = interactionList.Sum(interaction => interaction.InputTokens);
@@ -323,39 +426,23 @@ public static class ReportEndpoints
             totalOutputTokens,
             totalTokens,
             averageTokensPerInteraction,
-            BuildTokenEfficiencyIndicator(score, maxScore, totalTokens, interactionList.Count),
             tags,
             perTaskTokenTotals);
     }
 
-    internal static string BuildTokenEfficiencyIndicator(
-        int score,
-        int maxScore,
-        int totalTokens,
-        int totalInteractions)
+    private static object BuildAiGradingObject(AssessmentSession session)
     {
-        if (totalInteractions == 0 || totalTokens == 0)
+        return new
         {
-            return "no_ai_usage";
-        }
-
-        var scorePercent = maxScore <= 0 ? 0 : score * 100.0 / maxScore;
-        if (scorePercent >= 80 && totalTokens <= 2500)
-        {
-            return "strategic";
-        }
-
-        if (scorePercent >= 80)
-        {
-            return "token_heavy_success";
-        }
-
-        if (scorePercent < 60 && totalTokens >= 2500)
-        {
-            return "inefficient";
-        }
-
-        return "needs_review";
+            status = session.AiGradingStatus,
+            score = session.AiUsageScore,
+            rubric_version = session.AiRubricVersion,
+            model = session.AiGradingModel,
+            summary = session.AiGradingSummary,
+            confidence = session.AiGradingConfidence,
+            graded_at = session.AiGradedAt,
+            details = JsonDocumentSerializer.Deserialize(session.AiGradingDetailsJson, new Dictionary<string, object>())
+        };
     }
 
     private static string BuildSubmissionStatus(IReadOnlyCollection<Submission> submissions, int score, int maxScore)

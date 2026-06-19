@@ -43,7 +43,8 @@ public sealed class AiAssistantService
     private const int MaxPromptFileCount = 8;
     private const int MaxPromptFileCharacters = 6000;
     private const int MaxRunOutputCharacters = 4000;
-    private const int MaxSuggestionCharacters = 50000;
+    private const int MaxSuggestionCharacters = 30000;
+    private const int AssistantMaxTokens = 16384;
     private const int MaxActionRepairAttempts = 2;
     private readonly AiCompletionService completionService;
 
@@ -91,11 +92,37 @@ public sealed class AiAssistantService
             BuildSystemPrompt(context),
             BuildUserPrompt(context, tags),
             AiResponseFormat.Json,
-            cancellationToken);
+            cancellationToken,
+            AssistantMaxTokens);
 
         var totalInputTokens = result.InputTokens;
         var totalOutputTokens = result.OutputTokens;
-        var assistantResult = ParseStructuredResponse(result.Content, context, tags, totalInputTokens, totalOutputTokens);
+        var assistantResult = ParseStructuredResponse(
+            result.Content,
+            context,
+            tags,
+            totalInputTokens,
+            totalOutputTokens,
+            out var parsedSuccessfully);
+        if (!parsedSuccessfully)
+        {
+            var repairResult = await completionService.GenerateAsync(
+                BuildSystemPrompt(context),
+                BuildMalformedResponseRepairPrompt(context, tags),
+                AiResponseFormat.Json,
+                cancellationToken,
+                AssistantMaxTokens);
+            totalInputTokens += repairResult.InputTokens;
+            totalOutputTokens += repairResult.OutputTokens;
+            assistantResult = ParseStructuredResponse(
+                repairResult.Content,
+                context,
+                tags,
+                totalInputTokens,
+                totalOutputTokens,
+                out _);
+        }
+
         var requestedTargets = GetExplicitFileActionTargets(context);
         for (var repairAttempt = 0; repairAttempt < MaxActionRepairAttempts; repairAttempt += 1)
         {
@@ -109,7 +136,8 @@ public sealed class AiAssistantService
                 BuildSystemPrompt(context),
                 BuildRepairUserPrompt(context, tags, assistantResult, missingExplicitTargets),
                 AiResponseFormat.Json,
-                cancellationToken);
+                cancellationToken,
+                AssistantMaxTokens);
             totalInputTokens += repairResult.InputTokens;
             totalOutputTokens += repairResult.OutputTokens;
             var repairedAssistantResult = ParseStructuredResponse(
@@ -117,7 +145,8 @@ public sealed class AiAssistantService
                 context,
                 tags,
                 totalInputTokens,
-                totalOutputTokens);
+                totalOutputTokens,
+                out _);
             assistantResult = SelectBestActionResult(requestedTargets, assistantResult, repairedAssistantResult)
                               with { InputTokens = totalInputTokens, OutputTokens = totalOutputTokens };
         }
@@ -177,6 +206,7 @@ public sealed class AiAssistantService
             "- Complete-file replacement means the full content of that one visible file, not hidden tests or administrator-only solution material.",
             "- When the task requires coordinated edits across visible files, such as HTML markup plus JavaScript behavior, emit one replace_file action for each required visible file.",
             "- Keep replacements minimal and include no more than three replace_file actions.",
+            "- Keep each replacement_code under 30000 characters and avoid unrelated rewrites.",
             "- Prefer the active file unless the student's request explicitly names another visible file.",
             "- For JavaScript frontend tasks, files such as index.html, style.css, and app.js are all part of the JavaScript workspace; set replace_file.language to javascript for each of them.",
             "- Preserve the starter file's required public function names, exports, imports, and rendering entry points.",
@@ -263,6 +293,21 @@ public sealed class AiAssistantService
             FormatRunContext(context.LastRunResult),
             "",
             "Remember: output valid JSON only. Include response_markdown and semantic_tags. Include suggestion only when it is a safe active-file replacement.",
+        ]);
+    }
+
+    private static string BuildMalformedResponseRepairPrompt(
+        AiGenerationContext context,
+        string[] semanticTags)
+    {
+        return string.Join("\n",
+        [
+            BuildUserPrompt(context, semanticTags),
+            "",
+            "Your previous response could not be parsed as a complete JSON object.",
+            "Return a fresh, compact, valid JSON object only.",
+            "If edits are requested, include complete replace_file workspace_actions for the visible files that need changes.",
+            "Do not describe JSON or place it in a Markdown code fence."
         ]);
     }
 
@@ -394,27 +439,93 @@ public sealed class AiAssistantService
         AiGenerationContext context,
         string[] fallbackTags,
         int inputTokens,
-        int outputTokens)
+        int outputTokens,
+        out bool parsedSuccessfully)
     {
-        try
+        if (TryParseResponseObject(providerContent, out var document))
         {
-            using var document = JsonDocument.Parse(providerContent);
-            var root = document.RootElement;
-            var markdown = GetString(root, "response_markdown");
-            if (string.IsNullOrWhiteSpace(markdown))
+            using (document)
             {
-                markdown = providerContent.Trim();
-            }
+                var root = document.RootElement;
+                var markdown = GetString(root, "response_markdown");
+                if (string.IsNullOrWhiteSpace(markdown))
+                {
+                    markdown = "The AI prepared a workspace proposal. Review the suggested changes before applying them.";
+                }
 
-            var tags = TryReadTags(root, fallbackTags);
-            var suggestion = TryReadSuggestion(root, context);
-            var workspaceActions = TryReadWorkspaceActions(root, context, suggestion);
-            return new AiAssistantResult(markdown.Trim(), tags, inputTokens, outputTokens, suggestion, workspaceActions);
+                var tags = TryReadTags(root, fallbackTags);
+                var suggestion = TryReadSuggestion(root, context);
+                var workspaceActions = TryReadWorkspaceActions(root, context, suggestion);
+                parsedSuccessfully = true;
+                return new AiAssistantResult(markdown.Trim(), tags, inputTokens, outputTokens, suggestion, workspaceActions);
+            }
         }
-        catch (JsonException)
+
+        parsedSuccessfully = false;
+        return new AiAssistantResult(
+            "The AI response was incomplete, so no workspace changes were proposed. Please try the request again.",
+            fallbackTags,
+            inputTokens,
+            outputTokens,
+            null,
+            []);
+    }
+
+    private static bool TryParseResponseObject(string providerContent, out JsonDocument document)
+    {
+        document = null!;
+        var trimmed = providerContent.Trim();
+        var candidates = new List<string> { trimmed };
+
+        if (trimmed.StartsWith("```", StringComparison.Ordinal))
         {
-            return new AiAssistantResult(providerContent.Trim(), fallbackTags, inputTokens, outputTokens, null, []);
+            var firstLineBreak = trimmed.IndexOf('\n');
+            var finalFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+            if (firstLineBreak >= 0 && finalFence > firstLineBreak)
+            {
+                candidates.Add(trimmed[(firstLineBreak + 1)..finalFence].Trim());
+            }
         }
+
+        var firstBrace = trimmed.IndexOf('{');
+        var finalBrace = trimmed.LastIndexOf('}');
+        if (firstBrace >= 0 && finalBrace > firstBrace)
+        {
+            candidates.Add(trimmed[firstBrace..(finalBrace + 1)]);
+        }
+
+        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
+        {
+            try
+            {
+                var parsed = JsonDocument.Parse(candidate);
+                if (parsed.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    document = parsed;
+                    return true;
+                }
+
+                if (parsed.RootElement.ValueKind == JsonValueKind.String)
+                {
+                    var nested = parsed.RootElement.GetString();
+                    parsed.Dispose();
+                    if (!string.IsNullOrWhiteSpace(nested)
+                        && TryParseResponseObject(nested, out document))
+                    {
+                        return true;
+                    }
+                    continue;
+                }
+
+                parsed.Dispose();
+            }
+            catch (JsonException)
+            {
+                // Try the next safe representation.
+            }
+        }
+
+        return false;
     }
 
     private static string[] TryReadTags(JsonElement root, string[] fallbackTags)

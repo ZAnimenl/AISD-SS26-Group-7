@@ -25,6 +25,38 @@ feedback, and report review.
 - REST API, database, and bug-fix tasks show task-appropriate verification
   output rather than forcing a browser preview.
 
+## Submission Reflection Design
+
+- AI-enabled final submission first freezes the code and then opens a dedicated
+  reflection step.
+- The reflection prompt is: "In no more than 100 words, explain how you used
+  the AI assistant during this assessment. Include one suggestion that helped
+  and how you verified it, and one suggestion that you rejected, corrected, or
+  found unhelpful."
+- The reflection view shows a live word count, a visible ten-minute countdown,
+  autosave status, and an early-submit action.
+- Code editing, Run, AI assistance, and code resubmission are unavailable after
+  code is frozen.
+- Refreshing or reconnecting restores the latest draft and backend-owned
+  deadline without restarting the timer.
+- At timeout, the latest saved reflection is submitted automatically.
+- AI-disabled submission bypasses the reflection step.
+
+## Results and Report Design
+
+- AI-enabled result views show three distinct score cards: Functional Score,
+  AI Usage Score, and Final Score.
+- AI-disabled result views show only the Functional Score.
+- The Final Score card explains that it is the arithmetic mean of the other two
+  scores.
+- Administrator report detail exposes the four AI Usage Score criteria,
+  automatic-grading summary, cited evidence, reflection consistency, raw
+  interaction and token metrics, and grading status.
+- Token totals are labeled as descriptive evidence and are not presented as a
+  universal efficiency threshold.
+- Pending and failed AI grading states remain visibly distinct from a zero AI
+  Usage Score.
+
 ## Visual Constraints
 
 - Keep UI quiet, dense, and work-focused.

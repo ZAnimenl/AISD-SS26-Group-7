@@ -12,6 +12,7 @@ import type {
   Difficulty,
   Language,
   Question,
+  ReflectionState,
   ReportListItem,
   Role,
   RunResult,
@@ -19,7 +20,6 @@ import type {
   SubmissionResult,
   SystemConfig,
   TaskType,
-  TokenEfficiencyIndicator,
   UserAccount,
   VerificationMode,
   WorkspaceFile,
@@ -432,9 +432,15 @@ export async function getStudentResults() {
       title: item.assessment_title,
       status: "closed",
       attempt_status: "submitted",
-      score: item.max_score ? Math.round((item.score / item.max_score) * 100) : item.score,
+      score: item.functional_score ?? (item.max_score ? Math.round((item.score / item.max_score) * 100) : item.score),
+      functional_score: item.functional_score ?? 0,
+      ai_usage_score: item.ai_usage_score ?? null,
+      final_score: item.final_score ?? null,
+      ai_grading_status: item.ai_grading_status ?? "not_required",
+      reflection_text: item.reflection_text ?? "",
+      reflection_submitted_at: item.reflection_submitted_at ?? null,
       question_count: item.question_count,
-      ai_enabled: false
+      ai_enabled: Boolean(item.ai_enabled)
     });
     normalized.submission_id = item.submission_id;
     return normalized;
@@ -539,6 +545,18 @@ export async function generateQuestionDraft(assessmentId: string, input: {
   return normalizeQuestion(raw);
 }
 
+export async function generateAssessmentBlueprint(assessmentId: string, input: {
+  task_type_counts: Partial<Record<TaskType, number>>;
+  difficulty: Difficulty;
+}) {
+  const raw = await apiRequest<any[]>(`/admin/assessments/${assessmentId}/questions/generate-blueprint`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+
+  return raw.map(normalizeQuestion);
+}
+
 export async function regenerateQuestionDraft(questionId: string, input: {
   task_type: TaskType;
   difficulty: Difficulty;
@@ -596,7 +614,11 @@ export async function getReportList() {
   return raw.map((item) => ({
     assessment_id: item.assessment_id,
     assessment_title: item.assessment_title,
+    ai_enabled: Boolean(item.ai_enabled),
     average_score: Math.round(item.average_score ?? 0),
+    average_functional_score: Math.round(item.average_functional_score ?? item.average_score ?? 0),
+    average_ai_usage_score: Math.round(item.average_ai_usage_score ?? 0),
+    average_final_score: Math.round(item.average_final_score ?? 0),
     completion_count: item.completion_count ?? 0,
     participant_count: item.participant_count ?? 0,
     ai_interactions: item.ai_interactions ?? 0,
@@ -613,7 +635,11 @@ export async function getAggregateReport(assessmentId: string) {
   return {
     assessment_id: raw.assessment_id,
     assessment_title: raw.assessment_title,
+    ai_enabled: Boolean(raw.ai_enabled),
     average_score: Math.round(raw.average_score ?? 0),
+    average_functional_score: Math.round(raw.average_functional_score ?? raw.average_score ?? 0),
+    average_ai_usage_score: Math.round(raw.average_ai_usage_score ?? 0),
+    average_final_score: Math.round(raw.average_final_score ?? 0),
     completion_count: raw.completion_count ?? 0,
     participant_count: raw.participant_count ?? 0,
     ai_interactions: raw.ai_interactions ?? 0,
@@ -631,7 +657,26 @@ export async function getAggregateReport(assessmentId: string) {
       submission_status: student.submission_status ?? "not_submitted",
       score: student.score ?? 0,
       max_score: student.max_score ?? 0,
+      functional_score: student.functional_score ?? 0,
+      ai_usage_score: student.ai_usage_score ?? null,
+      final_score: student.final_score ?? null,
       submitted_at: student.submitted_at ?? "",
+      reflection: {
+        text: student.reflection?.text ?? "",
+        word_count: student.reflection?.word_count ?? 0,
+        submitted_at: student.reflection?.submitted_at ?? null,
+        submitted_by: student.reflection?.submitted_by ?? null
+      },
+      ai_grading: {
+        status: student.ai_grading?.status ?? "not_required",
+        score: student.ai_grading?.score ?? null,
+        rubric_version: student.ai_grading?.rubric_version ?? null,
+        model: student.ai_grading?.model ?? null,
+        summary: student.ai_grading?.summary ?? null,
+        confidence: student.ai_grading?.confidence ?? null,
+        graded_at: student.ai_grading?.graded_at ?? null,
+        details: student.ai_grading?.details ?? {}
+      },
       ai_usage_summary: normalizeAiUsageSummary(student.ai_usage_summary)
     }))
   } satisfies AggregateReport;
@@ -735,6 +780,51 @@ export async function finalizeSubmission(assessmentId: string) {
   return apiRequest<SubmissionResult>(`/assessments/${assessmentId}/submit`, {
     method: "POST"
   });
+}
+
+export async function retryAiUsageGrade(assessmentId: string, studentId: string) {
+  return apiRequest<{
+    grading_status: string;
+    ai_usage_score: number | null;
+    grading_summary: string | null;
+  }>(`/admin/reports/${assessmentId}/students/${studentId}/ai-grade/retry`, {
+    method: "POST"
+  });
+}
+
+export async function getReflection(assessmentId: string) {
+  return apiRequest<ReflectionState>(`/assessments/${assessmentId}/reflection`);
+}
+
+export async function saveReflection(assessmentId: string, reflectionText: string) {
+  return apiRequest<ReflectionState>(`/assessments/${assessmentId}/reflection`, {
+    method: "PUT",
+    body: JSON.stringify({ reflection_text: reflectionText })
+  });
+}
+
+export async function submitReflection(assessmentId: string, reflectionText: string) {
+  return apiRequest<ReflectionState>(`/assessments/${assessmentId}/reflection/submit`, {
+    method: "POST",
+    body: JSON.stringify({ reflection_text: reflectionText })
+  });
+}
+
+export async function recordAiInteractionEvent(input: {
+  assessment_id: string;
+  interaction_id: string;
+  event_type: "response_visible" | "apply" | "edit" | "reject" | "dismiss" | "undo";
+  elapsed_milliseconds?: number;
+  applied_unchanged?: boolean;
+  metadata?: Record<string, string>;
+}) {
+  return apiRequest<{ recorded: boolean }>(
+    `/assessments/${input.assessment_id}/ai-interactions/${input.interaction_id}/events`,
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    }
+  );
 }
 
 export async function getAiResponse(input: {
@@ -851,6 +941,12 @@ function normalizeAssessment(raw: any): Assessment {
     attempt_status: normalizeAttemptStatus(attemptStatus),
     progress_percent: attemptStatus === "active" ? 25 : attemptStatus === "submitted" ? 100 : 0,
     score: raw.score,
+    functional_score: raw.functional_score,
+    ai_usage_score: raw.ai_usage_score ?? null,
+    final_score: raw.final_score ?? null,
+    ai_grading_status: raw.ai_grading_status,
+    reflection_text: raw.reflection_text,
+    reflection_submitted_at: raw.reflection_submitted_at ?? null,
     questions: (raw.questions ?? []).map(normalizeQuestion)
   };
 }
@@ -966,7 +1062,6 @@ function normalizeAiUsageSummary(value: any): AiUsageSummary {
     total_input_tokens: value?.total_input_tokens ?? 0,
     total_output_tokens: value?.total_output_tokens ?? 0,
     average_tokens_per_interaction: value?.average_tokens_per_interaction ?? 0,
-    token_efficiency_indicator: normalizeTokenEfficiencyIndicator(value?.token_efficiency_indicator),
     main_semantic_tags: Array.isArray(value?.main_semantic_tags) ? value.main_semantic_tags : [],
     per_task_token_totals: perTaskTokenTotals
   };
@@ -1066,20 +1161,6 @@ function normalizeAuthoringSource(value: string | undefined) {
   }
 
   return "manual";
-}
-
-function normalizeTokenEfficiencyIndicator(value: string | undefined): TokenEfficiencyIndicator {
-  if (
-    value === "no_ai_usage"
-    || value === "strategic"
-    || value === "token_heavy_success"
-    || value === "inefficient"
-    || value === "needs_review"
-  ) {
-    return value;
-  }
-
-  return "needs_review";
 }
 
 function normalizeMetadata(value: unknown): Record<string, string> {
