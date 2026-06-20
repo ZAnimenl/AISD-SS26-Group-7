@@ -20,6 +20,8 @@ public sealed record AiUsageGrade(
     string ReflectionConsistency,
     IReadOnlyList<object> Evidence);
 
+public sealed record ProblemStatementCopyEvidence(Guid InteractionId, Guid QuestionId, string Reason);
+
 public sealed class AiUsageGradingService(
     OjSharpDbContext dbContext,
     AiCompletionService completionService,
@@ -46,16 +48,25 @@ public sealed class AiUsageGradingService(
             interactions = interactions.OrderBy(item => item.CreatedAt).ToList();
             events = events.OrderBy(item => item.CreatedAt).ToList();
             executions = executions.OrderBy(item => item.CreatedAt).ToList();
+            var problemStatements = await dbContext.Questions
+                .Where(item => item.AssessmentId == session.AssessmentId)
+                .Select(item => new { item.Id, item.ProblemDescriptionMarkdown })
+                .ToListAsync(cancellationToken);
 
             var objectiveRepetition = CalculateObjectiveRepetition(interactions, events);
             var rapidAcceptDeduction = CalculateRapidAcceptDeduction(events);
+            var problemCopy = DetectProblemStatementCopy(
+                interactions,
+                problemStatements.ToDictionary(item => item.Id, item => item.ProblemDescriptionMarkdown));
             var completion = await completionService.GenerateAsync(
                 BuildSystemPrompt(),
                 BuildUserPrompt(session, interactions, events, executions, objectiveRepetition, rapidAcceptDeduction),
                 AiResponseFormat.Json,
                 cancellationToken,
                 maxTokens: 1800);
-            var grade = ParseGrade(completion.Content, objectiveRepetition, rapidAcceptDeduction);
+            var grade = ApplyProblemStatementCopyCap(
+                ParseGrade(completion.Content, objectiveRepetition, rapidAcceptDeduction),
+                problemCopy);
 
             session.AiUsageScore = grade.Score;
             session.AiGradingStatus = AiGradingStatuses.Completed;
@@ -75,7 +86,9 @@ public sealed class AiUsageGradingService(
                 objective_metrics = new
                 {
                     objective_repetition_score = objectiveRepetition,
-                    rapid_accept_deduction = rapidAcceptDeduction
+                    rapid_accept_deduction = rapidAcceptDeduction,
+                    problem_statement_copy_detected = problemCopy is not null,
+                    prompt_quality_cap_reason = problemCopy?.Reason
                 }
             });
             session.AiGradedAt = DateTimeOffset.UtcNow;
@@ -241,7 +254,7 @@ public sealed class AiUsageGradingService(
         return JsonDocumentSerializer.Serialize(payload);
     }
 
-    private static AiUsageGrade ParseGrade(string content, int objectiveRepetition, int rapidAcceptDeduction)
+    internal static AiUsageGrade ParseGrade(string content, int objectiveRepetition, int rapidAcceptDeduction)
     {
         using var document = JsonDocument.Parse(content);
         var root = document.RootElement;
@@ -253,7 +266,7 @@ public sealed class AiUsageGradingService(
         var criteria = new AiUsageCriteria(prompt, efficiency, objectiveRepetition, critical, reflection);
         var score = prompt + efficiency + objectiveRepetition + critical + reflection;
         var evidence = root.TryGetProperty("evidence", out var evidenceElement)
-            ? JsonSerializer.Deserialize<object[]>(evidenceElement.GetRawText()) ?? []
+            ? NormalizeEvidence(evidenceElement)
             : [];
 
         return new AiUsageGrade(
@@ -263,6 +276,99 @@ public sealed class AiUsageGradingService(
             ReadString(root, "confidence", "medium"),
             ReadString(root, "reflection_consistency", "not_assessed"),
             evidence);
+    }
+
+    internal static IReadOnlyList<object> NormalizeEvidence(JsonElement evidence)
+    {
+        try
+        {
+            return evidence.ValueKind switch
+            {
+                JsonValueKind.Array => evidence.EnumerateArray().Select(item => (object)item.Clone()).ToArray(),
+                JsonValueKind.Object => [evidence.Clone()],
+                JsonValueKind.String when !string.IsNullOrWhiteSpace(evidence.GetString()) => [evidence.GetString()!],
+                _ => []
+            };
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    internal static ProblemStatementCopyEvidence? DetectProblemStatementCopy(
+        IReadOnlyList<AiInteraction> interactions,
+        IReadOnlyDictionary<Guid, string> problemStatements)
+    {
+        foreach (var interaction in interactions)
+        {
+            if (!problemStatements.TryGetValue(interaction.QuestionId, out var statement))
+            {
+                continue;
+            }
+
+            var normalizedStatement = NormalizeComparableText(statement);
+            var normalizedPrompt = NormalizeComparableText(interaction.Message);
+            if (normalizedStatement.Length >= 60 && normalizedPrompt.Contains(normalizedStatement, StringComparison.Ordinal))
+            {
+                return new ProblemStatementCopyEvidence(
+                    interaction.Id,
+                    interaction.QuestionId,
+                    "The problem statement was copied into an AI prompt with only formatting or whitespace changes; Prompt quality and context is capped at 15/30.");
+            }
+        }
+
+        return null;
+    }
+
+    private static AiUsageGrade ApplyProblemStatementCopyCap(
+        AiUsageGrade grade,
+        ProblemStatementCopyEvidence? copyEvidence)
+    {
+        if (copyEvidence is null)
+        {
+            return grade;
+        }
+
+        var criteria = grade.Criteria with
+        {
+            PromptQualityAndContext = Math.Min(15, grade.Criteria.PromptQualityAndContext)
+        };
+        var evidence = grade.Evidence.Concat([
+            (object)new Dictionary<string, object>
+            {
+                ["criterion"] = "prompt_quality_and_context",
+                ["reason"] = copyEvidence.Reason,
+                ["interaction_id"] = copyEvidence.InteractionId,
+                ["question_id"] = copyEvidence.QuestionId
+            }
+        ]).ToArray();
+        return grade with
+        {
+            Criteria = criteria,
+            Score = criteria.PromptQualityAndContext
+                + criteria.BehavioralEfficiency
+                + criteria.ObjectiveRepetition
+                + criteria.CriticalEvaluationAndAdaptation
+                + criteria.ReflectionQualityAndConsistency,
+            Evidence = evidence
+        };
+    }
+
+    private static string NormalizeComparableText(string value)
+    {
+        var characters = value
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
+            .Aggregate(new List<char>(), (characters, character) =>
+            {
+                if (character != ' ' || characters.Count == 0 || characters[^1] != ' ')
+                {
+                    characters.Add(character);
+                }
+                return characters;
+            });
+        return new string(characters.ToArray()).Trim();
     }
 
     private static int ReadScore(JsonElement root, string property, int maximum)

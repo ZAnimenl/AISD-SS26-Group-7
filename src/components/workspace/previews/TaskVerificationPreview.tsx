@@ -69,72 +69,18 @@ function getPrimaryMetadata(question: Question | undefined) {
   return metadata.endpoint ?? metadata.result_shape ?? metadata.focus ?? metadata.preview_entry ?? metadata.primary_view ?? null;
 }
 
-function getHtmlOutput(runResult: RunResult | null) {
-  return runResult?.test_results.find((test) => /<\/?[a-z][\s\S]*>/i.test(test.output))?.output ?? null;
-}
-
-function buildPreviewDocument(bodyHtml: string) {
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';" />
-    <style>
-      :root { color-scheme: dark; font-family: Barlow, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        color: #eef7ff;
-        background:
-          radial-gradient(circle at 18% 10%, rgba(0, 229, 255, 0.22), transparent 34%),
-          radial-gradient(circle at 88% 70%, rgba(168, 85, 247, 0.24), transparent 38%),
-          #07111d;
-      }
-      main { min-height: 100vh; padding: 10px; }
-      .prototype-shell {
-        width: min(100%, 760px);
-        overflow: hidden;
-        border: 1px solid rgba(0, 229, 255, 0.24);
-        background: rgba(8, 15, 28, 0.82);
-        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255,255,255,0.08);
-      }
-      .canvas { padding: 12px; }
-      section[data-testid="todo-summary"] {
-        border: 1px solid rgba(255,255,255,0.10);
-        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(0,229,255,0.05));
-        padding: 14px;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-      }
-      h2 { margin: 0 0 10px; font-size: 21px; line-height: 1.2; color: #ffffff; letter-spacing: 0; }
-      p { margin: 6px 0; color: rgba(238,247,255,0.72); }
-      .eyebrow { margin: 0 0 8px; color: #7eeaff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
-      .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
-      article { border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.06); padding: 10px; }
-      strong { display: block; color: #ffffff; font-size: 24px; line-height: 1; text-shadow: 0 0 18px rgba(0,229,255,0.22); }
-      span { color: rgba(238,247,255,0.55); font-size: 12px; }
-      .status {
-        border-left: 3px solid #34d399;
-        background: rgba(16,185,129,0.10);
-        padding: 10px 12px;
-        color: rgba(238,247,255,0.76);
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <div class="prototype-shell">
-        <div class="canvas">${bodyHtml}</div>
-      </div>
-    </main>
-  </body>
-</html>`;
+function buildPreviewDocument(sandboxDocument: string) {
+  const securityHead = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; img-src data: blob:; media-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none';">`;
+  if (/<head[\s>]/i.test(sandboxDocument)) {
+    return sandboxDocument.replace(/<head([^>]*)>/i, `<head$1>${securityHead}`);
+  }
+  return `<!doctype html><html><head>${securityHead}</head><body>${sandboxDocument}</body></html>`;
 }
 
 function BrowserPreviewFrame({ runResult }: {
   runResult: RunResult | null;
 }) {
-  const htmlOutput = getHtmlOutput(runResult);
+  const htmlOutput = runResult?.preview_document ?? null;
 
   if (!htmlOutput) {
     return (
@@ -150,13 +96,14 @@ function BrowserPreviewFrame({ runResult }: {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950">
+    <div className="relative h-full min-h-[280px] overflow-hidden rounded-xl border border-white/10 bg-white">
       <span className="absolute right-2 top-2 z-10 rounded border border-emerald-500/25 bg-[#07111d] px-2 py-1 text-[10px] text-emerald-300">
         Sandbox output
       </span>
       <iframe
-        className="h-[170px] w-full bg-[#07111d] xl:h-[190px]"
-        sandbox=""
+        className="h-full min-h-[280px] w-full bg-white"
+        sandbox="allow-forms allow-scripts"
+        referrerPolicy="no-referrer"
         srcDoc={buildPreviewDocument(htmlOutput)}
         title="Browser UI preview"
       />

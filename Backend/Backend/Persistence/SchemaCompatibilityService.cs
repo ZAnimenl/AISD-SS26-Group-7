@@ -62,6 +62,7 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
                 ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "SharedPrototypeVersion" character varying(80);
                 ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "SharedPrototypeMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;
                 ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "StartsAt" timestamp with time zone;
+                ALTER TABLE assessments ADD COLUMN IF NOT EXISTS "ExpiresAt" timestamp with time zone;
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS test_code_json text NOT NULL DEFAULT '{{}}';
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "AuthoringSource" character varying(80) NOT NULL DEFAULT 'manual';
                 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS "TraceabilityMetadataJson" jsonb NOT NULL DEFAULT '{{}}'::jsonb;

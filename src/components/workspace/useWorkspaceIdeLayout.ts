@@ -6,14 +6,13 @@ type ResizeTarget = "tasks" | "agent" | "output";
 
 const COLLAPSED_SIDE_WIDTH = 52;
 const COLLAPSED_OUTPUT_HEIGHT = 46;
-// Tasks panel needs enough width for the task title to not truncate and for the
-// problem-statement prose underneath to wrap at a readable line length.
-const DEFAULT_SIDE_WIDTH = 310;
-const DEFAULT_AGENT_WIDTH = 340;
-const DEFAULT_OUTPUT_HEIGHT = 280;
-const MIN_SIDE_WIDTH = 250;
+const DEFAULT_SIDE_WIDTH = 280;
+const DEFAULT_AGENT_WIDTH = 280;
+const DEFAULT_OUTPUT_HEIGHT = 180;
+const MIN_TASKS_WIDTH = 240;
+const MIN_AGENT_WIDTH = 220;
 const MAX_SIDE_WIDTH = 460;
-const MIN_OUTPUT_HEIGHT = 160;
+const MIN_OUTPUT_HEIGHT = 120;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -21,10 +20,10 @@ function clamp(value: number, min: number, max: number) {
 
 function getMaxOutputHeight() {
   if (typeof window === "undefined") {
-    return 520;
+    return 420;
   }
 
-  return Math.max(260, Math.min(520, window.innerHeight * 0.62));
+  return Math.max(220, Math.min(420, window.innerHeight * 0.48));
 }
 
 export function useWorkspaceIdeLayout() {
@@ -56,12 +55,12 @@ export function useWorkspaceIdeLayout() {
       }
 
       if (start.target === "tasks") {
-        setTasksWidth(clamp(start.tasksWidth + event.clientX - start.pointerX, MIN_SIDE_WIDTH, MAX_SIDE_WIDTH));
+        setTasksWidth(clamp(start.tasksWidth + event.clientX - start.pointerX, MIN_TASKS_WIDTH, MAX_SIDE_WIDTH));
         return;
       }
 
       if (start.target === "agent") {
-        setAgentWidth(clamp(start.agentWidth + start.pointerX - event.clientX, MIN_SIDE_WIDTH, MAX_SIDE_WIDTH));
+        setAgentWidth(clamp(start.agentWidth + start.pointerX - event.clientX, MIN_AGENT_WIDTH, MAX_SIDE_WIDTH));
         return;
       }
 

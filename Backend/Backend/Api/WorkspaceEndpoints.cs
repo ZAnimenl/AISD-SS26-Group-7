@@ -27,7 +27,7 @@ public static class WorkspaceEndpoints
             httpContext,
             dbContext,
             currentUserAccessor,
-            requireOpenAssessment: false,
+            requireOpenAssessment: true,
             cancellationToken: cancellationToken);
         if (error is not null)
         {

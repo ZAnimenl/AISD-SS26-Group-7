@@ -14,6 +14,10 @@ the active requirements. It does not replace automated test files.
 
 - Administrators can create an assessment with title, description, duration,
   status, and AI enabled state.
+- Assessment creation visibly separates basics, generated-question review, and
+  delivery settings into three stages.
+- Title and description are required before generation review, and at least one
+  reviewed question is required before delivery settings can be finalized.
 - Administrators can create tasks using the supported task categories.
 - AI-generated assessment drafts are provider-backed, editable before
   publication, and never template fallbacks labeled as LLM output.
@@ -26,8 +30,33 @@ the active requirements. It does not replace automated test files.
 ## Student Workspace
 
 - Students can start an active assessment and open the browser workspace.
+- Before starting, students see an explicit assessment expiration timestamp and
+  a notice that the workspace becomes review-only afterward.
+- The initial workspace gives the code editor more space than the output panel,
+  and the AI panel can be resized horizontally with its visible divider.
+- Resizing the editor or AI rail does not overlap file tabs, language selection,
+  Run, AI status, usage metrics, or panel controls.
+- The task rail displays one active question with Previous, Next, and compact
+  direct question navigation.
+- Switching questions preserves the selected language, active file, and code
+  for every question.
 - Starting an assessment shows a pending state while the backend resolves the
   real active attempt and prevents duplicate start clicks.
+
+## AI Report Summary
+
+- AI-enabled admin and student reports display the stored grading narrative and
+  reflection-understanding assessment below the score overview.
+- The student review page renders the automated assessment insight immediately
+  above the student's submitted reflection.
+- Pending, reflection-pending, failed, and completed grading states display
+  distinct truthful copy.
+- Student result serialization includes AI grading summary, confidence, and
+  details such as `reflection_consistency`.
+- Dashboard average-score cards and report percentage cards render a compact
+  accessible donut whose value matches the displayed percentage.
+- Student review Functional and AI Usage cards show the score donuts without
+  redundant statistic icons; the Final Score label appears below its donut.
 - After start succeeds, the start page verifies the real backend workspace is
   readable before navigating to the IDE.
 - Direct deep links to student assessment start, workspace, and review pages
@@ -228,3 +257,31 @@ the active requirements. It does not replace automated test files.
 - Student code is not executed by frontend JavaScript or normal backend request
   handlers.
 - Secrets and provider keys are not committed.
+# Added verification cases (2026-06-19)
+
+- Canonical prototype contains only source/config/test assets and excludes dependencies, caches, logs, databases, and build output.
+- Canonical browser UI contains no remote dependencies and references local CSS/JavaScript.
+- Browser preview tests inline local CSS and JavaScript in the sandbox artifact.
+- The preview iframe permits interactive JavaScript/forms while CSP blocks network and parent access.
+- Incomplete starter code returns failed public checks without being relabeled as a runtime or infrastructure failure.
+- Submission freezes timer and all mutation controls before workspace save/final submission calls complete.
+- AI-enabled confirmed submission routes to reflection; AI-disabled confirmed submission routes to review.
+- The ten-minute reflection deadline starts from backend submission confirmation, not from the beginning of hidden-test evaluation.
+- AI grading evidence accepts array, object, string, missing, null, and unsupported primitive shapes without throwing.
+- Problem statement copy detection tolerates whitespace/punctuation formatting differences and caps only Prompt quality and context at 15/30 with evidence.
+- Dashboard final average groups question submissions by attempt and includes only submitted attempts with completed AI grading.
+- Every administrator/student dropdown supports arrows, Home/End, Enter/Space, Escape/Tab, outside click, disabled state, and form serialization.
+
+# Added verification cases (2026-06-20)
+
+- Assessment create and edit requests require an expiration timestamp later than the effective start timestamp.
+- Student assessment listings expose the configured assessment expiration.
+- Starting an attempt after assessment expiration returns `ASSESSMENT_EXPIRED`.
+- A late-started attempt expires at the assessment deadline when that deadline occurs before the configured duration.
+- Expired assessments expose review navigation for submitted work and no start, continue, or repeat-attempt action.
+- Shared dropdown option lists render at viewport level and open upward when the lower viewport space would clip options.
+- Draft generation retries advanced-concern validation with exact task-type vocabulary and supports up to five attempts before failing.
+- Assessment create/edit rejects zero, negative, and non-integer duration values before persistence.
+- Draft generation validates the requested task category before language-test coverage and retries missing test-code entries with explicit required-language guidance.
+- Duration sliders serialize a positive 1–240 minute value on create and edit.
+- A frontend task explicitly requiring optimistic UI and conflict resolution satisfies the frontend advanced-concern threshold.

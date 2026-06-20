@@ -107,6 +107,14 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
             logger.LogInformation("Added assessments.StartsAt column to local SQLite database.");
         }
 
+        if (assessmentColumns.Count > 0 && !assessmentColumns.Contains("ExpiresAt"))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE assessments ADD COLUMN ExpiresAt TEXT NULL;",
+                cancellationToken);
+            logger.LogInformation("Added assessments.ExpiresAt column to local SQLite database.");
+        }
+
         if (assessmentColumns.Count > 0)
         {
             await dbContext.Database.ExecuteSqlRawAsync(

@@ -6,8 +6,10 @@ import { Loader2, Trash2 } from "lucide-react";
 import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { CustomDropdown } from "@/components/ui/CustomDropdown";
+import { DurationSlider } from "@/components/admin/DurationSlider";
 import { deleteAssessment, getAdminAssessment, isAuthenticationError, updateAssessment } from "@/lib/api";
-import { currentUtcIso, toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
+import { currentUtcIso, defaultAssessmentExpiry, toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
 import type { Assessment, AssessmentStatus } from "@/lib/types";
 
 export default function EditAssessmentPage() {
@@ -22,6 +24,10 @@ export default function EditAssessmentPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [startMode, setStartMode] = useState<"now" | "scheduled">("now");
   const [scheduledStart, setScheduledStart] = useState(() => toLocalDateTimeInput());
+  const [expiresAt, setExpiresAt] = useState(defaultAssessmentExpiry);
+  const [statusValue, setStatusValue] = useState<AssessmentStatus>("draft");
+  const [aiAccess, setAiAccess] = useState<"enabled" | "disabled">("enabled");
+  const [durationMinutes, setDurationMinutes] = useState(50);
 
   useEffect(() => {
     getAdminAssessment(assessmentId)
@@ -29,6 +35,10 @@ export default function EditAssessmentPage() {
         setAssessment(nextAssessment);
         setStartMode(nextAssessment.starts_at ? "scheduled" : "now");
         setScheduledStart(toLocalDateTimeInput(nextAssessment.starts_at));
+        setExpiresAt(nextAssessment.expires_at ? toLocalDateTimeInput(nextAssessment.expires_at) : defaultAssessmentExpiry());
+        setStatusValue(nextAssessment.status);
+        setAiAccess(nextAssessment.ai_enabled ? "enabled" : "disabled");
+        setDurationMinutes(Math.max(1, nextAssessment.duration_minutes));
         setError(null);
       })
       .catch((exception) => {
@@ -49,12 +59,23 @@ export default function EditAssessmentPage() {
     }
 
     const form = new FormData(event.currentTarget);
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      setError("Duration must be a whole number greater than zero.");
+      return;
+    }
+    const startsAt = startMode === "scheduled" ? toUtcIso(scheduledStart) : currentUtcIso();
+    const expiry = toUtcIso(expiresAt);
+    if (!expiry || new Date(expiry).getTime() <= new Date(startsAt ?? currentUtcIso()).getTime()) {
+      setError("Assessment expiration must be later than its start time.");
+      return;
+    }
     const nextAssessment = {
       ...assessment,
       title: String(form.get("title") ?? assessment.title),
       description: String(form.get("description") ?? assessment.description),
-      duration_minutes: Number(form.get("duration_minutes") ?? assessment.duration_minutes),
-      starts_at: startMode === "scheduled" ? toUtcIso(scheduledStart) : currentUtcIso(),
+      duration_minutes: durationMinutes,
+      starts_at: startsAt,
+      expires_at: expiry,
       status: String(form.get("status") ?? assessment.status) as AssessmentStatus,
       ai_enabled: form.get("ai_enabled") === "enabled",
       shared_prototype_reference: assessment.shared_prototype_reference ?? null,
@@ -128,7 +149,7 @@ export default function EditAssessmentPage() {
             <label className="grid gap-2 text-sm text-white/60">Title<input className="field" name="title" defaultValue={assessment.title} /></label>
             <label className="grid gap-2 text-sm text-white/60">Description<textarea className="field min-h-28" name="description" defaultValue={assessment.description} /></label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-white/60">Duration<input className="field" name="duration_minutes" type="number" defaultValue={assessment.duration_minutes} /></label>
+              <DurationSlider value={durationMinutes} onChange={setDurationMinutes} disabled={isSaving || isDeleting} />
               <div className="grid gap-2 text-sm text-white/60">
                 Starts
                 <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-black/20 p-1">
@@ -153,8 +174,13 @@ export default function EditAssessmentPage() {
                   <input className="field [color-scheme:dark]" type="datetime-local" value={scheduledStart} required onChange={(event) => setScheduledStart(event.target.value)} />
                 </label>
               ) : null}
-              <label className="grid gap-2 text-sm text-white/60">Status<select className="field" name="status" defaultValue={assessment.status}><option>draft</option><option>active</option><option>closed</option><option>archived</option></select></label>
-              <label className="grid gap-2 text-sm text-white/60">AI assistance<select className="field" name="ai_enabled" defaultValue={assessment.ai_enabled ? "enabled" : "disabled"}><option>enabled</option><option>disabled</option></select></label>
+              <label className="grid gap-2 text-sm text-white/60 sm:col-span-2">
+                Assessment expires
+                <input className="field [color-scheme:dark]" type="datetime-local" value={expiresAt} required onChange={(event) => setExpiresAt(event.target.value)} />
+                <span className="text-xs text-white/35">After this deadline students can review results, but cannot start or continue an attempt.</span>
+              </label>
+              <label className="grid gap-2 text-sm text-white/60">Status<CustomDropdown name="status" ariaLabel="Status" value={statusValue} onChange={setStatusValue} options={["draft", "active", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} /></label>
+              <label className="grid gap-2 text-sm text-white/60">AI assistance<CustomDropdown name="ai_enabled" ariaLabel="AI assistance" value={aiAccess} onChange={setAiAccess} options={[{ value: "enabled", label: "enabled" }, { value: "disabled", label: "disabled" }]} /></label>
             </div>
             <div className="flex flex-wrap gap-3">
               <button className="btn-primary" disabled={isSaving || isDeleting}>

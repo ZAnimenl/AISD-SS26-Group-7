@@ -73,6 +73,7 @@ export interface Assessment {
   description: string;
   duration_minutes: number;
   starts_at?: string | null;
+  expires_at?: string | null;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;
@@ -89,6 +90,9 @@ export interface Assessment {
   ai_usage_score?: number | null;
   final_score?: number | null;
   ai_grading_status?: AiGradingStatus;
+  ai_grading_summary?: string | null;
+  ai_grading_confidence?: string | null;
+  ai_grading_details?: Record<string, unknown>;
   reflection_text?: string;
   reflection_submitted_at?: string | null;
   questions: Question[];
@@ -118,6 +122,7 @@ export interface RunResult {
   status: ExecutionStatus;
   stdout: string;
   stderr: string | null;
+  preview_document?: string | null;
   test_results: Array<{
     name: string;
     visibility: "public";

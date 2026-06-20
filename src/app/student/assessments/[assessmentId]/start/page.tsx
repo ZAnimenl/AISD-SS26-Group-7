@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CalendarClock, Clock, Loader2, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -8,7 +9,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAssessment, getWorkspace, isAuthenticationError, startAssessment } from "@/lib/api";
 import { getLanguageLabel, normalizeStudentLanguageConstraints } from "@/lib/languages";
 import type { Assessment } from "@/lib/types";
-import { formatAssessmentStart, hasAssessmentStarted } from "@/lib/assessmentSchedule";
+import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted } from "@/lib/assessmentSchedule";
 
 function formatQuestionLanguages(question: Assessment["questions"][number]) {
   return normalizeStudentLanguageConstraints(question.language_constraints, question.task_type)
@@ -67,7 +68,8 @@ export default function AssessmentStartPage() {
 
   const attemptExpired = assessment.attempt_status === "expired";
   const hasStarted = hasAssessmentStarted(assessment.starts_at);
-  const canStartAttempt = assessment.status === "active" && hasStarted && !attemptExpired;
+  const assessmentExpired = hasAssessmentExpired(assessment.expires_at);
+  const canStartAttempt = assessment.status === "active" && hasStarted && !assessmentExpired && !attemptExpired;
   const startButtonLabel = assessment.attempt_status === "submitted" ? "Start another attempt" : "Start attempt";
 
   return (
@@ -81,8 +83,17 @@ export default function AssessmentStartPage() {
             <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Clock size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.duration_minutes} min</p><p className="text-sm text-white/45">Duration</p></div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><CalendarClock size={20} className="text-cyanGlow" /><p className="mt-3 text-base font-semibold">{formatAssessmentStart(assessment.starts_at)}</p><p className="text-sm text-white/45">Start time</p></div>
+              <div className="rounded-2xl border border-pinkGlow/25 bg-pinkGlow/[0.06] p-4"><CalendarClock size={20} className="text-pinkGlow" /><p className="mt-3 text-base font-semibold">{formatAssessmentExpiry(assessment.expires_at)}</p><p className="text-sm font-medium text-pinkGlow/80">Assessment expires</p></div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-purpleGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.questions.length || assessment.question_count}</p><p className="text-sm text-white/45">Questions</p></div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.ai_enabled ? "On" : "Off"}</p><p className="text-sm text-white/45">AI assistance</p></div>
+            </div>
+            <div className="mt-5 rounded-2xl border border-pinkGlow/25 bg-pinkGlow/[0.06] px-4 py-3">
+              <p className="text-sm font-medium text-white/80">
+                Submission deadline: <span className="text-pinkGlow">{formatAssessmentExpiry(assessment.expires_at)}</span>
+              </p>
+              <p className="mt-1 text-xs leading-5 text-white/45">
+                After this time, the assessment becomes review-only. You cannot start a new attempt or continue editing.
+              </p>
             </div>
             {canStartAttempt ? (
               <button className="btn-primary mt-8" onClick={openWorkspace} disabled={isStarting}>
@@ -90,13 +101,22 @@ export default function AssessmentStartPage() {
                 {isStarting ? "Opening workspace..." : startButtonLabel}
               </button>
             ) : (
-              <p className="mt-8 text-sm text-white/50">
-                {attemptExpired
-                  ? "This assessment attempt has expired and cannot be started again."
-                  : !hasStarted
-                  ? `This assessment opens ${formatAssessmentStart(assessment.starts_at)}.`
-                  : "This assessment is not open for new attempts."}
-              </p>
+              <div className="mt-8">
+                <p className="text-sm text-white/50">
+                  {assessmentExpired
+                    ? "This assessment has expired. You can review your submitted result, but cannot start another attempt."
+                    : attemptExpired
+                    ? "This assessment attempt has expired and cannot be started again."
+                    : !hasStarted
+                    ? `This assessment opens ${formatAssessmentStart(assessment.starts_at)}.`
+                    : "This assessment is not open for new attempts."}
+                </p>
+                {assessmentExpired && assessment.attempt_status === "submitted" ? (
+                  <Link className="btn-secondary mt-4" href={`/student/assessments/${assessmentId}/review`}>
+                    Review submitted result
+                  </Link>
+                ) : null}
+              </div>
             )}
             {isStarting ? <p className="mt-3 text-sm text-white/55" aria-live="polite">Backend is resolving your real active attempt and workspace before opening the IDE.</p> : null}
             {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}

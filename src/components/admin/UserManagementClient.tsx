@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { createAdminUser, getAdminUsers, isAuthenticationError } from "@/lib/api";
+import { CustomDropdown } from "@/components/ui/CustomDropdown";
 import type { Role, UserAccount } from "@/lib/types";
 
 export function UserManagementClient() {
@@ -86,10 +87,7 @@ export function UserManagementClient() {
           </label>
           <label className="grid gap-2 text-sm text-white/60">
             Role
-            <select className="field" value={role} onChange={(event) => setRole(event.target.value as Role)}>
-              <option value="administrator">administrator</option>
-              <option value="student">student</option>
-            </select>
+            <CustomDropdown ariaLabel="Role" value={role} onChange={setRole} options={[{ value: "administrator", label: "administrator" }, { value: "student", label: "student" }]} />
           </label>
           <button className="btn-primary w-fit" type="submit" disabled={isSubmitting}>
             <UserPlus size={16} />

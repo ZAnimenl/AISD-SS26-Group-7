@@ -7,20 +7,27 @@ public static class AssessmentPolicy
     private static readonly string[] DefaultStudentLanguages = ["python", "javascript"];
     private static readonly string[] SupportedStudentLanguages = ["python", "javascript", "typescript", "html", "sql"];
 
-    public static bool IsAssessmentActive(Assessment? assessment)
+    public static bool IsAssessmentActive(Assessment? assessment, DateTimeOffset? now = null)
     {
-        return assessment?.Status == AssessmentStatuses.Active;
+        return assessment?.Status == AssessmentStatuses.Active
+               && !HasAssessmentExpired(assessment, now);
     }
 
     public static bool IsAssessmentAvailable(Assessment? assessment, DateTimeOffset? now = null)
     {
-        return IsAssessmentActive(assessment) && HasAssessmentStarted(assessment, now);
+        return IsAssessmentActive(assessment, now) && HasAssessmentStarted(assessment, now);
     }
 
     public static bool HasAssessmentStarted(Assessment? assessment, DateTimeOffset? now = null)
     {
         return assessment is not null
                && (assessment.StartsAt is null || assessment.StartsAt <= (now ?? DateTimeOffset.UtcNow));
+    }
+
+    public static bool HasAssessmentExpired(Assessment? assessment, DateTimeOffset? now = null)
+    {
+        return assessment?.ExpiresAt is not null
+               && assessment.ExpiresAt <= (now ?? DateTimeOffset.UtcNow);
     }
 
     public static string[] GetSupportedStudentLanguages(Question question)

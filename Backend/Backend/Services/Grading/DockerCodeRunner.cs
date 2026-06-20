@@ -89,6 +89,9 @@ internal sealed class DockerCodeRunner : ICodeRunner
                ?? (language.Equals("html", StringComparison.OrdinalIgnoreCase)
                    ? testCode.GetValueOrDefault("javascript")
                    : null)
+               ?? (language.Equals("javascript", StringComparison.OrdinalIgnoreCase)
+                   ? testCode.GetValueOrDefault("html")
+                   : null)
                ?? string.Empty;
     }
 

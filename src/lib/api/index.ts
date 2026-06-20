@@ -437,6 +437,9 @@ export async function getStudentResults() {
       ai_usage_score: item.ai_usage_score ?? null,
       final_score: item.final_score ?? null,
       ai_grading_status: item.ai_grading_status ?? "not_required",
+      ai_grading_summary: item.ai_grading_summary ?? null,
+      ai_grading_confidence: item.ai_grading_confidence ?? null,
+      ai_grading_details: item.ai_grading_details ?? {},
       reflection_text: item.reflection_text ?? "",
       reflection_submitted_at: item.reflection_submitted_at ?? null,
       question_count: item.question_count,
@@ -461,6 +464,7 @@ export async function createAssessment(input: {
   description: string;
   duration_minutes: number;
   starts_at?: string | null;
+  expires_at: string;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;
@@ -480,6 +484,7 @@ export async function generateAssessment(input: {
   description: string;
   duration_minutes: number;
   starts_at?: string | null;
+  expires_at: string;
   status: AssessmentStatus;
   ai_enabled: boolean;
   shared_prototype_reference?: string | null;
@@ -506,6 +511,7 @@ export async function updateAssessment(input: Assessment) {
       description: input.description,
       duration_minutes: input.duration_minutes,
       starts_at: input.starts_at ?? null,
+      expires_at: input.expires_at,
       status: input.status,
       ai_enabled: input.ai_enabled,
       shared_prototype_reference: input.shared_prototype_reference ?? null,
@@ -649,7 +655,7 @@ export async function getAggregateReport(assessmentId: string) {
     ai_usage_summary: aiUsageSummary,
     score_distribution: raw.score_distribution ?? [],
     students: (raw.students ?? []).map((student: any) => ({
-      attempt_id: student.attempt_id ?? student.session_id ?? `${student.user_id}-${student.submitted_at ?? "active"}`,
+      attempt_id: student.attempt_id ?? `${student.user_id}-${student.submitted_at ?? "active"}`,
       user_id: student.user_id,
       student_name: student.student_name,
       student_email: student.student_email,
@@ -929,6 +935,7 @@ function normalizeAssessment(raw: any): Assessment {
     description: raw.description ?? "",
     duration_minutes: raw.duration_minutes ?? 0,
     starts_at: raw.starts_at ?? null,
+    expires_at: raw.assessment_expires_at ?? raw.expires_at ?? null,
     status: (raw.status ?? "active") as AssessmentStatus,
     ai_enabled: Boolean(raw.ai_enabled),
     shared_prototype_reference: raw.shared_prototype_reference ?? null,
@@ -936,7 +943,7 @@ function normalizeAssessment(raw: any): Assessment {
     shared_prototype_metadata: normalizeMetadata(raw.shared_prototype_metadata),
     supported_task_categories: (raw.supported_task_categories ?? []).map(normalizeTaskType),
     supported_verification_modes: (raw.supported_verification_modes ?? []).map((mode: string | undefined) => normalizeVerificationMode(mode)),
-    closes_at: raw.closes_at ?? raw.expires_at ?? new Date().toISOString(),
+    closes_at: raw.closes_at ?? raw.expires_at ?? raw.assessment_expires_at ?? new Date().toISOString(),
     question_count: raw.question_count ?? raw.questions?.length ?? 0,
     attempt_status: normalizeAttemptStatus(attemptStatus),
     progress_percent: attemptStatus === "active" ? 25 : attemptStatus === "submitted" ? 100 : 0,
@@ -945,6 +952,11 @@ function normalizeAssessment(raw: any): Assessment {
     ai_usage_score: raw.ai_usage_score ?? null,
     final_score: raw.final_score ?? null,
     ai_grading_status: raw.ai_grading_status,
+    ai_grading_summary: raw.ai_grading_summary ?? null,
+    ai_grading_confidence: raw.ai_grading_confidence ?? null,
+    ai_grading_details: raw.ai_grading_details && typeof raw.ai_grading_details === "object" && !Array.isArray(raw.ai_grading_details)
+      ? raw.ai_grading_details
+      : {},
     reflection_text: raw.reflection_text,
     reflection_submitted_at: raw.reflection_submitted_at ?? null,
     questions: (raw.questions ?? []).map(normalizeQuestion)

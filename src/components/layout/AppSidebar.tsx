@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { CodeXml } from "lucide-react";
 import { logout } from "@/lib/api";
 import { SemanticIcon, type SemanticIconName } from "@/components/ui/SemanticIcon";
 
@@ -34,8 +35,8 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
   return (
     <aside className={`liquid-glass sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 py-5 lg:flex ${compact ? "w-20 px-2" : "w-64 px-4"}`}>
       <Link href={role === "student" ? "/student/dashboard" : "/admin/dashboard"} className={`relative flex items-center ${compact ? "justify-center" : "gap-3"}`}>
-        <span className="float-soft grid h-10 w-10 place-items-center rounded-2xl border border-cyanGlow/25 bg-[linear-gradient(145deg,rgba(0,229,255,0.16),rgba(168,85,247,0.12))] text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.24)]">
-          <SemanticIcon name="platform" size={22} />
+        <span className="float-soft grid h-10 w-10 place-items-center rounded-xl border border-cyanGlow/30 bg-[linear-gradient(145deg,rgba(0,229,255,0.14),rgba(168,85,247,0.10))] text-cyanGlow shadow-[0_0_22px_rgba(0,229,255,0.18)]">
+          <CodeXml size={22} strokeWidth={1.8} aria-hidden="true" />
         </span>
         <span className={compact ? "sr-only" : ""}>
           <span className="live-gradient-text block text-sm font-semibold">AI Coding</span>

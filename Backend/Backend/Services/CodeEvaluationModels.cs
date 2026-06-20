@@ -13,7 +13,8 @@ public sealed record CodeEvaluationResult(
     string Stdout,
     string? Stderr,
     IReadOnlyList<TestCaseEvaluationResult> TestResults,
-    ExecutionMetrics Metrics);
+    ExecutionMetrics Metrics,
+    string? PreviewDocument = null);
 
 public sealed record TestCaseEvaluationResult(
     string Name,

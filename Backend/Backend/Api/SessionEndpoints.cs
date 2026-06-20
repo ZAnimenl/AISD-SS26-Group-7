@@ -69,6 +69,13 @@ public static class SessionEndpoints
                 $"This assessment opens at {assessment.StartsAt:O}.",
                 StatusCodes.Status409Conflict);
         }
+        if (AssessmentPolicy.HasAssessmentExpired(assessment, now))
+        {
+            return ApiResults.Error(
+                "ASSESSMENT_EXPIRED",
+                "This assessment has expired and is available for review only.",
+                StatusCodes.Status409Conflict);
+        }
 
         var studentSessions = dbContext.AssessmentSessions
             .Where(item => item.AssessmentId == assessmentId
@@ -117,7 +124,7 @@ public static class SessionEndpoints
                 UserId = student.Id,
                 Status = SessionStatuses.Active,
                 StartedAt = now,
-                ExpiresAt = now.AddMinutes(assessment.DurationMinutes)
+                ExpiresAt = ResolveAttemptExpiry(now, assessment.DurationMinutes, assessment.ExpiresAt)
             };
             dbContext.AssessmentSessions.Add(session);
             dbContext.WorkspaceQuestionStates.AddRange(CreateMissingWorkspaceStates(
@@ -214,6 +221,17 @@ public static class SessionEndpoints
     internal static bool HasExpiredAttempt(IEnumerable<string> sessionStatuses)
     {
         return sessionStatuses.Any(status => status == SessionStatuses.Expired);
+    }
+
+    internal static DateTimeOffset ResolveAttemptExpiry(
+        DateTimeOffset startedAt,
+        int durationMinutes,
+        DateTimeOffset? assessmentExpiresAt)
+    {
+        var durationExpiry = startedAt.AddMinutes(durationMinutes);
+        return assessmentExpiresAt is not null && assessmentExpiresAt < durationExpiry
+            ? assessmentExpiresAt.Value
+            : durationExpiry;
     }
 
     private static object ToAttemptDto(AssessmentSession session, DateTimeOffset now)

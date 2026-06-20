@@ -297,7 +297,8 @@ public sealed class CodeEvaluationServiceTests
             {
                 ["javascript"] = new()
                 {
-                    ["index.html"] = "<!doctype html><html><body><button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script></body></html>",
+                    ["index.html"] = "<!doctype html><html><head><link rel=\"stylesheet\" href=\"styles.css\"></head><body><button id=\"clearBtn\">Clear All</button><script src=\"app.js\"></script></body></html>",
+                    ["styles.css"] = "button { color: blue; }\n",
                     ["app.js"] = "document.getElementById('clearBtn');\n"
                 }
             }),
@@ -308,7 +309,8 @@ public sealed class CodeEvaluationServiceTests
         var testCode = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>())["javascript"];
 
         Assert.Contains("index.html", testCode);
-        Assert.Contains("inlineLocalScripts", testCode);
+        Assert.Contains("inlineLocalAssets", testCode);
+        Assert.Contains("styles.css", question.StarterCodeJson);
         Assert.DoesNotContain("TodoSummaryPanel", testCode);
     }
 

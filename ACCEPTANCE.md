@@ -1,5 +1,29 @@
 # Acceptance Criteria
 
+## Assessment Authoring and Review UX
+
+- Admin assessment creation has three visible stages: Assessment basics,
+  Generate & review, and Delivery settings.
+- Generated questions and tests can be reviewed and edited before timing and
+  availability are finalized.
+- Delivery settings cannot be finalized with zero questions or a non-positive
+  duration.
+- The ongoing student workspace shows one question at a time with Previous,
+  Next, and compact direct navigation.
+- The pre-start page explicitly labels the assessment expiration deadline and
+  explains that access becomes review-only afterward.
+- The code editor is the largest workspace area by default; the output starts
+  compact and the narrower AI panel has a visible horizontal resize handle.
+- Question navigation preserves autosaved per-question workspace state.
+- AI-enabled student and admin reports show a concise AI-use and
+  demonstrated-understanding summary below the score overview.
+- Student review shows the automated assessment insight directly above the
+  submitted reflection.
+- Report summaries use stored grading evidence and distinguish pending, failed,
+  and completed analysis.
+- Dashboard and report percentage scores include compact accessible charts that
+  exactly match their displayed numeric values.
+
 ## Active Agent Contract
 
 - The active root `AGENTS.md` contains the owner's 16-point Codex Engineering Contract.
@@ -69,6 +93,39 @@
 - An empty reflection receives zero Reflection quality points but preserves the
   Functional Score.
 - AI-disabled assessments bypass reflection entirely.
+- Confirmed submission immediately freezes the visible timer and disables editor, task, file, language, Run, AI, suggestion, and duplicate-submission controls.
+- Code remains frozen while the AI-enabled reflection is pending.
+- Hidden-test evaluation time does not consume the backend-owned ten-minute reflection window.
+
+## Canonical Assessment Prototype and Preview
+
+- `assessmentPrototype/` contains the source-only canonical Todo UI, FastAPI API, Peewee ORM, and SQLite configuration.
+- Generated tasks extend the canonical Todo source/contracts and do not invent a replacement base application.
+- Students install no prototype dependencies locally.
+- Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
+- The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
+- Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.
+- Failed tests, runtime errors, and sandbox infrastructure failures are visibly distinct.
+
+## Shared Dropdown
+
+- No native `select` remains on administrator or student pages.
+- The reusable dropdown supports keyboard navigation, outside-click closing, disabled behavior, and form serialization.
+- Dropdown option lists are not clipped by cards, panels, or page scrolling and remain within the visible viewport.
+
+## Assessment Expiration
+
+- Administrators must set an assessment expiration date and time when creating or editing an assessment.
+- Expiration must be later than the effective start time.
+- New attempt expiry is capped at the earlier of the configured attempt duration and assessment expiration.
+- After assessment expiration, students can review submitted results but cannot start, continue, run, save, use AI, or submit code.
+- Assessment duration must be a positive whole number and is validated by both administrator UI and backend API.
+- Administrator duration is selected with a 1–240 minute range slider and accessible five-minute adjustment buttons.
+
+## Reporting Aggregation
+
+- Dashboard Average is calculated from one Final Score per submitted attempt with completed AI grading.
+- Registered users, active attempts, failed/pending AI grades, and raw per-question rows do not affect Dashboard Average.
 
 ## Real Deployment Readiness
 

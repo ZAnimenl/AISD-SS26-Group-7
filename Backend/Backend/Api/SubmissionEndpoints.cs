@@ -140,12 +140,8 @@ public static class SubmissionEndpoints
             dbContext.Submissions.Add(submission);
         }
 
-        session.Status = SessionStatuses.Submitted;
-        session.CompletedAt = now;
-        session.ReflectionDeadline = session.Assessment.AiEnabled ? now.AddMinutes(10) : null;
-        session.AiGradingStatus = session.Assessment.AiEnabled
-            ? AiGradingStatuses.ReflectionPending
-            : AiGradingStatuses.NotRequired;
+        var completedAt = DateTimeOffset.UtcNow;
+        CompleteSession(session, allSubmissions, completedAt);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var totalScore = allSubmissions.Sum(submission => submission.Score);
@@ -195,6 +191,24 @@ public static class SubmissionEndpoints
         }
 
         return addedStates;
+    }
+
+    internal static void CompleteSession(
+        AssessmentSession session,
+        IEnumerable<Submission> submissions,
+        DateTimeOffset completedAt)
+    {
+        foreach (var submission in submissions)
+        {
+            submission.SubmittedAt = completedAt;
+        }
+
+        session.Status = SessionStatuses.Submitted;
+        session.CompletedAt = completedAt;
+        session.ReflectionDeadline = session.Assessment!.AiEnabled ? completedAt.AddMinutes(10) : null;
+        session.AiGradingStatus = session.Assessment.AiEnabled
+            ? AiGradingStatuses.ReflectionPending
+            : AiGradingStatuses.NotRequired;
     }
 
     private static string BuildFinalStatus(IReadOnlyCollection<Submission> submissions, int totalScore, int maxScore)
