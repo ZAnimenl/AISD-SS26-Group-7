@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List App</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Todo List App</h1>
+        <p>Keep things moving</p>
+      </div>
+      <div class="counts" aria-live="polite">
+        <span id="pending-count">0 pending</span>
+        <span id="completed-count">0 done</span>
+      </div>
+    </header>
+    <main>
+      <form id="todo-form">
+        <label>
+          <span>Task</span>
+          <input id="todo-title" required placeholder="What needs to be done?">
+        </label>
+        <label>
+          <span>Note</span>
+          <textarea id="todo-description" rows="2" placeholder="Add a note (optional)"></textarea>
+        </label>
+        <button type="submit">Add task</button>
+      </form>
+      <section aria-labelledby="tasks-heading">
+        <h2 id="tasks-heading">Tasks</h2>
+        <p id="empty-state">No todos yet. Add your first task above.</p>
+        <ul id="todo-list"></ul>
+      </section>
+      <canvas id="completion-chart" width="640" height="120" aria-label="Todo completion chart"></canvas>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
+

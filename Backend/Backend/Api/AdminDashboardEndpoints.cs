@@ -25,7 +25,17 @@ public static class AdminDashboardEndpoints
             return error;
         }
 
-        var submissions = await dbContext.Submissions.ToListAsync(cancellationToken);
+        var submissions = await dbContext.Submissions
+            .Include(submission => submission.Session)
+            .ToListAsync(cancellationToken);
+        var averageFinalScore = FinalScoreAggregation.AverageCompletedAiGradedFinalScore(
+            submissions.Select(submission => new AttemptScoreRow(
+                submission.SessionId,
+                submission.Session!.Status,
+                submission.Session.AiGradingStatus,
+                submission.Session.AiUsageScore,
+                submission.Score,
+                submission.MaxScore)));
         var usesSqlite = DatabaseProviders.IsSqliteProviderName(dbContext.Database.ProviderName);
         var recentAssessments = usesSqlite
             ? (await dbContext.Assessments
@@ -88,7 +98,7 @@ public static class AdminDashboardEndpoints
                 active_assessments = await dbContext.Assessments.CountAsync(assessment => assessment.Status == AssessmentStatuses.Active, cancellationToken),
                 total_students = await dbContext.Users.CountAsync(user => user.Role == UserRoles.Student, cancellationToken),
                 total_submissions = submissions.Count,
-                average_score = submissions.Count == 0 ? 0 : submissions.Average(submission => submission.Score),
+                average_score = averageFinalScore,
                 ai_interactions = await dbContext.AiInteractions.CountAsync(cancellationToken)
             },
             recent_assessments = recentAssessments,

@@ -40,6 +40,27 @@ public sealed class SessionStartConcurrencyTests
     }
 
     [Fact]
+    public void Attempt_expiry_is_capped_by_assessment_deadline()
+    {
+        var startedAt = new DateTimeOffset(2026, 6, 20, 10, 0, 0, TimeSpan.Zero);
+        var assessmentDeadline = startedAt.AddMinutes(20);
+
+        var expiry = SessionEndpoints.ResolveAttemptExpiry(startedAt, 50, assessmentDeadline);
+
+        Assert.Equal(assessmentDeadline, expiry);
+    }
+
+    [Fact]
+    public void Attempt_uses_full_duration_when_assessment_deadline_is_later()
+    {
+        var startedAt = new DateTimeOffset(2026, 6, 20, 10, 0, 0, TimeSpan.Zero);
+
+        var expiry = SessionEndpoints.ResolveAttemptExpiry(startedAt, 50, startedAt.AddHours(3));
+
+        Assert.Equal(startedAt.AddMinutes(50), expiry);
+    }
+
+    [Fact]
     public void Missing_workspace_states_are_created_in_deterministic_question_order()
     {
         var sessionId = Guid.Parse("33333333-3333-3333-3333-333333333333");

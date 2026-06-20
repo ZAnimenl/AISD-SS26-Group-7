@@ -63,7 +63,17 @@ public static class AssessmentEndpoints
         }
 
         await schemaCompatibilityService.EnsureAsync(cancellationToken);
+        var durationError = ValidateDuration(request.DurationMinutes);
+        if (durationError is not null)
+        {
+            return durationError;
+        }
         var startsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
+        var scheduleError = ValidateSchedule(startsAt, request.ExpiresAt);
+        if (scheduleError is not null)
+        {
+            return scheduleError;
+        }
 
         var assessment = new Assessment
         {
@@ -74,6 +84,7 @@ public static class AssessmentEndpoints
             Status = NormalizeAssessmentStatus(request.Status),
             AiEnabled = request.AiEnabled,
             StartsAt = startsAt,
+            ExpiresAt = request.ExpiresAt,
             SharedPrototypeReference = PrototypeDefaults.TodoListReference,
             SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
             SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
@@ -196,6 +207,7 @@ public static class AssessmentEndpoints
             assessment.Status,
             assessment.AiEnabled,
             assessment.StartsAt,
+            assessment.ExpiresAt,
             assessment.SharedPrototypeReference,
             assessment.SharedPrototypeVersion,
             JsonDocumentSerializer.Deserialize(assessment.SharedPrototypeMetadataJson, new Dictionary<string, string>()),
@@ -239,7 +251,17 @@ public static class AssessmentEndpoints
         }
 
         await schemaCompatibilityService.EnsureAsync(cancellationToken);
+        var durationError = ValidateDuration(request.DurationMinutes);
+        if (durationError is not null)
+        {
+            return durationError;
+        }
         var startsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
+        var scheduleError = ValidateSchedule(startsAt, request.ExpiresAt);
+        if (scheduleError is not null)
+        {
+            return scheduleError;
+        }
 
         var assessmentId = Guid.NewGuid();
         try
@@ -257,6 +279,7 @@ public static class AssessmentEndpoints
                 Status = AssessmentStatuses.Draft,
                 AiEnabled = request.AiEnabled,
                 StartsAt = startsAt,
+                ExpiresAt = request.ExpiresAt,
                 SharedPrototypeReference = PrototypeDefaults.TodoListReference,
                 SharedPrototypeVersion = PrototypeDefaults.TodoListVersion,
                 SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>()),
@@ -331,12 +354,25 @@ public static class AssessmentEndpoints
             return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
         }
 
+        var durationError = ValidateDuration(request.DurationMinutes);
+        if (durationError is not null)
+        {
+            return durationError;
+        }
+
         assessment.Title = request.Title;
         assessment.Description = request.Description;
         assessment.DurationMinutes = request.DurationMinutes;
         assessment.Status = NormalizeAssessmentStatus(request.Status);
         assessment.AiEnabled = request.AiEnabled;
-        assessment.StartsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
+        var startsAt = request.StartsAt ?? DateTimeOffset.UtcNow;
+        var scheduleError = ValidateSchedule(startsAt, request.ExpiresAt);
+        if (scheduleError is not null)
+        {
+            return scheduleError;
+        }
+        assessment.StartsAt = startsAt;
+        assessment.ExpiresAt = request.ExpiresAt;
         assessment.SharedPrototypeReference = PrototypeDefaults.TodoListReference;
         assessment.SharedPrototypeVersion = PrototypeDefaults.TodoListVersion;
         assessment.SharedPrototypeMetadataJson = JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>());
@@ -442,6 +478,11 @@ public static class AssessmentEndpoints
             return ApiResults.Error("ASSESSMENT_NOT_FOUND", "Assessment was not found.", StatusCodes.Status404NotFound);
         }
 
+        if (AssessmentPolicy.HasAssessmentExpired(assessment))
+        {
+            return ApiResults.Error("ASSESSMENT_EXPIRED", "This assessment has expired and is available for review only.", StatusCodes.Status409Conflict);
+        }
+
         var session = await SessionQueries.FirstUnexpiredAsync(
             dbContext.AssessmentSessions.Where(
                 item => item.AssessmentId == assessmentId
@@ -471,6 +512,39 @@ public static class AssessmentEndpoints
             TaskTypes.LegacyDatabaseTask => TaskTypes.DatabaseQuerySchema,
             _ => TaskTypes.RestApiDevelopment
         };
+    }
+
+    private static IResult? ValidateSchedule(DateTimeOffset startsAt, DateTimeOffset? expiresAt)
+    {
+        if (expiresAt is null)
+        {
+            return ApiResults.Error(
+                "ASSESSMENT_EXPIRY_REQUIRED",
+                "An assessment expiration date and time is required.",
+                StatusCodes.Status400BadRequest);
+        }
+
+        return expiresAt <= startsAt
+            ? ApiResults.Error(
+                "INVALID_ASSESSMENT_SCHEDULE",
+                "Assessment expiration must be later than its start time.",
+                StatusCodes.Status400BadRequest)
+            : null;
+    }
+
+    private static IResult? ValidateDuration(int durationMinutes)
+    {
+        return !IsValidDuration(durationMinutes)
+            ? ApiResults.Error(
+                "INVALID_ASSESSMENT_DURATION",
+                "Assessment duration must be greater than zero minutes.",
+                StatusCodes.Status400BadRequest)
+            : null;
+    }
+
+    internal static bool IsValidDuration(int durationMinutes)
+    {
+        return durationMinutes > 0;
     }
 
     private static string NormalizeAssessmentStatus(string status)

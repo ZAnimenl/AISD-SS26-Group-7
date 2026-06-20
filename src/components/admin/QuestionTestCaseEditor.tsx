@@ -22,6 +22,7 @@ import {
   STUDENT_LANGUAGE_OPTIONS
 } from "@/lib/languages";
 import type { AdminTestCase, Assessment, AuthoringSource, Difficulty, Language, Question, TaskType, VerificationMode } from "@/lib/types";
+import { CustomDropdown } from "@/components/ui/CustomDropdown";
 
 interface QuestionTestCaseEditorProps {
   assessment: Assessment;
@@ -481,19 +482,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/60">
                     Task type
-                    <select className="field w-full" value={question.task_type ?? "rest_api_development"} onChange={(event) => updateQuestionTaskType(question.question_id, event.target.value as TaskType)}>
-                      {taskTypes.map((taskType) => (
-                        <option key={taskType.value} value={taskType.value}>{taskType.label}</option>
-                      ))}
-                    </select>
+                    <CustomDropdown ariaLabel="Task type" value={question.task_type ?? "rest_api_development"} options={taskTypes} onChange={(value) => updateQuestionTaskType(question.question_id, value)} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Difficulty
-                    <select className="field w-full" value={question.difficulty ?? "medium"} onChange={(event) => updateQuestionState(question.question_id, { difficulty: event.target.value as Difficulty })}>
-                      {difficulties.map((difficulty) => (
-                        <option key={difficulty} value={difficulty}>{difficulty}</option>
-                      ))}
-                    </select>
+                    <CustomDropdown ariaLabel="Difficulty" value={question.difficulty ?? "medium"} options={difficulties.map((value) => ({ value, label: value }))} onChange={(value) => updateQuestionState(question.question_id, { difficulty: value })} />
                   </label>
                 </div>
                 <label className="grid gap-2 text-sm text-white/60">
@@ -503,19 +496,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/60">
                     Verification mode
-                    <select className="field w-full" value={question.verification_mode ?? "automated_test"} onChange={(event) => updateQuestionState(question.question_id, { verification_mode: event.target.value as VerificationMode })}>
-                      {verificationModes.map((mode) => (
-                        <option key={mode.value} value={mode.value}>{mode.label}</option>
-                      ))}
-                    </select>
+                    <CustomDropdown ariaLabel="Verification mode" value={question.verification_mode ?? "automated_test"} options={verificationModes} onChange={(value) => updateQuestionState(question.question_id, { verification_mode: value })} />
                   </label>
                   <label className="grid gap-2 text-sm text-white/60">
                     Authoring source
-                    <select className="field w-full" value={question.authoring_source ?? "manual"} onChange={(event) => updateQuestionState(question.question_id, { authoring_source: event.target.value as AuthoringSource })}>
-                      {authoringSources.map((source) => (
-                        <option key={source} value={source}>{source}</option>
-                      ))}
-                    </select>
+                    <CustomDropdown ariaLabel="Authoring source" value={question.authoring_source ?? "manual"} options={authoringSources.map((value) => ({ value, label: value }))} onChange={(value) => updateQuestionState(question.question_id, { authoring_source: value })} />
                   </label>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-1">
@@ -573,18 +558,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                               </label>
                               <label className="grid gap-2 text-sm text-white/60">
                                 Visibility
-                                <select className="field w-full" value={testCase.visibility} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { visibility: event.target.value as AdminTestCase["visibility"] })}>
-                                  <option value="public">public</option>
-                                  <option value="hidden">hidden</option>
-                                </select>
+                                <CustomDropdown ariaLabel="Visibility" value={testCase.visibility} options={[{ value: "public", label: "public" }, { value: "hidden", label: "hidden" }]} onChange={(value) => updateTestCaseState(question.question_id, testCase.test_case_id, { visibility: value })} />
                               </label>
                               <label className="grid gap-2 text-sm text-white/60">
                                 Source
-                                <select className="field w-full" value={testCase.authoring_source ?? "manual"} onChange={(event) => updateTestCaseState(question.question_id, testCase.test_case_id, { authoring_source: event.target.value as AuthoringSource })}>
-                                  {authoringSources.map((source) => (
-                                    <option key={source} value={source}>{source}</option>
-                                  ))}
-                                </select>
+                                <CustomDropdown ariaLabel="Test source" value={testCase.authoring_source ?? "manual"} options={authoringSources.map((value) => ({ value, label: value }))} onChange={(value) => updateTestCaseState(question.question_id, testCase.test_case_id, { authoring_source: value })} />
                               </label>
                               <div className="flex items-end gap-2">
                                 <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => saveTestCase(testCase), "Test case saved.", { key: `save-test-${testCase.test_case_id}`, label: "Saving test case in backend..." })}>
@@ -682,16 +660,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
               <div className="mt-4 flex flex-wrap items-end justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
                 <label className="grid min-w-44 gap-2 text-sm text-white/60">
                   Shared difficulty
-                  <select
-                    className="field capitalize"
-                    value={blueprintDifficulty}
-                    disabled={pendingAction !== null}
-                    onChange={(event) => setBlueprintDifficulty(event.target.value as Difficulty)}
-                  >
-                    {difficulties.map((difficulty) => (
-                      <option key={difficulty} value={difficulty}>{difficulty}</option>
-                    ))}
-                  </select>
+                  <CustomDropdown ariaLabel="Shared difficulty" value={blueprintDifficulty} disabled={pendingAction !== null} options={difficulties.map((value) => ({ value, label: value }))} onChange={setBlueprintDifficulty} />
                 </label>
                 <button
                   className="btn-primary"

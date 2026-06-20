@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { CalendarClock, Clock, Eye, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatAssessmentStart, hasAssessmentStarted } from "@/lib/assessmentSchedule";
+import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
   const attemptExpired = assessment.attempt_status === "expired";
   const hasStarted = hasAssessmentStarted(assessment.starts_at);
-  const canStartAttempt = assessment.status === "active" && hasStarted && assessment.attempt_status !== "active" && !attemptExpired;
+  const assessmentExpired = hasAssessmentExpired(assessment.expires_at);
+  const canStartAttempt = assessment.status === "active" && hasStarted && !assessmentExpired && assessment.attempt_status !== "active" && !attemptExpired;
   const hasSubmittedResult = assessment.attempt_status === "submitted";
   const actionHref =
-    assessment.attempt_status === "active"
+    assessment.attempt_status === "active" && !assessmentExpired
       ? `/student/assessments/${assessment.assessment_id}/workspace`
       : canStartAttempt
       ? `/student/assessments/${assessment.assessment_id}/start`
@@ -18,7 +19,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
       ? `/student/assessments/${assessment.assessment_id}/review`
       : null;
   const actionLabel =
-    assessment.attempt_status === "active"
+    assessment.attempt_status === "active" && !assessmentExpired
       ? "Continue"
       : hasSubmittedResult && canStartAttempt
       ? "Start again"
@@ -49,7 +50,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
           />
         </div>
         <div className="mt-5 flex items-center justify-between">
-          <p className="text-xs text-white/40">{hasStarted ? `Closes ${new Date(assessment.closes_at).toLocaleDateString()}` : `Opens ${formatAssessmentStart(assessment.starts_at)}`}</p>
+          <p className="text-xs text-white/40">{hasStarted ? `${assessmentExpired ? "Expired" : "Expires"} ${formatAssessmentExpiry(assessment.expires_at)}` : `Opens ${formatAssessmentStart(assessment.starts_at)}`}</p>
           <div className="flex flex-wrap justify-end gap-2">
             {hasSubmittedResult && canStartAttempt ? (
               <Link className="btn-secondary" href={`/student/assessments/${assessment.assessment_id}/review`}>

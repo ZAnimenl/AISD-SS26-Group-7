@@ -1,5 +1,6 @@
 using Backend.Domain;
 using Backend.Services;
+using System.Text.Json;
 
 namespace OjSharp.Tests.ApiContractTests;
 
@@ -74,6 +75,43 @@ public sealed class AiUsageGradingServiceTests
         };
 
         Assert.True(AiUsageGradingService.CalculateObjectiveRepetition(interactions, []) < 10);
+    }
+
+    [Theory]
+    [InlineData("""{"evidence":[{"criterion":"prompt"}]}""", 1)]
+    [InlineData("""{"evidence":{"criterion":"prompt"}}""", 1)]
+    [InlineData("""{"evidence":"interaction 1"}""", 1)]
+    [InlineData("""{}""", 0)]
+    [InlineData("""{"evidence":42}""", 0)]
+    [InlineData("""{"evidence":null}""", 0)]
+    public void Evidence_shapes_are_normalized_without_object_array_failures(string fragment, int expectedCount)
+    {
+        using var source = JsonDocument.Parse(fragment);
+        var evidence = source.RootElement.TryGetProperty("evidence", out var element)
+            ? AiUsageGradingService.NormalizeEvidence(element)
+            : [];
+
+        Assert.Equal(expectedCount, evidence.Count);
+    }
+
+    [Fact]
+    public void Problem_statement_copy_detection_ignores_formatting_differences()
+    {
+        var questionId = Guid.NewGuid();
+        var interaction = Interaction(
+            "Build an accessible Todo summary panel.\n\nInclude pending and completed counts, preserve the existing API contract, and verify empty-state behavior.",
+            DateTimeOffset.UtcNow);
+        interaction.QuestionId = questionId;
+
+        var evidence = AiUsageGradingService.DetectProblemStatementCopy(
+            [interaction],
+            new Dictionary<Guid, string>
+            {
+                [questionId] = "Build an accessible Todo summary panel. Include pending and completed counts, preserve the existing API contract, and verify empty-state behavior."
+            });
+
+        Assert.NotNull(evidence);
+        Assert.Equal(interaction.Id, evidence!.InteractionId);
     }
 
     private static AiInteraction Interaction(string message, DateTimeOffset createdAt)

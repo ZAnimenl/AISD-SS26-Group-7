@@ -16,6 +16,8 @@ public sealed class Assessment
 
     public DateTimeOffset? StartsAt { get; set; }
 
+    public DateTimeOffset? ExpiresAt { get; set; }
+
     public string? SharedPrototypeReference { get; set; }
 
     public string? SharedPrototypeVersion { get; set; }

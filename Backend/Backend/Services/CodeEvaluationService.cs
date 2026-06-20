@@ -80,6 +80,7 @@ public sealed class CodeEvaluationService
             status = result.Status,
             stdout = result.Stdout,
             stderr = result.Stderr,
+            preview_document = result.PreviewDocument,
             test_results = result.TestResults.Select(testResult => new
             {
                 testResult.Name,

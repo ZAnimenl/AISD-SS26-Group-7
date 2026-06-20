@@ -21,6 +21,7 @@ interface MonacoCodeEditorProps {
   language: Language;
   value: string;
   onChange: (value: string, eventTimestamp: number) => void;
+  readOnly?: boolean;
 }
 
 const MONACO_LANGUAGE_BY_WORKSPACE_LANGUAGE: Record<Language, string> = {
@@ -68,7 +69,7 @@ function getModelPath(assessmentId: string, questionId: string, fileName: string
   ].join("/");
 }
 
-export function MonacoCodeEditor({ assessmentId, questionId, fileName, language, value, onChange }: MonacoCodeEditorProps) {
+export function MonacoCodeEditor({ assessmentId, questionId, fileName, language, value, onChange, readOnly = false }: MonacoCodeEditorProps) {
   const modelPath = getModelPath(assessmentId, questionId, fileName);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -115,7 +116,8 @@ export function MonacoCodeEditor({ assessmentId, questionId, fileName, language,
           scrollBeyondLastLine: false,
           smoothScrolling: true,
           tabSize: 2,
-          wordWrap: "on"
+          wordWrap: "on",
+          readOnly
         }}
       />
     </div>

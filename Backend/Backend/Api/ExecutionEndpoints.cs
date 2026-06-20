@@ -108,6 +108,17 @@ public static class ExecutionEndpoints
             files,
             normalizedLanguage,
             cancellationToken);
+        if (question.VerificationMode == VerificationModes.BrowserUiPreview)
+        {
+            var previewResult = result.TestResults.FirstOrDefault(item =>
+                item.Name == "Browser preview render" && item.Passed);
+            result = result with
+            {
+                PreviewDocument = previewResult is null
+                    ? null
+                    : LimitPreviewDocument(previewResult.Output)
+            };
+        }
 
         dbContext.ExecutionRecords.Add(new ExecutionRecord
         {
@@ -296,22 +307,46 @@ public static class ExecutionEndpoints
           return fs.readFileSync(safeName, 'utf8');
         }
 
-        function inlineLocalScripts(html) {
-          return html.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (_match, src) => {
-            const scriptName = path.basename(src);
-            if (!scriptName.endsWith('.js') || !fs.existsSync(scriptName)) {
+        function isSafeLocalAsset(assetPath, extension) {
+          return !/^(?:https?:|data:|\/\/)/i.test(assetPath)
+            && path.basename(assetPath).toLowerCase().endsWith(extension);
+        }
+
+        function inlineLocalAssets(html) {
+          const withStyles = html.replace(/<link\s+[^>]*href=["']([^"']+)["'][^>]*>/gi, (match, href) => {
+            const styleName = path.basename(href);
+            if (!isSafeLocalAsset(href, '.css') || !fs.existsSync(styleName)) {
               return '';
             }
-            return '<script>' + fs.readFileSync(scriptName, 'utf8') + '</script>';
+            return '<style data-sandbox-inline="' + styleName + '">' + fs.readFileSync(styleName, 'utf8') + '</style>';
+          });
+          return withStyles.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (_match, src) => {
+            const scriptName = path.basename(src);
+            if (!isSafeLocalAsset(src, '.js') || !fs.existsSync(scriptName)) {
+              return '';
+            }
+            return '<script data-sandbox-inline="' + scriptName + '">' + fs.readFileSync(scriptName, 'utf8') + '<\/script>';
           });
         }
 
         test('browser preview render', () => {
-          const html = inlineLocalScripts(readLocalFile('{{htmlPreviewEntry}}'));
+          const html = inlineLocalAssets(readLocalFile('{{htmlPreviewEntry}}'));
           fs.writeFileSync('actual.txt', html, 'utf8');
           expect(html).toMatch(/<\/?[a-z][\s\S]*>/i);
+          expect(html).not.toMatch(/<(?:script|link)\s+[^>]*(?:src|href)=["']https?:/i);
         });
         """;
+    }
+
+    private static string? LimitPreviewDocument(string value)
+    {
+        const int maximumPreviewLength = 500_000;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Length <= maximumPreviewLength ? value : value[..maximumPreviewLength];
     }
 
     private static bool IsPreviewEntryForLanguage(string? previewEntry, string selectedLanguage)

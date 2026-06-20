@@ -7,7 +7,10 @@ import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "
 import { getStudentAssessments, getStudentResults, isAuthenticationError } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
+import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import type { Assessment } from "@/lib/types";
+import { hasAssessmentExpired } from "@/lib/assessmentSchedule";
 
 export default function StudentAssessmentReviewPage() {
   const router = useRouter();
@@ -62,6 +65,7 @@ export default function StudentAssessmentReviewPage() {
   const canStartAnotherAttempt = assessments.some((assessment) =>
     assessment.assessment_id === assessmentId
     && assessment.status === "active"
+    && !hasAssessmentExpired(assessment.expires_at)
     && assessment.attempt_status !== "expired"
   );
 
@@ -119,23 +123,21 @@ export default function StudentAssessmentReviewPage() {
         </section>
         <section className="metric-card">
           <div className="relative flex flex-col items-center gap-3 text-center">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow"><BarChart3 size={20} /></span>
             <div>
+              <ScoreDonut value={result.functional_score ?? result.score ?? 0} size={58} label="Functional score" />
               <p className="text-sm text-white/45">Functional score</p>
-              <p className="text-2xl font-semibold text-cyanGlow">{result.functional_score ?? result.score ?? 0}%</p>
             </div>
           </div>
         </section>
         {result.ai_enabled ? (
           <section className="metric-card">
             <div className="relative flex flex-col items-center gap-3 text-center">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-purpleGlow/10 text-purpleGlow"><BarChart3 size={20} /></span>
               <div>
+                {result.ai_usage_score != null ? <ScoreDonut value={result.ai_usage_score} tone="purple" size={58} label="AI usage score" /> : null}
                 <p className="text-sm text-white/45">AI usage score</p>
-                <p className="text-2xl font-semibold text-purpleGlow">
+                {result.ai_usage_score == null ? <p className="text-sm font-semibold text-purpleGlow">
                   {result.ai_usage_score ?? (result.ai_grading_status === "failed" ? "Failed" : "Pending")}
-                  {result.ai_usage_score != null ? "%" : ""}
-                </p>
+                </p> : null}
               </div>
             </div>
           </section>
@@ -152,11 +154,11 @@ export default function StudentAssessmentReviewPage() {
       </div>
       {result.ai_enabled ? (
         <section className="panel mt-6 text-center">
-          <p className="text-sm uppercase tracking-[0.14em] text-white/35">Final score</p>
-          <p className="mt-2 text-4xl font-semibold text-cyanGlow">
-            {result.final_score ?? "Pending"}{result.final_score != null ? "%" : ""}
-          </p>
-          <p className="mt-2 text-sm text-white/45">Arithmetic mean of Functional Score and AI Usage Score.</p>
+          <div className="flex items-center justify-center">
+            {result.final_score != null ? <ScoreDonut value={result.final_score} size={96} label="Final score" /> : null}
+            {result.final_score == null ? <p className="text-xl font-semibold text-cyanGlow">Pending</p> : null}
+          </div>
+          <p className="mt-3 text-sm uppercase tracking-[0.14em] text-white/45">Final score</p>
         </section>
       ) : null}
       <section className="panel mt-6">
@@ -165,6 +167,15 @@ export default function StudentAssessmentReviewPage() {
           <p className="mt-3 max-w-3xl leading-7 text-white/60">
             Your final submission for this assessment has been recorded. Hidden test inputs and expected outputs remain private; only the published score and status are shown here.
           </p>
+          {result.ai_enabled ? (
+            <AiAssessmentSummary
+              status={result.ai_grading_status ?? "pending"}
+              summary={result.ai_grading_summary}
+              reflectionText={result.reflection_text}
+              details={result.ai_grading_details}
+              confidence={result.ai_grading_confidence}
+            />
+          ) : null}
           {result.ai_enabled && result.reflection_text ? (
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-white/35">Your reflection</p>

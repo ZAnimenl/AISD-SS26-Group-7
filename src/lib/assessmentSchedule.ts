@@ -16,6 +16,25 @@ export function hasAssessmentStarted(startsAt?: string | null) {
   return !startsAt || new Date(startsAt).getTime() <= Date.now();
 }
 
+export function hasAssessmentExpired(expiresAt?: string | null) {
+  return Boolean(expiresAt) && new Date(expiresAt!).getTime() <= Date.now();
+}
+
+export function formatAssessmentExpiry(expiresAt?: string | null) {
+  if (!expiresAt) {
+    return "No deadline";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(expiresAt));
+}
+
+export function defaultAssessmentExpiry() {
+  return toLocalDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+}
+
 export function formatAssessmentStart(startsAt?: string | null) {
   if (!startsAt) {
     return "Available now";

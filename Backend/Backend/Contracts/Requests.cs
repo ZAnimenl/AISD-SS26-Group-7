@@ -35,6 +35,7 @@ public sealed record AssessmentRequest(
     string Status,
     bool AiEnabled,
     DateTimeOffset? StartsAt = null,
+    DateTimeOffset? ExpiresAt = null,
     string? SharedPrototypeReference = null,
     string? SharedPrototypeVersion = null,
     Dictionary<string, string>? SharedPrototypeMetadata = null,

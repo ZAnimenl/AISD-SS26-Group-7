@@ -126,4 +126,22 @@ public sealed class SubmissionFinalizeTests
         Assert.Equal("main.js", addedState.ActiveFile);
         Assert.DoesNotContain("main.py", addedState.FilesJson);
     }
+
+    [Fact]
+    public void Reflection_deadline_starts_when_backend_evaluation_completes()
+    {
+        var completedAt = DateTimeOffset.UtcNow;
+        var submission = new Submission { SubmittedAt = completedAt.AddMinutes(-4) };
+        var session = new AssessmentSession
+        {
+            Assessment = new Assessment { AiEnabled = true }
+        };
+
+        SubmissionEndpoints.CompleteSession(session, [submission], completedAt);
+
+        Assert.Equal(completedAt, session.CompletedAt);
+        Assert.Equal(completedAt.AddMinutes(10), session.ReflectionDeadline);
+        Assert.Equal(completedAt, submission.SubmittedAt);
+        Assert.Equal(AiGradingStatuses.ReflectionPending, session.AiGradingStatus);
+    }
 }

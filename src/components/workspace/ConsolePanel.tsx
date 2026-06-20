@@ -144,6 +144,14 @@ export function ConsolePanel({ isRunning, runResult, taskError }: {
               <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs text-rose-200/80">{runResult.stderr}</pre>
             </section>
           ) : null}
+
+          <section className="rounded-lg border border-white/10 bg-[#0e1726]">
+            <div className="border-b border-white/10 bg-[#101a2a] px-3 py-2 text-xs font-medium text-white/55">metrics</div>
+            <div className="grid grid-cols-2 gap-3 p-3 font-mono text-xs text-white/55">
+              <span>CPU {runResult.metrics.cpu_time_seconds}s</span>
+              <span>Peak memory {runResult.metrics.peak_memory_kb} KB</span>
+            </div>
+          </section>
         </div>
       </div>
     </div>

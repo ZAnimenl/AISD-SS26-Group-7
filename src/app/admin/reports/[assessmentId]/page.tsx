@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
+import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import { getAggregateReport, isAuthenticationError, retryAiUsageGrade } from "@/lib/api";
 import type { AggregateReport } from "@/lib/types";
 
@@ -13,7 +15,10 @@ function criterion(details: Record<string, unknown>, key: string) {
     return null;
   }
   const value = (criteria as Record<string, unknown>)[key];
-  return typeof value === "number" ? value : null;
+  if (typeof value === "number") return value;
+  const pascalKey = key.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("");
+  const legacyValue = (criteria as Record<string, unknown>)[pascalKey];
+  return typeof legacyValue === "number" ? legacyValue : null;
 }
 
 export default function ReportDetailPage() {
@@ -48,18 +53,18 @@ export default function ReportDetailPage() {
       <SectionHeader eyebrow="Report detail" title={report.assessment_title} />
       <section className="panel">
         <div className={`relative grid gap-3 ${report.ai_enabled ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-            <p className="text-3xl text-cyanGlow">{report.average_functional_score}%</p>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <ScoreDonut value={report.average_functional_score} label="Average functional" />
             <p className="text-sm text-white/45">Average functional</p>
           </div>
           {report.ai_enabled ? (
             <>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <p className="text-3xl text-purpleGlow">{report.average_ai_usage_score}%</p>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <ScoreDonut value={report.average_ai_usage_score} tone="purple" label="Average AI usage" />
                 <p className="text-sm text-white/45">Average AI usage</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <p className="text-3xl text-cyanGlow">{report.average_final_score}%</p>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <ScoreDonut value={report.average_final_score} label="Average final" />
                 <p className="text-sm text-white/45">Average final</p>
               </div>
             </>
@@ -103,19 +108,28 @@ export default function ReportDetailPage() {
               <div className="flex gap-2"><StatusBadge status={student.attempt_status} /><StatusBadge status={student.submission_status} /></div>
             </div>
             <div className={`relative mt-5 grid gap-3 ${report.ai_enabled ? "sm:grid-cols-3" : "sm:grid-cols-1"}`}>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center"><p className="text-2xl text-cyanGlow">{student.functional_score}%</p><p className="text-xs text-white/40">Functional</p></div>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3"><ScoreDonut value={student.functional_score} size={52} label="Functional score" /><p className="text-xs text-white/40">Functional</p></div>
               {report.ai_enabled ? (
                 <>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center"><p className="text-2xl text-purpleGlow">{student.ai_usage_score ?? student.ai_grading.status}</p><p className="text-xs text-white/40">AI usage</p></div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center"><p className="text-2xl text-cyanGlow">{student.final_score ?? "Pending"}</p><p className="text-xs text-white/40">Final average</p></div>
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">{student.ai_usage_score != null ? <ScoreDonut value={student.ai_usage_score} tone="purple" size={52} label="AI usage score" /> : <p className="text-sm text-purpleGlow">{student.ai_grading.status}</p>}<p className="text-xs text-white/40">AI usage</p></div>
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-cyanGlow/35 bg-cyanGlow/10 p-5 shadow-[0_0_28px_rgba(0,229,255,0.10)]">{student.final_score != null ? <ScoreDonut value={student.final_score} size={68} label="Final average score" /> : <p className="text-lg text-cyanGlow">Pending</p>}<p className="text-sm font-medium text-white/65">Final average score</p></div>
                 </>
               ) : null}
             </div>
             {report.ai_enabled ? (
-              <div className="relative mt-5 grid gap-4 lg:grid-cols-2">
+              <>
+                <AiAssessmentSummary
+                  status={student.ai_grading.status}
+                  summary={student.ai_grading.summary}
+                  reflectionText={student.reflection.text}
+                  details={student.ai_grading.details}
+                  interactionCount={student.ai_usage_summary.total_interactions}
+                  totalTokens={student.ai_usage_summary.total_tokens}
+                  confidence={student.ai_grading.confidence}
+                />
+                <div className="relative mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-white/35">AI grading evidence</p>
-                  <p className="mt-2 text-sm text-white/65">{student.ai_grading.summary ?? "Automatic grading has not completed."}</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-white/35">Rubric breakdown</p>
                   {student.ai_grading.status === "failed" ? (
                     <button
                       className="btn-secondary mt-3 px-3 py-2 text-xs"
@@ -135,12 +149,15 @@ export default function ReportDetailPage() {
                       {retryingStudentId === student.user_id ? "Retrying..." : "Retry AI grading"}
                     </button>
                   ) : null}
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <p>Prompt quality <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "prompt_quality_and_context") ?? "—"}/30</span></p>
-                    <p>Behavioral efficiency <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "behavioral_efficiency") ?? "—"}/30</span></p>
-                    <p>Objective repetition <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "objective_repetition") ?? "—"}/10</span></p>
-                    <p>Critical evaluation <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "critical_evaluation_and_adaptation") ?? "—"}/20</span></p>
-                    <p>Reflection <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "reflection_quality_and_consistency") ?? "—"}/10</span></p>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p>Prompt quality and context <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "prompt_quality_and_context") ?? "—"}/30</span></p>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                      <p className="font-medium text-white/75">Token and interaction efficiency <span className="float-right text-cyanGlow">{(criterion(student.ai_grading.details, "behavioral_efficiency") ?? 0) + (criterion(student.ai_grading.details, "objective_repetition") ?? 0)}/40</span></p>
+                      <p className="mt-1 pl-3 text-xs text-white/50">Behavioral efficiency <span className="float-right">{criterion(student.ai_grading.details, "behavioral_efficiency") ?? "—"}/30</span></p>
+                      <p className="mt-1 pl-3 text-xs text-white/50">Objective repetition <span className="float-right">{criterion(student.ai_grading.details, "objective_repetition") ?? "—"}/10</span></p>
+                    </div>
+                    <p>Critical evaluation and adaptation <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "critical_evaluation_and_adaptation") ?? "—"}/20</span></p>
+                    <p>Reflection quality and consistency <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "reflection_quality_and_consistency") ?? "—"}/10</span></p>
                   </div>
                   <p className="mt-4 text-xs text-white/35">{student.ai_usage_summary.total_interactions} interactions · {student.ai_usage_summary.total_tokens.toLocaleString()} tokens · confidence {student.ai_grading.confidence ?? "—"}</p>
                 </div>
@@ -155,6 +172,7 @@ export default function ReportDetailPage() {
                   </div>
                 </div>
               </div>
+              </>
             ) : null}
           </section>
         ))}

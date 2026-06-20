@@ -54,7 +54,7 @@ export default function AdminDashboardPage() {
         <MetricCard icon={FileText} label="Assessments" value={dashboard.summary.total_assessments} />
         <MetricCard icon={Users} label="Students" value={dashboard.summary.total_students} />
         <MetricCard icon={Send} label="Submissions" value={dashboard.summary.total_submissions} />
-        <MetricCard icon={BarChart3} label="Average" value={`${dashboard.summary.average_score}%`} />
+        <MetricCard icon={BarChart3} label="Average final" value={`${Math.round(dashboard.summary.average_score)}%`} score={dashboard.summary.average_score} />
         <MetricCard icon={Brain} label="AI events" value={dashboard.summary.ai_interactions} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">

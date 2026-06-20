@@ -61,7 +61,8 @@ public static class ReportEndpoints
                 submission.Score,
                 submission.MaxScore,
                 submission.Session!.AiUsageScore,
-                submission.Session.AiGradingStatus
+                submission.Session.AiGradingStatus,
+                SessionStatus = submission.Session.Status
             })
             .ToListAsync(cancellationToken);
         var aiSummaries = await dbContext.AiInteractions
@@ -106,18 +107,14 @@ public static class ReportEndpoints
                     .Select(group => group.First().AiUsageScore!.Value)
                     .DefaultIfEmpty()
                     .Average(),
-                average_final_score = assessmentSubmissions
-                    .Where(item => item.AiUsageScore.HasValue)
-                    .GroupBy(item => item.SessionId)
-                    .Select(group =>
-                    {
-                        var functional = group.Sum(item => item.MaxScore) == 0
-                            ? 0
-                            : group.Sum(item => item.Score) * 100.0 / group.Sum(item => item.MaxScore);
-                        return (functional + group.First().AiUsageScore!.Value) / 2;
-                    })
-                    .DefaultIfEmpty()
-                    .Average(),
+                average_final_score = FinalScoreAggregation.AverageCompletedAiGradedFinalScore(
+                    assessmentSubmissions.Select(item => new AttemptScoreRow(
+                        item.SessionId,
+                        item.SessionStatus,
+                        item.AiGradingStatus,
+                        item.AiUsageScore,
+                        item.Score,
+                        item.MaxScore))),
                 participant_count = assessment.Sessions.Count,
                 completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
                 ai_interactions = assessmentAi.Count,
@@ -231,15 +228,11 @@ public static class ReportEndpoints
                 .Select(session => session.AiUsageScore!.Value)
                 .DefaultIfEmpty()
                 .Average(),
-            average_final_score = assessment.Sessions
-                .Where(session => session.AiUsageScore.HasValue && bySession.ContainsKey(session.Id) && bySession[session.Id].MaxScore > 0)
-                .Select(session =>
-                {
-                    var summary = bySession[session.Id];
-                    return ((summary.Score * 100.0 / summary.MaxScore) + session.AiUsageScore!.Value) / 2;
-                })
-                .DefaultIfEmpty()
-                .Average(),
+            average_final_score = FinalScoreAggregation.AverageCompletedAiGradedFinalScore(
+                assessment.Sessions.SelectMany(session =>
+                    bySession.TryGetValue(session.Id, out var summary)
+                        ? [new AttemptScoreRow(session.Id, session.Status, session.AiGradingStatus, session.AiUsageScore, summary.Score, summary.MaxScore)]
+                        : Array.Empty<AttemptScoreRow>())),
             completion_count = assessment.Sessions.Count(session => session.Status == SessionStatuses.Submitted),
             participant_count = assessment.Sessions.Count,
             ai_interactions = interactions.Count,

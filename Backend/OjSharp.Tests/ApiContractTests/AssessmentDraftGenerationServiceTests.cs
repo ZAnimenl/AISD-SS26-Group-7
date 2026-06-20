@@ -13,6 +13,19 @@ namespace OjSharp.Tests.ApiContractTests;
 public sealed class AssessmentDraftGenerationServiceTests
 {
     [Fact]
+    public void Optimistic_ui_with_conflict_resolution_is_advanced_frontend_work()
+    {
+        const string taskText = "Implement Optimistic UI with Conflict Resolution for Todo Toggle";
+
+        var concernCount = AssessmentDraftGenerationService.CountAdvancedConcerns(
+            taskText,
+            TaskTypes.FrontendUiExtension);
+
+        Assert.Equal(2, concernCount);
+        Assert.Equal(2, AssessmentDraftGenerationService.GetMinimumAdvancedConcerns(TaskTypes.FrontendUiExtension));
+    }
+
+    [Fact]
     public void Assessment_task_counts_expand_to_the_requested_mix()
     {
         var counts = AssessmentDraftGenerationService.NormalizeTaskTypeCounts(new Dictionary<string, int>
@@ -166,6 +179,78 @@ public sealed class AssessmentDraftGenerationServiceTests
                 CancellationToken.None));
 
         Assert.Contains("missing test code for language 'sql'", exception.Message);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_repairs_missing_language_test_code()
+    {
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+            ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+            ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+        };
+        var missingTestCode = AdvancedSqlTaskContent(starterFiles)
+            .Replace("\"sql\":\"const fs", "\"javascript\":\"const fs", StringComparison.Ordinal);
+        var handler = new SequencedHandler(
+            OpenAiResponse(missingTestCode),
+            OpenAiResponse(AdvancedSqlTaskContent(starterFiles)));
+        var service = CreateDraftService(handler);
+
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.DatabaseQuerySchema,
+                "hard",
+                ["sql"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
+
+        Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Contains("Every public and hidden test_cases item", handler.CapturedBodies[1]);
+        Assert.Contains("required language", handler.CapturedBodies[1]);
+    }
+
+    [Fact]
+    public void Test_code_coverage_accepts_html_key_for_javascript_dom_tests()
+    {
+        var testCode = new Dictionary<string, string>
+        {
+            ["html"] = "test('optimistic toggle updates immediately', () => expect(true).toBe(true));"
+        };
+
+        Assert.True(AssessmentDraftGenerationService.HasNonEmptyTestCode(testCode, "javascript"));
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_rejects_wrong_task_type_before_language_coverage()
+    {
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+            ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+            ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+        };
+        var wrongTaskType = AdvancedSqlTaskContent(starterFiles)
+            .Replace("\"task_type\":\"database_query_schema\"", "\"task_type\":\"bug_fix\"", StringComparison.Ordinal);
+        var handler = new CapturingHandler(OpenAiResponse(wrongTaskType));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "hard",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("required task type is 'database_query_schema'", exception.Message);
+        Assert.DoesNotContain("missing test code", exception.Message);
     }
 
     [Fact]
@@ -354,6 +439,41 @@ public sealed class AssessmentDraftGenerationServiceTests
         Assert.Equal(2, handler.CallCount);
         Assert.Contains("previous draft was rejected", handler.CapturedBodies[1]);
         Assert.Contains("still tutorial-level", handler.CapturedBodies[1]);
+        Assert.Contains("exact vocabulary", handler.CapturedBodies[1]);
+    }
+
+    [Fact]
+    public async Task Generate_question_draft_allows_more_than_three_correction_attempts()
+    {
+        var shallowDescription = string.Join(" ", Enumerable.Repeat(
+            "Build a polished Todo task progress bar that updates when a checkbox changes and make the layout responsive with clear colors and helpful labels.",
+            8));
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["schema.sql"] = "CREATE TABLE todo_tasks (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL);",
+            ["seed.sql"] = "INSERT INTO todo_tasks (id, completed) VALUES (1, 0), (2, 1);",
+            ["solution.sql"] = "-- Implement the transaction-safe Todo task reporting queries."
+        };
+        var shallowResponse = OpenAiResponse(AdvancedSqlTaskContent(starterFiles, shallowDescription));
+        var handler = new SequencedHandler(
+            shallowResponse,
+            shallowResponse,
+            shallowResponse,
+            OpenAiResponse(AdvancedSqlTaskContent(starterFiles)));
+        var service = CreateDraftService(handler);
+
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.DatabaseQuerySchema,
+                "hard",
+                ["sql"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
+
+        Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
+        Assert.Equal(4, handler.CallCount);
     }
 
     [Fact]
