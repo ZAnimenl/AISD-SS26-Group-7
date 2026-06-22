@@ -9,6 +9,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
 import { AiRubricBreakdown } from "@/components/reports/AiRubricBreakdown";
+import { ScoreBar } from "@/components/reports/ScoreBar";
 import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import type { Assessment } from "@/lib/types";
 import { hasAssessmentExpired } from "@/lib/assessmentSchedule";
@@ -132,19 +133,19 @@ export default function StudentAssessmentReviewPage() {
           </div>
         </section>
         <section className="metric-card">
-          <div className="relative flex flex-col items-center gap-3 text-center">
-            <div>
-              <ScoreDonut value={result.functional_score ?? result.score ?? 0} size={58} label="Functional score" />
-              <p className="text-sm text-white/45">Functional score</p>
+          <div className="relative flex h-full flex-col justify-center text-center">
+            <p className="text-sm text-white/45">Functional score</p>
+            <div className="mt-4">
+              <ScoreBar value={result.functional_score ?? result.score ?? 0} label="Functional score" />
             </div>
           </div>
         </section>
         {result.ai_enabled ? (
           <section className="metric-card">
-            <div className="relative flex flex-col items-center gap-3 text-center">
-              <div>
-                {result.ai_usage_score != null ? <ScoreDonut value={result.ai_usage_score} tone="purple" size={58} label="AI usage score" /> : null}
-                <p className="text-sm text-white/45">AI usage score</p>
+            <div className="relative flex h-full flex-col justify-center text-center">
+              <p className="text-sm text-white/45">AI usage score</p>
+              <div className="mt-4">
+                {result.ai_usage_score != null ? <ScoreBar value={result.ai_usage_score} tone="purple" label="AI usage score" /> : null}
                 {result.ai_usage_score == null ? <p className="text-sm font-semibold text-purpleGlow">
                   {result.ai_usage_score ?? (result.ai_grading_status === "failed" ? "Failed" : "Pending")}
                 </p> : null}
@@ -163,12 +164,20 @@ export default function StudentAssessmentReviewPage() {
         </section>
       </div>
       {result.ai_enabled ? (
-        <section className="panel mt-6 text-center">
+        <section className="panel mt-6 py-8 text-center">
           <div className="flex items-center justify-center">
-            {result.final_score != null ? <ScoreDonut value={result.final_score} size={96} label="Final score" /> : null}
+            {result.final_score != null ? <ScoreDonut value={result.final_score} size={132} label="Final score" /> : null}
             {result.final_score == null ? <p className="text-xl font-semibold text-cyanGlow">Pending</p> : null}
           </div>
-          <p className="mt-3 text-sm uppercase tracking-[0.14em] text-white/45">Final score</p>
+          <p className="mt-4 text-sm uppercase tracking-[0.18em] text-white/45">Final score</p>
+        </section>
+      ) : null}
+      {result.ai_enabled && result.reflection_text ? (
+        <section className="panel mt-6">
+          <div className="relative">
+            <p className="text-xs uppercase tracking-[0.14em] text-white/35">Your reflection</p>
+            <p className="mt-3 max-w-4xl leading-7 text-white/65">{result.reflection_text}</p>
+          </div>
         </section>
       ) : null}
       <section className="panel mt-6">
@@ -190,12 +199,6 @@ export default function StudentAssessmentReviewPage() {
                 <AiRubricBreakdown details={result.ai_grading_details} />
               ) : null}
             </>
-          ) : null}
-          {result.ai_enabled && result.reflection_text ? (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-white/35">Your reflection</p>
-              <p className="mt-2 leading-7 text-white/65">{result.reflection_text}</p>
-            </div>
           ) : null}
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Back to dashboard</Link>

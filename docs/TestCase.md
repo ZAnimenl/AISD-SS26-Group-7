@@ -334,3 +334,17 @@ the active requirements. It does not replace automated test files.
   timeouts, network isolation, aliases, and syntax errors.
 - Routine loading, saving, AI, submission, and execution-unavailable messages
   avoid backend/provider/sandbox implementation wording.
+- Student review renders Functional and AI Usage as horizontal score bars,
+  renders Final Score as a larger donut, and places Your reflection before
+  Submission summary.
+- Dashboard and report grids keep donut centers, labels, and card heights
+  aligned with adjacent icon and numeric metric cards.
+- Administrator dashboard keeps Assessments, Students, Submissions, and AI
+  Events as equal operational cards and renders Average Final separately.
+- Student dashboard keeps Available, In Progress, and Completed as equal
+  operational cards and renders Average Score separately.
+- Administrator report list, aggregate summary, and student result rows show
+  Functional and AI Usage as score bars and Final as the only featured donut.
+- Report overview cards render Final Score above Functional, AI Usage,
+  completion, and interaction metrics.
+- Report detail renders Final Score as the leftmost aggregate score card.

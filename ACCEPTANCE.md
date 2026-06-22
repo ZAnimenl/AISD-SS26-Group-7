@@ -180,6 +180,22 @@
 - Production login UI does not prefill or display demo credentials.
 - Production-facing UI copy does not expose backend, provider, sandbox, or
   persistence implementation details in routine loading and save states.
+- Student review uses horizontal score bars for Functional and AI Usage,
+  reserves the enlarged donut for Final Score, and places the student's
+  reflection directly below the final score.
+- Donut-based metric cards use consistent visual slots and vertical alignment
+  across dashboard and report grids.
+- Administrator dashboards group operational counts separately and display
+  Average Final as a distinct featured score card.
+- Student dashboards group assessment-status counts separately and display
+  Average Score as a distinct featured score card.
+- Administrator report list, aggregate, and per-student views use supporting
+  bars for Functional and AI Usage while reserving the prominent donut
+  treatment for Final Score.
+- Administrator report overview cards place the featured Final Score directly
+  below the assessment title, before all supporting metrics.
+- Administrator report detail places the featured Final Score at the left of
+  the aggregate score row.
 
 ## Truthful Optimistic UI
 
