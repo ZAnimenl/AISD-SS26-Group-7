@@ -5,21 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
+import { AiRubricBreakdown } from "@/components/reports/AiRubricBreakdown";
 import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import { getAggregateReport, isAuthenticationError, retryAiUsageGrade } from "@/lib/api";
 import type { AggregateReport } from "@/lib/types";
-
-function criterion(details: Record<string, unknown>, key: string) {
-  const criteria = details.criteria;
-  if (!criteria || typeof criteria !== "object") {
-    return null;
-  }
-  const value = (criteria as Record<string, unknown>)[key];
-  if (typeof value === "number") return value;
-  const pascalKey = key.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("");
-  const legacyValue = (criteria as Record<string, unknown>)[pascalKey];
-  return typeof legacyValue === "number" ? legacyValue : null;
-}
 
 export default function ReportDetailPage() {
   const router = useRouter();
@@ -43,7 +32,7 @@ export default function ReportDetailPage() {
     return <SectionHeader eyebrow="Report detail" title={error} />;
   }
   if (!report) {
-    return <SectionHeader eyebrow="Report detail" title="Connecting to backend..." />;
+    return <SectionHeader eyebrow="Report detail" title="Loading report..." />;
   }
 
   const max = Math.max(1, ...report.score_distribution.map((item) => item.count));
@@ -127,9 +116,12 @@ export default function ReportDetailPage() {
                   totalTokens={student.ai_usage_summary.total_tokens}
                   confidence={student.ai_grading.confidence}
                 />
+                {student.ai_grading.status === "completed" ? (
+                  <AiRubricBreakdown details={student.ai_grading.details} />
+                ) : null}
                 <div className="relative mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-white/35">Rubric breakdown</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-white/35">AI grading details</p>
                   {student.ai_grading.status === "failed" ? (
                     <button
                       className="btn-secondary mt-3 px-3 py-2 text-xs"
@@ -149,16 +141,9 @@ export default function ReportDetailPage() {
                       {retryingStudentId === student.user_id ? "Retrying..." : "Retry AI grading"}
                     </button>
                   ) : null}
-                  <div className="mt-4 space-y-2 text-sm">
-                    <p>Prompt quality and context <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "prompt_quality_and_context") ?? "—"}/30</span></p>
-                    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
-                      <p className="font-medium text-white/75">Token and interaction efficiency <span className="float-right text-cyanGlow">{(criterion(student.ai_grading.details, "behavioral_efficiency") ?? 0) + (criterion(student.ai_grading.details, "objective_repetition") ?? 0)}/40</span></p>
-                      <p className="mt-1 pl-3 text-xs text-white/50">Behavioral efficiency <span className="float-right">{criterion(student.ai_grading.details, "behavioral_efficiency") ?? "—"}/30</span></p>
-                      <p className="mt-1 pl-3 text-xs text-white/50">Objective repetition <span className="float-right">{criterion(student.ai_grading.details, "objective_repetition") ?? "—"}/10</span></p>
-                    </div>
-                    <p>Critical evaluation and adaptation <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "critical_evaluation_and_adaptation") ?? "—"}/20</span></p>
-                    <p>Reflection quality and consistency <span className="float-right text-cyanGlow">{criterion(student.ai_grading.details, "reflection_quality_and_consistency") ?? "—"}/10</span></p>
-                  </div>
+                  <p className="mt-4 text-sm leading-6 text-white/55">
+                    Rubric version {student.ai_grading.rubric_version ?? "not available"}.
+                  </p>
                   <p className="mt-4 text-xs text-white/35">{student.ai_usage_summary.total_interactions} interactions · {student.ai_usage_summary.total_tokens.toLocaleString()} tokens · confidence {student.ai_grading.confidence ?? "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">

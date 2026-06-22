@@ -1,6 +1,9 @@
 from peewee import AutoField, BooleanField, CharField, Model, SqliteDatabase, TextField
 
-from config.environment import DATABASE_PATH
+try:
+    from config.environment import DATABASE_PATH
+except ModuleNotFoundError:
+    from environment import DATABASE_PATH
 
 db = SqliteDatabase(DATABASE_PATH)
 
@@ -13,4 +16,3 @@ class Todo(Model):
 
     class Meta:
         database = db
-

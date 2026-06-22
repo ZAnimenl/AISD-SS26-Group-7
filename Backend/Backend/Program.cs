@@ -72,6 +72,7 @@ builder.Services.AddSingleton<AiCompletionService>();
 builder.Services.AddSingleton<AiAssistantService>();
 builder.Services.AddScoped<AiUsageGradingService>();
 builder.Services.AddHostedService<ReflectionDeadlineWorker>();
+builder.Services.AddSingleton<CanonicalPrototypeSource>();
 builder.Services.AddSingleton<AssessmentDraftGenerationService>();
 builder.Services.AddScoped<SeedAdminSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();

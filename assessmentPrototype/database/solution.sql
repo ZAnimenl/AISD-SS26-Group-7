@@ -1,0 +1,2 @@
+-- Extend the canonical Todo schema and queries for this task.
+-- Keep the existing todos table and its public contract intact.

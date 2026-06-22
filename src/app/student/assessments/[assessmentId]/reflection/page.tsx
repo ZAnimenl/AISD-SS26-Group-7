@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Clock3, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Clock3, Loader2, Send } from "lucide-react";
 import { getReflection, isAuthenticationError, saveReflection, submitReflection } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { ReflectionState } from "@/lib/types";
@@ -113,6 +114,21 @@ export default function AssessmentReflectionPage() {
 
   if (!state && !error) {
     return <SectionHeader eyebrow="Final reflection" title="Loading reflection..." />;
+  }
+
+  if (!state) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <SectionHeader eyebrow="AI-enabled assessment" title="Reflection unavailable" />
+        <section className="panel">
+          <p className="relative text-white/60">{error ?? "Submit the assessment before completing the reflection."}</p>
+          <Link className="btn-secondary relative mt-5" href={`/student/assessments/${assessmentId}/workspace`}>
+            <ArrowLeft size={16} />
+            Back to workspace
+          </Link>
+        </section>
+      </div>
+    );
   }
 
   return (

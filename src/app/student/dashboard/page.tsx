@@ -46,7 +46,7 @@ export default function StudentDashboardPage() {
   }
 
   if (!dashboard) {
-    return <SectionHeader eyebrow="Student" title="Connecting to backend..." />;
+    return <SectionHeader eyebrow="Student" title="Loading dashboard..." />;
   }
 
   return (

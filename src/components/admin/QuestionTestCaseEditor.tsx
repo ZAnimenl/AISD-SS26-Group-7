@@ -407,7 +407,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
               </div>
             ) : null}
           </div>
-          <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(addQuestion, "Question added.", { key: "add-question", label: "Creating question in backend..." })}>
+          <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(addQuestion, "Question added.", { key: "add-question", label: "Creating question..." })}>
             {isActionPending("add-question") ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />}
             {isActionPending("add-question") ? "Creating..." : "Add question"}
           </button>
@@ -431,7 +431,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question editor</p>
                   <div className="flex flex-wrap gap-2">
-                    <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => saveQuestion(question), "Question saved.", { key: `save-question-${question.question_id}`, label: "Saving question changes in backend..." })}>
+                    <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => saveQuestion(question), "Question saved.", { key: `save-question-${question.question_id}`, label: "Saving question changes..." })}>
                       {isActionPending(`save-question-${question.question_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
                       {isActionPending(`save-question-${question.question_id}`) ? "Saving..." : "Save question"}
                     </button>
@@ -452,7 +452,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                         </button>
                       );
                     })()}
-                    <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => removeQuestion(question.question_id), "Question deleted.", { key: `delete-question-${question.question_id}`, label: "Deleting question in backend..." })}>
+                    <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => removeQuestion(question.question_id), "Question deleted.", { key: `delete-question-${question.question_id}`, label: "Deleting question..." })}>
                       {isActionPending(`delete-question-${question.question_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
                       {isActionPending(`delete-question-${question.question_id}`) ? "Deleting..." : "Delete"}
                     </button>
@@ -539,7 +539,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
               <div className="mt-5 border-t border-white/10 pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-white/80">Test cases</h3>
-                  <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => addTestCase(question.question_id), "Test case added.", { key: `add-test-${question.question_id}`, label: "Creating test case in backend..." })}>
+                  <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => addTestCase(question.question_id), "Test case added.", { key: `add-test-${question.question_id}`, label: "Creating test case..." })}>
                     {isActionPending(`add-test-${question.question_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />}
                     {isActionPending(`add-test-${question.question_id}`) ? "Creating..." : "Add test case"}
                   </button>
@@ -565,11 +565,11 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                                 <CustomDropdown ariaLabel="Test source" value={testCase.authoring_source ?? "manual"} options={authoringSources.map((value) => ({ value, label: value }))} onChange={(value) => updateTestCaseState(question.question_id, testCase.test_case_id, { authoring_source: value })} />
                               </label>
                               <div className="flex items-end gap-2">
-                                <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => saveTestCase(testCase), "Test case saved.", { key: `save-test-${testCase.test_case_id}`, label: "Saving test case in backend..." })}>
+                                <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => saveTestCase(testCase), "Test case saved.", { key: `save-test-${testCase.test_case_id}`, label: "Saving test case..." })}>
                                   {isActionPending(`save-test-${testCase.test_case_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
                                   {isActionPending(`save-test-${testCase.test_case_id}`) ? "Saving..." : "Save"}
                                 </button>
-                                <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => removeTestCase(question.question_id, testCase.test_case_id), "Test case deleted.", { key: `delete-test-${testCase.test_case_id}`, label: "Deleting test case in backend..." })}>
+                                <button className="btn-secondary px-3 py-2" type="button" disabled={pendingAction !== null} onClick={() => runEditorAction(() => removeTestCase(question.question_id, testCase.test_case_id), "Test case deleted.", { key: `delete-test-${testCase.test_case_id}`, label: "Deleting test case..." })}>
                                   {isActionPending(`delete-test-${testCase.test_case_id}`) ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
                                 </button>
                               </div>
@@ -669,7 +669,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                   onClick={() => runEditorAction(
                     generateBlueprint,
                     `${blueprintTaskTotal} question${blueprintTaskTotal === 1 ? "" : "s"} and their test cases generated for review.`,
-                    { key: "generate-blueprint", label: `Generating ${blueprintTaskTotal} validated questions in backend...` }
+                    { key: "generate-blueprint", label: `Generating ${blueprintTaskTotal} validated questions...` }
                   )}
                 >
                   {isActionPending("generate-blueprint") ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}

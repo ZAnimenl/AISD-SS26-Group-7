@@ -47,7 +47,7 @@ export default function WorkspacePage() {
   }
 
   if (!assessment || !workspace) {
-    return <SectionHeader eyebrow="Workspace" title="Connecting to backend..." />;
+    return <SectionHeader eyebrow="Workspace" title="Preparing workspace..." />;
   }
 
   return <WorkspaceClient assessment={assessment} workspace={workspace} sandboxAvailable={sandboxAvailable} />;

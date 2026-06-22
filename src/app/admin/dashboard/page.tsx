@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
   }
 
   if (!dashboard) {
-    return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
+    return <SectionHeader eyebrow="Administrator" title="Loading dashboard..." />;
   }
 
   return (
@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
         <MetricCard icon={Brain} label="AI events" value={dashboard.summary.ai_interactions} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <AdminAssessmentTable assessments={assessments.slice(0, 3)} />
+        <AdminAssessmentTable assessments={assessments.slice(0, 3)} compact />
         <section className="panel">
           <h2 className="relative text-lg font-semibold">Recent submissions</h2>
           <div className="relative mt-4 space-y-3">

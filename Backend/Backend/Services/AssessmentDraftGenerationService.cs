@@ -71,10 +71,14 @@ public sealed class AssessmentDraftGenerationService
     ];
 
     private readonly AiCompletionService completionService;
+    private readonly CanonicalPrototypeSource prototypeSource;
 
-    public AssessmentDraftGenerationService(AiCompletionService completionService)
+    public AssessmentDraftGenerationService(
+        AiCompletionService completionService,
+        CanonicalPrototypeSource prototypeSource)
     {
         this.completionService = completionService;
+        this.prototypeSource = prototypeSource;
     }
 
     public async Task<IReadOnlyList<Question>> GenerateAssessmentDraftAsync(
@@ -357,7 +361,7 @@ public sealed class AssessmentDraftGenerationService
             .ToArray();
     }
 
-    private static List<Question> ParseTasks(string json, Guid assessmentId, IReadOnlyCollection<string> expectedTaskTypes)
+    private List<Question> ParseTasks(string json, Guid assessmentId, IReadOnlyCollection<string> expectedTaskTypes)
     {
         try
         {
@@ -396,7 +400,7 @@ public sealed class AssessmentDraftGenerationService
         }
     }
 
-    private static Question ParseQuestion(
+    private Question ParseQuestion(
         JsonElement element,
         Guid assessmentId,
         int sortOrder,
@@ -426,6 +430,10 @@ public sealed class AssessmentDraftGenerationService
             languageConstraints,
             starterCode,
             testCases);
+        starterCode = prototypeSource.ApplyCanonicalFiles(starterCode, languageConstraints);
+        var starterMetadata = MergeStarterMetadata(
+            starterCode,
+            ReadNestedStringDictionary(element, "starter_files_metadata"));
 
         foreach (var testCase in testCases)
         {
@@ -440,12 +448,11 @@ public sealed class AssessmentDraftGenerationService
             TaskType = taskType,
             Difficulty = NormalizeDifficulty(OptionalString(element, "difficulty")),
             VerificationMode = verificationMode,
-            StarterPrototypeReference = NormalizeOptionalText(OptionalString(element, "starter_prototype_reference")),
+            StarterPrototypeReference = PrototypeDefaults.TodoListReference,
             ProblemDescriptionMarkdown = problemDescription,
             LanguageConstraintsJson = JsonDocumentSerializer.Serialize(languageConstraints),
             StarterCodeJson = JsonDocumentSerializer.Serialize(starterCode),
-            StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(
-                ReadNestedStringDictionary(element, "starter_files_metadata") ?? BuildStarterMetadata(starterCode)),
+            StarterFilesMetadataJson = JsonDocumentSerializer.Serialize(starterMetadata),
             VerificationMetadataJson = JsonDocumentSerializer.Serialize(
                 ReadStringDictionary(element, "verification_metadata") ?? new Dictionary<string, string> { ["primary_view"] = verificationMode }),
             GradingConfigurationJson = JsonDocumentSerializer.Serialize(
@@ -727,6 +734,35 @@ public sealed class AssessmentDraftGenerationService
         return starterCode.ToDictionary(
             language => language.Key,
             language => language.Value.ToDictionary(file => file.Key, _ => "editable"));
+    }
+
+    private static Dictionary<string, Dictionary<string, string>> MergeStarterMetadata(
+        Dictionary<string, Dictionary<string, string>> starterCode,
+        Dictionary<string, Dictionary<string, string>>? generatedMetadata)
+    {
+        var metadata = BuildStarterMetadata(starterCode);
+        if (generatedMetadata is null)
+        {
+            return metadata;
+        }
+
+        foreach (var language in generatedMetadata)
+        {
+            if (!metadata.TryGetValue(language.Key, out var files))
+            {
+                continue;
+            }
+
+            foreach (var file in language.Value)
+            {
+                if (files.ContainsKey(file.Key))
+                {
+                    files[file.Key] = file.Value;
+                }
+            }
+        }
+
+        return metadata;
     }
 
     private static string NormalizeTaskType(string? taskType)

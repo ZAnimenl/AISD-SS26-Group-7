@@ -33,7 +33,7 @@ export default function StudentAssessmentsPage() {
       <SectionHeader eyebrow="Student" title="Assessments" />
       {error ? <section className="panel text-sm text-pinkGlow">{error}</section> : null}
       {assessments === null ? (
-        <section className="panel text-sm text-white/55" aria-live="polite">Loading available assessments from backend...</section>
+        <section className="panel text-sm text-white/55" aria-live="polite">Loading available assessments...</section>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {assessments.map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}

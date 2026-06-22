@@ -14,6 +14,8 @@
   explains that access becomes review-only afterward.
 - The code editor is the largest workspace area by default; the output starts
   compact and the narrower AI panel has a visible horizontal resize handle.
+- On narrow screens, auxiliary workspace panels start collapsed so the editor
+  remains usable without horizontal page overflow.
 - Question navigation preserves autosaved per-question workspace state.
 - AI-enabled student and admin reports show a concise AI-use and
   demonstrated-understanding summary below the score overview.
@@ -23,6 +25,21 @@
   and completed analysis.
 - Dashboard and report percentage scores include compact accessible charts that
   exactly match their displayed numeric values.
+- Dashboard score cards do not show a redundant statistic icon above a donut.
+- The dashboard assessment preview fits its panel without a horizontal
+  scrollbar.
+- Assessment duration can be entered directly as a number or adjusted with the
+  slider and step buttons.
+- Future assessment availability is presented as neutral scheduling
+  information; warning styling is reserved for actually unavailable attempts.
+- Expired pre-start pages use explicit review-only copy instead of language that
+  implies work can still continue.
+- Review and reflection deep links without a submission explain the real state
+  and route an active attempt back to its workspace.
+- Logout clears local authentication and leaves protected pages immediately,
+  even when backend token revocation is slow or unavailable.
+- Completed AI scoring displays all four rubric subsections with their score
+  and a concise evidence-based summary.
 
 ## Active Agent Contract
 
@@ -141,6 +158,14 @@
 - `npm run dev` restarts an old local Next.js process on the frontend port when it can be safely identified so the printed URL serves the pulled code.
 - `npm run dev:doctor` reports local prerequisite and configuration readiness without starting servers or writing secrets.
 - `npm run dev:doctor` reports sandbox runtime readiness for Run and Submit without making Docker a startup requirement.
+- Docker startup diagnostics distinguish a configured endpoint from a
+  reachable runtime.
+- Docker Desktop named-pipe diagnostics use the CLI-compatible endpoint form
+  and report a running engine as detected.
+- Generated assessment workspaces copy canonical Todo frontend, backend, and
+  database starter files from the packaged `assessmentPrototype` source.
+- LLM output may add task-specific files and tests but cannot replace canonical
+  base files with a newly invented application.
 - Backend startup supports SQLite for local development and PostgreSQL for explicit external database deployment.
 - Backend startup failures produce CLI repair guidance for local SQLite regeneration, external database configuration, Docker sandbox permission, and missing-runtime failures.
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
@@ -153,6 +178,8 @@
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL`; localhost API fallback is Development-only.
 - Production login UI does not prefill or display demo credentials.
+- Production-facing UI copy does not expose backend, provider, sandbox, or
+  persistence implementation details in routine loading and save states.
 
 ## Truthful Optimistic UI
 

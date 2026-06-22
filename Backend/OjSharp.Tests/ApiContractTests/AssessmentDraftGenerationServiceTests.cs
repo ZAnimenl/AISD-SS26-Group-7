@@ -301,7 +301,37 @@ public sealed class AssessmentDraftGenerationServiceTests
 
         var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
         Assert.Equal(3, starterCode["sql"].Count);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS todos", starterCode["sql"]["schema.sql"]);
+        Assert.Contains("canonical Todo schema", starterCode["sql"]["solution.sql"]);
+        Assert.Equal(PrototypeDefaults.TodoListReference, question.StarterPrototypeReference);
+        var metadata = JsonDocumentSerializer.Deserialize(
+            question.StarterFilesMetadataJson,
+            new Dictionary<string, Dictionary<string, string>>());
+        Assert.Equal("editable", metadata["sql"]["schema.sql"]);
+        Assert.Equal("editable", metadata["sql"]["seed.sql"]);
+        Assert.Equal("editable", metadata["sql"]["solution.sql"]);
         Assert.Equal(4, question.TestCases.Count);
+    }
+
+    [Fact]
+    public void Canonical_prototype_source_overwrites_generated_base_files_and_keeps_task_files()
+    {
+        var source = new CanonicalPrototypeSource();
+
+        var starterCode = source.ApplyCanonicalFiles(
+            new Dictionary<string, Dictionary<string, string>>
+            {
+                ["html"] = new()
+                {
+                    ["index.html"] = "<p>LLM replacement</p>",
+                    ["task-helper.js"] = "// task-specific helper"
+                }
+            },
+            ["html"]);
+
+        Assert.Contains("Todo List App", starterCode["html"]["index.html"]);
+        Assert.Contains("const todos", starterCode["html"]["app.js"]);
+        Assert.Equal("// task-specific helper", starterCode["html"]["task-helper.js"]);
     }
 
     [Fact]
@@ -525,7 +555,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             }),
             NullLogger<AiCompletionService>.Instance);
 
-        return new AssessmentDraftGenerationService(completionService);
+        return new AssessmentDraftGenerationService(completionService, new CanonicalPrototypeSource());
     }
 
     private static Dictionary<string, int> RequiredTaskTypeCounts(int count)

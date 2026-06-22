@@ -9,6 +9,11 @@ Stack:
 - ORM: Peewee
 - Database: SQLite
 
+The `frontend/`, `backend/`, and `database/` source files are packaged with the
+API and copied directly into generated starter workspaces. The LLM supplies the
+task description, tests, and optional task-specific files; it does not replace
+the canonical base application.
+
 Students do not install or start this project locally. Generated tasks may extend these files and contracts, but may not replace the base application with a different product.
 
 API contract:
@@ -19,4 +24,3 @@ API contract:
 - `PUT /api/todos/{todo_id}`
 - `POST /api/todos/{todo_id}/toggle`
 - `DELETE /api/todos/{todo_id}`
-

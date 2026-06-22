@@ -44,6 +44,21 @@ export function useWorkspaceIdeLayout() {
   } | null>(null);
 
   useEffect(() => {
+    const compactViewport = window.matchMedia("(max-width: 768px)");
+    const collapseForCompactViewport = (matches: boolean) => {
+      if (!matches) return;
+      setIsTasksCollapsed(true);
+      setIsAgentCollapsed(true);
+      setIsOutputCollapsed(true);
+    };
+    const handleViewportChange = (event: MediaQueryListEvent) => collapseForCompactViewport(event.matches);
+
+    collapseForCompactViewport(compactViewport.matches);
+    compactViewport.addEventListener("change", handleViewportChange);
+    return () => compactViewport.removeEventListener("change", handleViewportChange);
+  }, []);
+
+  useEffect(() => {
     if (!resizeTarget) {
       return;
     }

@@ -302,10 +302,13 @@ export async function consumeGoogleCallback(token: string, rememberMe: boolean) 
 }
 
 export async function logout() {
+  const backendLogout = apiRequest<{ logged_out: boolean }>("/auth/logout", { method: "POST" });
+  clearStoredAuth();
+
   try {
-    await apiRequest<{ logged_out: boolean }>("/auth/logout", { method: "POST" });
-  } finally {
-    clearStoredAuth();
+    await backendLogout;
+  } catch {
+    // Local sign-out must not be blocked by a slow or unavailable backend.
   }
 }
 
