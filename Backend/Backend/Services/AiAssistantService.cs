@@ -200,6 +200,9 @@ public sealed class AiAssistantService
             "Rules:",
             "- Use only visible task context and visible workspace files.",
             "- Be concise and practical.",
+            "- Students cannot install packages or start local services in the assessment sandbox. Never recommend pip install, npm install, or running dependency services.",
+            "- Missing FastAPI, Peewee, HTTPX, pytest, Node, or other task dependencies indicates a platform infrastructure error, not a student action item.",
+            "- If the student asks you to do or implement the task, provide safe replace_file actions even when the latest check output contains an infrastructure dependency error.",
             "- Put student-visible guidance in the response_markdown JSON field using Markdown formatting.",
             "- If the student asks for debugging help, point them toward the bug without fixing it entirely.",
             "- For code_suggestion requests, provide bounded complete-file replacements for the visible workspace files that must change.",
@@ -711,7 +714,16 @@ public sealed class AiAssistantService
             .Where(IsSafeWorkspaceFileName)
             .Take(3)
             .ToArray();
-        return requestedTargets;
+        if (requestedTargets.Length > 0)
+        {
+            return requestedTargets;
+        }
+
+        return context.VisibleFiles.Keys
+            .Where(fileName => fileName.Equals(context.ActiveFileName, StringComparison.Ordinal))
+            .Where(IsSafeWorkspaceFileName)
+            .Take(1)
+            .ToArray();
     }
 
     private static string[] FindMissingExplicitFileActionTargets(string[] requestedTargets, AiAssistantResult result)
@@ -772,6 +784,10 @@ public sealed class AiAssistantService
             "implement",
             "fix",
             "make",
+            "do it",
+            "do this",
+            "do the task",
+            "do it for me",
             "修改",
             "更新",
             "添加",
