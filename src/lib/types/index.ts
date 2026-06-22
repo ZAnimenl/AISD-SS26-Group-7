@@ -165,6 +165,25 @@ export interface AiAssistantResponse {
   };
 }
 
+export interface AiTaskTranscriptEntry {
+  interaction_id: string;
+  interaction_type: AiInteractionType;
+  input: string;
+  output: string;
+  token_usage: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+  created_at: string;
+}
+
+export interface AiTaskTranscript {
+  assessment_id: string;
+  question_id: string;
+  interactions: AiTaskTranscriptEntry[];
+}
+
 export interface SubmissionResult {
   submission_id: string;
   evaluation_status: SubmissionStatus;

@@ -280,6 +280,7 @@ public sealed class CodeEvaluationServiceTests
 
         Assert.Contains("Dockerfile", headerText);
         Assert.Contains("pytest", bodyText);
+        Assert.Contains("fastapi", bodyText);
         Assert.Contains("jest", bodyText);
         Assert.Contains("jest-environment-jsdom", bodyText);
         Assert.Contains("typescript", bodyText);

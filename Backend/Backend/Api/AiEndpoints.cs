@@ -11,6 +11,7 @@ public static class AiEndpoints
     public static void Map(RouteGroupBuilder api)
     {
         api.MapPost("/assessments/{assessmentId:guid}/questions/{questionId:guid}/ai/assist", AssistByAssessmentAsync);
+        api.MapGet("/assessments/{assessmentId:guid}/questions/{questionId:guid}/ai-interactions", InteractionsByQuestionAsync);
         api.MapPost("/assessments/{assessmentId:guid}/ai-interactions/{interactionId:guid}/events", RecordEventAsync);
         api.MapGet("/assessments/{assessmentId:guid}/ai-usage", UsageByAssessmentAsync);
         api.MapGet("/admin/assessments/{assessmentId:guid}/students/{studentId:guid}/ai-interactions", AdminInteractionsByAssessmentAsync);
@@ -148,6 +149,59 @@ public static class AiEndpoints
         });
     }
 
+    private static async Task<IResult> InteractionsByQuestionAsync(
+        Guid assessmentId,
+        Guid questionId,
+        HttpContext httpContext,
+        OjSharpDbContext dbContext,
+        CurrentUserAccessor currentUserAccessor,
+        CancellationToken cancellationToken)
+    {
+        var (user, error) = await currentUserAccessor.RequireRoleAsync(httpContext, dbContext, UserRoles.Student, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var session = await dbContext.AssessmentSessions.FirstOrDefaultAsync(
+            item => item.AssessmentId == assessmentId && item.UserId == user!.Id,
+            cancellationToken);
+        if (session is null)
+        {
+            return ApiResults.Error("ATTEMPT_NOT_FOUND", "Assessment attempt was not found.", StatusCodes.Status404NotFound);
+        }
+
+        var interactions = await DateTimeOffsetOrdering.ToAscendingListAsync(
+            dbContext.AiInteractions.Where(item =>
+                item.SessionId == session.Id
+                && item.AssessmentId == assessmentId
+                && item.QuestionId == questionId),
+            dbContext,
+            item => item.CreatedAt,
+            cancellationToken);
+
+        var transcript = BuildTranscript(interactions, questionId);
+        return ApiResults.Success(new
+        {
+            assessment_id = assessmentId,
+            question_id = questionId,
+            interactions = transcript.Select(item => new
+            {
+                interaction_id = item.InteractionId,
+                interaction_type = item.InteractionType,
+                input = item.Input,
+                output = item.Output,
+                token_usage = new
+                {
+                    input_tokens = item.InputTokens,
+                    output_tokens = item.OutputTokens,
+                    total_tokens = item.TotalTokens
+                },
+                created_at = item.CreatedAt
+            })
+        });
+    }
+
     private static async Task<IResult> RecordEventAsync(
         Guid assessmentId,
         Guid interactionId,
@@ -262,12 +316,66 @@ public static class AiEndpoints
             average_tokens_per_interaction = avgTokensPerInteraction,
             by_type = interactions.GroupBy(interaction => interaction.InteractionType)
                 .ToDictionary(group => group.Key, group => group.Count()),
+            by_question = BuildUsageByQuestion(interactions)
+                .ToDictionary(item => item.Key, item => new
+                {
+                    total_interactions = item.Value.TotalInteractions,
+                    total_input_tokens = item.Value.TotalInputTokens,
+                    total_output_tokens = item.Value.TotalOutputTokens,
+                    total_tokens = item.Value.TotalTokens
+                }),
             main_semantic_tags = interactions
                 .SelectMany(interaction => JsonDocumentSerializer.Deserialize(interaction.SemanticTagsJson, Array.Empty<string>()))
                 .Distinct()
                 .ToArray()
         });
     }
+
+    internal static IReadOnlyDictionary<Guid, TaskAiUsage> BuildUsageByQuestion(IEnumerable<AiInteraction> interactions)
+    {
+        return interactions
+            .GroupBy(interaction => interaction.QuestionId)
+            .ToDictionary(group => group.Key, group => new TaskAiUsage(
+                group.Count(),
+                group.Sum(interaction => interaction.InputTokens),
+                group.Sum(interaction => interaction.OutputTokens),
+                group.Sum(interaction => interaction.TotalTokens)));
+    }
+
+    internal static IReadOnlyList<TaskAiTranscriptEntry> BuildTranscript(
+        IEnumerable<AiInteraction> interactions,
+        Guid questionId)
+    {
+        return interactions
+            .Where(interaction => interaction.QuestionId == questionId)
+            .OrderBy(interaction => interaction.CreatedAt)
+            .Select(interaction => new TaskAiTranscriptEntry(
+                interaction.Id,
+                interaction.InteractionType,
+                interaction.Message,
+                interaction.ResponseMarkdown,
+                interaction.InputTokens,
+                interaction.OutputTokens,
+                interaction.TotalTokens,
+                interaction.CreatedAt))
+            .ToList();
+    }
+
+    internal sealed record TaskAiUsage(
+        int TotalInteractions,
+        int TotalInputTokens,
+        int TotalOutputTokens,
+        int TotalTokens);
+
+    internal sealed record TaskAiTranscriptEntry(
+        Guid InteractionId,
+        string InteractionType,
+        string Input,
+        string Output,
+        int InputTokens,
+        int OutputTokens,
+        int TotalTokens,
+        DateTimeOffset CreatedAt);
 
     private static async Task<IResult> AdminInteractionsByAssessmentAsync(
         Guid assessmentId,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { finalizeSubmission, getAiResponse, getAiUsage, recordAiInteractionEvent, runCode, saveWorkspace } from "@/lib/api";
+import { finalizeSubmission, getAiResponse, getAiTaskTranscript, getAiUsage, recordAiInteractionEvent, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
 import { ConsolePanel, formatExecutionStatus, getDisplayStatus, getStatusClass } from "@/components/workspace/ConsolePanel";
@@ -45,6 +45,10 @@ type WorkspaceAiUsageSummary = {
   total_interactions: number;
   total_tokens: number;
   average_tokens_per_interaction: number;
+  by_question?: Record<string, {
+    total_interactions: number;
+    total_tokens: number;
+  }>;
 };
 
 const TASK_LABELS: Record<TaskType, string> = {
@@ -77,6 +81,10 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
 
 const SANDBOX_UNAVAILABLE_MESSAGE = "Run and submit are temporarily unavailable. Please try again later or contact an administrator.";
 const MAX_PROBLEM_STATEMENT_WORDS = 150;
+
+function createInitialAiMessages(): AiChatMessage[] {
+  return [{ role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }];
+}
 
 function limitProblemStatement(markdown: string) {
   const words = Array.from(markdown.matchAll(/\S+/g));
@@ -438,16 +446,19 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [frozenTimeLabel, setFrozenTimeLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
-  const [aiMessage, setAiMessage] = useState("");
+  const [aiMessagesByQuestion, setAiMessagesByQuestion] = useState<Record<string, AiChatMessage[]>>({
+    [firstQuestion.question_id]: createInitialAiMessages()
+  });
+  const [aiDraftsByQuestion, setAiDraftsByQuestion] = useState<Record<string, string>>({});
   const [aiState, setAiState] = useState<"idle" | "running">("idle");
   const [agentActionState, setAgentActionState] = useState<"idle" | "applying">("idle");
   const [aiUsageSummary, setAiUsageSummary] = useState<WorkspaceAiUsageSummary | null>(null);
   const aiMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const aiRequestCounterRef = useRef(0);
+  const loadedAiTranscriptsRef = useRef(new Set<string>());
   const appliedSuggestionRef = useRef<{ interactionId: string; code: string; appliedAt: number } | null>(null);
-  const [messages, setMessages] = useState<AiChatMessage[]>([
-    { role: "assistant", text: "I am your embedded AI assistant. I can suggest code, explain concepts, or help debug issues. How can I help?" }
-  ]);
+  const messages = aiMessagesByQuestion[activeQuestionId] ?? createInitialAiMessages();
+  const aiMessage = aiDraftsByQuestion[activeQuestionId] ?? "";
 
   const fileNames = useMemo(() => {
     const state = sanitizeQuestionState(activeQuestion, questionStates[activeQuestionId], language);
@@ -465,6 +476,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const runTotalCount = runResult?.test_results.length ?? 0;
   const isSubmitPending = submitState !== "idle";
   const ideLayout = useWorkspaceIdeLayout();
+  const activeTaskAiUsage = aiUsageSummary?.by_question?.[activeQuestionId] ?? { total_interactions: 0, total_tokens: 0 };
 
   useEffect(() => {
     questionStatesRef.current = questionStates;
@@ -473,6 +485,37 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   useEffect(() => {
     aiMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, aiState]);
+
+  useEffect(() => {
+    if (!assessment.ai_enabled || loadedAiTranscriptsRef.current.has(activeQuestionId)) {
+      return;
+    }
+
+    let isMounted = true;
+    loadedAiTranscriptsRef.current.add(activeQuestionId);
+    getAiTaskTranscript(assessment.assessment_id, activeQuestionId)
+      .then((transcript) => {
+        if (!isMounted) return;
+        const restoredMessages = transcript.interactions.flatMap((interaction) => [
+          { clientId: `input-${interaction.interaction_id}`, role: "student" as const, text: interaction.input },
+          {
+            clientId: `output-${interaction.interaction_id}`,
+            interactionId: interaction.interaction_id,
+            role: "assistant" as const,
+            text: interaction.output,
+            tokenUsage: interaction.token_usage
+          }
+        ]);
+        setAiMessagesByQuestion((current) => ({
+          ...current,
+          [activeQuestionId]: restoredMessages.length > 0 ? restoredMessages : (current[activeQuestionId] ?? createInitialAiMessages())
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      isMounted = false;
+    };
+  }, [activeQuestionId, assessment.ai_enabled, assessment.assessment_id]);
 
   useEffect(() => {
     if (!assessment.ai_enabled) {
@@ -489,7 +532,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
         setAiUsageSummary({
           total_interactions: usage.total_interactions,
           total_tokens: usage.total_tokens,
-          average_tokens_per_interaction: usage.average_tokens_per_interaction
+          average_tokens_per_interaction: usage.average_tokens_per_interaction,
+          by_question: usage.by_question ?? {}
         });
       })
       .catch(() => {
@@ -696,6 +740,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     }
 
     setError(null);
+    const questionId = activeQuestionId;
     const message = (overrideMessage ?? aiMessage).trim() || type.replace("_", " ");
     const requestLanguage = resolveAllowedLanguage(activeQuestion, language);
     const currentState = sanitizeQuestionState(activeQuestion, questionStatesRef.current[activeQuestionId], requestLanguage);
@@ -704,17 +749,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     aiRequestCounterRef.current += 1;
     const pendingAssistantId = `pending-ai-${aiRequestCounterRef.current}`;
     setAiState("running");
-    setMessages((current) => [
+    setAiMessagesByQuestion((current) => ({
       ...current,
-      { role: "student", text: message },
-      {
-        clientId: pendingAssistantId,
-        role: "assistant",
-        status: "pending",
-        text: "Preparing a response..."
-      }
-    ]);
-    setAiMessage("");
+      [questionId]: [
+        ...(current[questionId] ?? createInitialAiMessages()),
+        { role: "student", text: message },
+        {
+          clientId: pendingAssistantId,
+          role: "assistant",
+          status: "pending",
+          text: "Preparing a response..."
+        }
+      ]
+    }));
+    setAiDraftsByQuestion((current) => ({ ...current, [questionId]: "" }));
     try {
       const response = await getAiResponse({
         assessment_id: assessment.assessment_id,
@@ -730,10 +778,18 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       setAiUsageSummary((current) => {
         const totalInteractions = (current?.total_interactions ?? 0) + 1;
         const totalTokens = (current?.total_tokens ?? 0) + response.token_usage.total_tokens;
+        const currentTaskUsage = current?.by_question?.[questionId] ?? { total_interactions: 0, total_tokens: 0 };
         return {
           total_interactions: totalInteractions,
           total_tokens: totalTokens,
-          average_tokens_per_interaction: Math.floor(totalTokens / totalInteractions)
+          average_tokens_per_interaction: Math.floor(totalTokens / totalInteractions),
+          by_question: {
+            ...(current?.by_question ?? {}),
+            [questionId]: {
+              total_interactions: currentTaskUsage.total_interactions + 1,
+              total_tokens: currentTaskUsage.total_tokens + response.token_usage.total_tokens
+            }
+          }
         };
       });
       const suggestion = response.suggestion;
@@ -748,23 +804,26 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             replacement_code: suggestion.replacement_code
           }]
           : [];
-      setMessages((current) => current.map((item) =>
-        item.clientId === pendingAssistantId
-          ? {
-            clientId: pendingAssistantId,
-            role: "assistant",
-            interactionId: response.interaction_id,
-            responseVisibleAt: performance.now(),
-            text: response.response_markdown,
-            suggestedCode: suggestion?.replacement_code ?? undefined,
-            suggestedLanguage: suggestion ? suggestion.language : undefined,
-            targetFile: suggestion?.target_file ?? undefined,
-            applyLabel: suggestion?.apply_label ?? undefined,
-            workspaceActions,
-            tokenUsage: response.token_usage
-          }
-          : item
-      ));
+      setAiMessagesByQuestion((current) => ({
+        ...current,
+        [questionId]: (current[questionId] ?? []).map((item) =>
+          item.clientId === pendingAssistantId
+            ? {
+              clientId: pendingAssistantId,
+              role: "assistant",
+              interactionId: response.interaction_id,
+              responseVisibleAt: performance.now(),
+              text: response.response_markdown,
+              suggestedCode: suggestion?.replacement_code ?? undefined,
+              suggestedLanguage: suggestion ? suggestion.language : undefined,
+              targetFile: suggestion?.target_file ?? undefined,
+              applyLabel: suggestion?.apply_label ?? undefined,
+              workspaceActions,
+              tokenUsage: response.token_usage
+            }
+            : item
+        )
+      }));
       void recordAiInteractionEvent({
         assessment_id: assessment.assessment_id,
         interaction_id: response.interaction_id,
@@ -772,16 +831,19 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       }).catch(() => undefined);
     } catch (exception) {
       const message = exception instanceof Error ? exception.message : "AI request failed.";
-      setMessages((current) => current.map((item) =>
-        item.clientId === pendingAssistantId
-          ? {
-            clientId: pendingAssistantId,
-            role: "assistant",
-            status: "failed",
-            text: `AI request failed: ${message}`
-          }
-          : item
-      ));
+      setAiMessagesByQuestion((current) => ({
+        ...current,
+        [questionId]: (current[questionId] ?? []).map((item) =>
+          item.clientId === pendingAssistantId
+            ? {
+              clientId: pendingAssistantId,
+              role: "assistant",
+              status: "failed",
+              text: `AI request failed: ${message}`
+            }
+            : item
+        )
+      }));
       setError(message);
     } finally {
       setAiState("idle");
@@ -949,9 +1011,27 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
         elapsed_milliseconds: Math.max(0, Math.round(eventTimestamp - (message.responseVisibleAt ?? eventTimestamp)))
       }).catch(() => undefined);
     }
-    setMessages((current) => current.map((item) =>
-      item === message ? { ...item, workspaceActions: [], suggestedCode: undefined } : item
-    ));
+    setAiMessagesByQuestion((current) => ({
+      ...current,
+      [activeQuestionId]: (current[activeQuestionId] ?? []).map((item) =>
+        item === message ? { ...item, workspaceActions: [], suggestedCode: undefined } : item
+      )
+    }));
+  }
+
+  async function downloadAiTranscript() {
+    try {
+      const transcript = await getAiTaskTranscript(assessment.assessment_id, activeQuestionId);
+      const file = new Blob([JSON.stringify(transcript, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(file);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `task-${activeQuestionIndex + 1}-ai-transcript.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Could not download the AI transcript.");
+    }
   }
 
   async function submitFinal() {
@@ -1230,7 +1310,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold">AI Agent</h2>
-              <p className="mt-0.5 truncate text-xs text-white/40">{assessment.ai_enabled ? "Available for this assessment" : "Disabled for this assessment"}</p>
+              <p className="mt-0.5 truncate text-xs text-white/40">
+                {assessment.ai_enabled ? `Task ${activeQuestionIndex + 1}: ${activeQuestion.title}` : "Disabled for this assessment"}
+              </p>
             </div>
             <button
               type="button"
@@ -1245,15 +1327,24 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </div>
           {assessment.ai_enabled ? (
             <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">AI usage</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">This task&apos;s AI usage</p>
               <p className="truncate text-right text-xs text-white/50">
                 <span className="font-mono font-semibold text-cyanGlow">
-                  {aiUsageSummary ? formatTokenCount(aiUsageSummary.total_tokens) : "0"}
+                  {formatTokenCount(activeTaskAiUsage.total_tokens)}
                 </span>
                 {" tokens · "}
-                {aiUsageSummary?.total_interactions ?? 0} interactions
+                {activeTaskAiUsage.total_interactions} interactions
               </p>
             </div>
+          ) : null}
+          {assessment.ai_enabled ? (
+            <button
+              type="button"
+              className="w-fit text-xs text-cyanGlow/80 underline-offset-4 hover:text-cyanGlow hover:underline"
+              onClick={() => void downloadAiTranscript()}
+            >
+              Download this task&apos;s AI transcript
+            </button>
           ) : null}
         </div>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
@@ -1313,7 +1404,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             placeholder={assessment.ai_enabled ? "Ask a question..." : "AI disabled for this assessment"}
             value={aiMessage}
             disabled={workspaceFrozen || !assessment.ai_enabled || aiState === "running"}
-            onChange={(event) => setAiMessage(event.target.value)}
+            onChange={(event) => setAiDraftsByQuestion((current) => ({ ...current, [activeQuestionId]: event.target.value }))}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();

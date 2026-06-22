@@ -94,6 +94,38 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Canonical_fastapi_app_runs_with_testclient_without_student_installation()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var files = new CanonicalPrototypeSource()
+            .ApplyCanonicalFiles(
+                new Dictionary<string, Dictionary<string, string>>(),
+                ["python"])["python"];
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            from fastapi.testclient import TestClient
+            from main import app
+
+            def test_root_endpoint_is_available():
+                with TestClient(app) as client:
+                    response = client.get("/")
+                assert response.status_code == 200
+                assert response.json() == {"message": "Todo API", "version": "1.0.0"}
+            """,
+            "");
+
+        var result = await runner.RunAsync(files, "python", testCase, CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task JavaScript_successful_execution_returns_zero_exit_code()
     {
         if (!IsDockerAvailable())

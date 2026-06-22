@@ -119,6 +119,10 @@
 - `assessmentPrototype/` contains the source-only canonical Todo UI, FastAPI API, Peewee ORM, and SQLite configuration.
 - Generated tasks extend the canonical Todo source/contracts and do not invent a replacement base application.
 - Students install no prototype dependencies locally.
+- Each assessment task restores its own embedded AI conversation and supports a
+  JSON transcript download containing that task's persisted AI inputs and outputs.
+- The workspace AI usage card is separated by task and does not show another
+  task's tokens or interactions as the active task's usage.
 - Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
 - The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
 - Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.

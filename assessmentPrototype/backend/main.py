@@ -4,7 +4,10 @@ from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config.environment import APP_TITLE, CORS_ORIGINS
+try:
+    from config.environment import APP_TITLE, CORS_ORIGINS
+except ModuleNotFoundError:
+    from environment import APP_TITLE, CORS_ORIGINS
 from controllers import TodoController
 from models import Todo, db
 from schemas import TodoCreate, TodoResponse, TodoUpdate
@@ -64,4 +67,3 @@ def toggle_todo_completion(todo_id: int):
 @app.delete("/api/todos/{todo_id}")
 def delete_todo(todo_id: int):
     return todo_controller.delete_todo(todo_id)
-

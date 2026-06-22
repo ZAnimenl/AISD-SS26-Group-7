@@ -138,6 +138,10 @@ the active requirements. It does not replace automated test files.
   been successfully persisted for the attempt.
 - AI interactions record message, response, semantic tags, input tokens, output
   tokens, total tokens, assessment, task, and attempt ownership.
+- Switching tasks restores only that task's persisted AI prompt/response history;
+  downloading its transcript returns those same records in JSON form.
+- The workspace AI usage card shows only the active task's token and interaction
+  totals, including newly completed requests without requiring a page refresh.
 - AI requests include active file name, selected language, visible
   selected-language file contents, active file content, and latest public run
   output when available.
