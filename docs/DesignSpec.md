@@ -37,6 +37,11 @@ feedback, and report review.
   navigation instead of rendering every question as a full row.
 - Question changes persist the current editor state and restore the selected
   question's language, file, code, and run context.
+- Each task has an independent embedded AI conversation. Opening a task restores
+  only its persisted prompts and responses, and students can download that
+  task's JSON transcript.
+- The AI panel shows token and interaction totals for the active task only;
+  assessment-wide totals remain available to reporting surfaces.
 - The verification area adapts to task type.
 - Frontend UI extension tasks show direct browser UI preview.
 - Browser preview renders only sandbox-produced HTML; when no preview output is

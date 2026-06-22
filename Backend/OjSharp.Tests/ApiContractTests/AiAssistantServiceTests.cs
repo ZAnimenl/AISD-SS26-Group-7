@@ -408,6 +408,48 @@ public sealed class AiAssistantServiceTests
         Assert.Equal(36, result.OutputTokens);
     }
 
+    [Fact]
+    public async Task Generate_response_for_do_it_request_after_missing_dependency_returns_applyable_visible_file_change()
+    {
+        var handler = new CapturingHandler(CompletionJson(
+            """
+            {"response_markdown":"I prepared the route change. Apply it, then rerun the public checks after the platform runtime is restored.","semantic_tags":["code_suggestion","api_design"],"workspace_actions":[{"type":"replace_file","target_file":"main.py","language":"python","replacement_code":"from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef read_root():\n    return {\"message\": \"Todo API\"}\n","label":"Apply to main.py"},{"type":"run_public_checks","label":"Run public checks"}]}
+            """,
+            24,
+            16));
+        var service = CreateAssistantService(handler);
+
+        var result = await service.GenerateResponseAsync(
+            AiInteractionTypes.CodeSuggestion,
+            "Please just do it for me.",
+            "python",
+            "main.py",
+            "from fastapi import FastAPI\n\napp = FastAPI()\n",
+            new Dictionary<string, string>
+            {
+                ["main.py"] = "from fastapi import FastAPI\n\napp = FastAPI()\n"
+            },
+            new Dictionary<string, string>
+            {
+                ["main.py"] = "from fastapi import FastAPI\n\napp = FastAPI()\n"
+            },
+            new AiRunContextRequest(
+                "runtime_error",
+                Stderr: "ModuleNotFoundError: No module named 'fastapi'"),
+            "Versioned Todo update",
+            "Implement the visible Todo API update.",
+            ["main.py"],
+            CancellationToken.None);
+
+        var action = Assert.Single(result.WorkspaceActions, action => action.Type == AiWorkspaceActionTypes.ReplaceFile);
+        Assert.Equal("main.py", action.TargetFile);
+        Assert.False(string.IsNullOrWhiteSpace(action.ReplacementCode));
+        Assert.Contains(result.WorkspaceActions, action => action.Type == AiWorkspaceActionTypes.RunPublicChecks);
+        Assert.DoesNotContain("pip install", result.ResponseMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Never recommend pip install", handler.CapturedBody, StringComparison.Ordinal);
+        Assert.Contains("provide safe replace_file actions", handler.CapturedBody, StringComparison.Ordinal);
+    }
+
     private static AiAssistantService CreateAssistantService(CapturingHandler handler)
     {
         var completionService = new AiCompletionService(

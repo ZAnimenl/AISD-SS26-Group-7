@@ -2,6 +2,7 @@ import type {
   AdminDashboard,
   AggregateReport,
   AiAssistantResponse,
+  AiTaskTranscript,
   AiInteractionType,
   AiUsageSummary,
   Assessment,
@@ -873,6 +874,10 @@ export async function getAiResponse(input: {
   return response;
 }
 
+export async function getAiTaskTranscript(assessmentId: string, questionId: string) {
+  return apiRequest<AiTaskTranscript>(`/assessments/${assessmentId}/questions/${questionId}/ai-interactions`);
+}
+
 export async function getAiUsage(assessmentId: string) {
   return apiRequest<{
     total_interactions: number;
@@ -881,6 +886,12 @@ export async function getAiUsage(assessmentId: string) {
     total_tokens: number;
     average_tokens_per_interaction: number;
     by_type: Record<string, number>;
+    by_question: Record<string, {
+      total_interactions: number;
+      total_input_tokens: number;
+      total_output_tokens: number;
+      total_tokens: number;
+    }>;
   }>(`/assessments/${assessmentId}/ai-usage`);
 }
 
