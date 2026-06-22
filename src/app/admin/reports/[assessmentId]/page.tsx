@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
 import { AiRubricBreakdown } from "@/components/reports/AiRubricBreakdown";
+import { ScoreBar } from "@/components/reports/ScoreBar";
 import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import { getAggregateReport, isAuthenticationError, retryAiUsageGrade } from "@/lib/api";
 import type { AggregateReport } from "@/lib/types";
@@ -41,34 +42,41 @@ export default function ReportDetailPage() {
     <div>
       <SectionHeader eyebrow="Report detail" title={report.assessment_title} />
       <section className="panel">
-        <div className={`relative grid gap-3 ${report.ai_enabled ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <ScoreDonut value={report.average_functional_score} label="Average functional" />
+        <div className={`relative grid gap-3 ${report.ai_enabled ? "lg:grid-cols-[1.15fr_1fr_1fr]" : "md:grid-cols-2"}`}>
+          {report.ai_enabled ? (
+            <div className="flex min-h-40 items-center justify-center gap-5 rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 p-5 shadow-[0_0_34px_rgba(0,229,255,0.12)]">
+              <ScoreDonut value={report.average_final_score} size={94} label="Average final" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyanGlow/80">Final score</p>
+                <p className="mt-2 text-lg font-semibold text-white">Average final result</p>
+              </div>
+            </div>
+          ) : null}
+          <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-white/45">Average functional</p>
+            <div className="mt-4"><ScoreBar value={report.average_functional_score} label="Average functional" /></div>
           </div>
           {report.ai_enabled ? (
             <>
-              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <ScoreDonut value={report.average_ai_usage_score} tone="purple" label="Average AI usage" />
+              <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-5">
                 <p className="text-sm text-white/45">Average AI usage</p>
-              </div>
-              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <ScoreDonut value={report.average_final_score} label="Average final" />
-                <p className="text-sm text-white/45">Average final</p>
+                <div className="mt-4"><ScoreBar value={report.average_ai_usage_score} tone="purple" label="Average AI usage" /></div>
               </div>
             </>
           ) : null}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+        </div>
+        <div className={`relative mt-3 grid gap-3 ${report.ai_enabled ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
+          <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
             <p className="text-3xl text-purpleGlow">{report.completion_count}/{report.participant_count}</p>
             <p className="text-sm text-white/45">Completed</p>
           </div>
           {report.ai_enabled ? (
             <>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+              <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
                 <p className="text-3xl text-cyanGlow">{report.ai_usage_summary.total_tokens.toLocaleString()}</p>
                 <p className="text-sm text-white/45">Descriptive AI tokens</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+              <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
                 <p className="text-3xl text-purpleGlow">{report.ai_usage_summary.total_interactions}</p>
                 <p className="text-sm text-white/45">AI interactions</p>
               </div>
@@ -96,12 +104,26 @@ export default function ReportDetailPage() {
               </div>
               <div className="flex gap-2"><StatusBadge status={student.attempt_status} /><StatusBadge status={student.submission_status} /></div>
             </div>
-            <div className={`relative mt-5 grid gap-3 ${report.ai_enabled ? "sm:grid-cols-3" : "sm:grid-cols-1"}`}>
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3"><ScoreDonut value={student.functional_score} size={52} label="Functional score" /><p className="text-xs text-white/40">Functional</p></div>
+            <div className={`relative mt-5 grid gap-3 ${report.ai_enabled ? "lg:grid-cols-[1fr_1fr_1.15fr]" : "sm:grid-cols-1"}`}>
+              <div className="flex min-h-36 flex-col justify-center rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-white/40">Functional</p>
+                <div className="mt-3"><ScoreBar value={student.functional_score} label="Functional score" /></div>
+              </div>
               {report.ai_enabled ? (
                 <>
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">{student.ai_usage_score != null ? <ScoreDonut value={student.ai_usage_score} tone="purple" size={52} label="AI usage score" /> : <p className="text-sm text-purpleGlow">{student.ai_grading.status}</p>}<p className="text-xs text-white/40">AI usage</p></div>
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-cyanGlow/35 bg-cyanGlow/10 p-5 shadow-[0_0_28px_rgba(0,229,255,0.10)]">{student.final_score != null ? <ScoreDonut value={student.final_score} size={68} label="Final average score" /> : <p className="text-lg text-cyanGlow">Pending</p>}<p className="text-sm font-medium text-white/65">Final average score</p></div>
+                  <div className="flex min-h-36 flex-col justify-center rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs text-white/40">AI usage</p>
+                    <div className="mt-3">
+                      {student.ai_usage_score != null ? <ScoreBar value={student.ai_usage_score} tone="purple" label="AI usage score" /> : <p className="text-sm text-purpleGlow">{student.ai_grading.status}</p>}
+                    </div>
+                  </div>
+                  <div className="flex min-h-36 items-center justify-center gap-4 rounded-2xl border border-cyanGlow/35 bg-cyanGlow/10 p-5 shadow-[0_0_28px_rgba(0,229,255,0.10)]">
+                    {student.final_score != null ? <ScoreDonut value={student.final_score} size={82} label="Final average score" /> : <p className="text-lg text-cyanGlow">Pending</p>}
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyanGlow/75">Final score</p>
+                      <p className="mt-2 text-sm font-medium text-white/65">Overall result</p>
+                    </div>
+                  </div>
                 </>
               ) : null}
             </div>

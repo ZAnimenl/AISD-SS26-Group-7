@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, CheckCircle2, Clock, FileCode2 } from "lucide-react";
+import { CheckCircle2, Clock, FileCode2 } from "lucide-react";
 import { AssessmentCard } from "@/components/student/AssessmentCard";
+import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getStudentAssessments, getStudentDashboard, getStudentResults, isAuthenticationError } from "@/lib/api";
@@ -56,11 +57,19 @@ export default function StudentDashboardPage() {
         title="Dashboard"
         action={<Link className="btn-primary" href="/student/assessments">Open assessments</Link>}
       />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={FileCode2} label="Available" value={dashboard.summary.available_assessments} />
-        <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} />
-        <MetricCard icon={CheckCircle2} label="Completed" value={dashboard.summary.completed_assessments} />
-        <MetricCard icon={BarChart3} label="Average score" value={`${dashboard.summary.average_score}%`} score={dashboard.summary.average_score} />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <MetricCard icon={FileCode2} label="Available" value={dashboard.summary.available_assessments} />
+          <MetricCard icon={Clock} label="In progress" value={dashboard.summary.in_progress_attempts} />
+          <MetricCard icon={CheckCircle2} label="Completed" value={dashboard.summary.completed_assessments} />
+        </div>
+        <section className="metric-card dynamic-surface flex min-h-48 items-center justify-center border-cyanGlow/25 bg-cyanGlow/8 text-center shadow-[0_0_34px_rgba(0,229,255,0.10)]">
+          <div className="relative">
+            <ScoreDonut value={dashboard.summary.average_score} size={96} label="Average score" />
+            <p className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Average score</p>
+            <p className="mt-2 text-xs text-white/35">Across your completed assessments</p>
+          </div>
+        </section>
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <div>
