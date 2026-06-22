@@ -9,6 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip nodejs npm \
     && python3 -m pip install --break-system-packages \
         pytest flask flask-cors requests beautifulsoup4 \
+        fastapi "uvicorn[standard]" peewee "pydantic>=2.9" "httpx>=0.27" \
     && npm install -g jest jest-environment-jsdom jsdom@22.1.0 typescript supertest express \
     && rm -rf /var/lib/apt/lists/*
 
