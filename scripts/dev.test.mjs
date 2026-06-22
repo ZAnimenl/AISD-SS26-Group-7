@@ -11,6 +11,7 @@ import {
   buildLocalSqliteConnectionString,
   cleanLocalAiConfig,
   convertPostgresUrlToNpgsql,
+  describeSandboxRuntime,
   diagnoseBackendFailure,
   isAcceptableDeepseekApiKey,
   isSafeBackendProcessCommand,
@@ -271,6 +272,13 @@ test("isSafeBackendProcessCommand recognizes Backend listeners only", () => {
   assert.equal(isSafeBackendProcessCommand("/usr/local/bin/dotnet /repo/Backend/Backend.dll"), true);
   assert.equal(isSafeBackendProcessCommand('"dotnet" exec "C:\\repo\\Backend\\Backend\\bin\\Debug\\net9.0\\Backend.dll"'), true);
   assert.equal(isSafeBackendProcessCommand("/usr/local/bin/node server.js"), false);
+});
+
+test("describeSandboxRuntime distinguishes configured and reachable Docker hosts", () => {
+  const config = { DOCKER_HOST: "npipe://./pipe/dockerDesktopLinuxEngine" };
+
+  assert.match(describeSandboxRuntime(config, () => false), /configured but unreachable/);
+  assert.match(describeSandboxRuntime(config, () => true), /detected/);
 });
 
 test("isSafeFrontendProcessCommand recognizes local Next.js listeners only", () => {

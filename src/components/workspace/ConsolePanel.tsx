@@ -107,9 +107,9 @@ export function ConsolePanel({ isRunning, runResult, taskError }: {
         <div className="grid gap-2 pb-3">
           {isEnvironmentUnavailable ? (
             <section className="rounded-lg border border-amber-500/25 bg-[#241d0d]">
-              <div className="border-b border-amber-500/15 bg-[#2a220f] px-3 py-2 text-xs font-semibold text-amber-200/90">Run environment unavailable</div>
+              <div className="border-b border-amber-500/15 bg-[#2a220f] px-3 py-2 text-xs font-semibold text-amber-200/90">Execution unavailable</div>
               <p className="p-3 text-xs leading-5 text-amber-100/75">
-                The sandbox grader is not reachable right now. This is an environment issue, not a code stderr output.
+                Your code was not run. Please try again later or contact an administrator.
               </p>
             </section>
           ) : null}

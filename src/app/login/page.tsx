@@ -95,7 +95,7 @@ function LoginContent() {
             </span>
             <span>
               <span className="block text-sm font-semibold">AI Coding Assessment</span>
-              <span className="block text-xs text-white/45">Frontend and API client</span>
+              <span className="block text-xs text-white/45">Secure assessment workspace</span>
             </span>
           </div>
           <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>
@@ -166,24 +166,14 @@ function LoginContent() {
           {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
         </div>
         <div className="border-t border-white/10 bg-black/20 p-8 lg:border-l lg:border-t-0 lg:p-12">
-          <div className="rounded-3xl border border-white/10 bg-black/30 p-5 font-mono text-sm text-white/70">
-            <div className="mb-4 flex gap-2">
-              <span className="h-3 w-3 rounded-full bg-pinkGlow" />
-              <span className="h-3 w-3 rounded-full bg-purpleGlow" />
-              <span className="h-3 w-3 rounded-full bg-cyanGlow" />
-            </div>
-            <pre className="whitespace-pre-wrap leading-7">
-{`POST /api/v1/auth/login
-POST /api/v1/auth/register/start
-POST /api/v1/auth/register/verify-code
-POST /api/v1/auth/register/complete
-GET  /api/v1/auth/google/start
-GET  /api/v1/auth/google/callback
-GET  /api/v1/auth/me
-POST /api/v1/auth/logout
-
-admin_users = "/api/v1/admin/users";`}
-            </pre>
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow">Built for focused assessment</p>
+            <h2 className="mt-4 text-2xl font-semibold text-white">Everything you need, without leaving the workspace.</h2>
+            <ul className="mt-5 grid gap-3 text-sm leading-6 text-white/60">
+              <li>Work across realistic project files in one secure editor.</li>
+              <li>Run visible checks and preview interface tasks as you build.</li>
+              <li>Keep progress saved while the assessment is active.</li>
+            </ul>
           </div>
           <div className="mt-6 grid gap-3 text-sm text-white/55">
             {showLocalDemoAccount ? (

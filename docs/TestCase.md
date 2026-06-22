@@ -16,6 +16,8 @@ the active requirements. It does not replace automated test files.
   status, and AI enabled state.
 - Assessment creation visibly separates basics, generated-question review, and
   delivery settings into three stages.
+- Task-count increment and decrement controls have category-specific accessible
+  names.
 - Title and description are required before generation review, and at least one
   reviewed question is required before delivery settings can be finalized.
 - Administrators can create tasks using the supported task categories.
@@ -34,6 +36,8 @@ the active requirements. It does not replace automated test files.
   a notice that the workspace becomes review-only afterward.
 - The initial workspace gives the code editor more space than the output panel,
   and the AI panel can be resized horizontally with its visible divider.
+- At mobile width, the task, AI, and output panels start collapsed so the editor
+  remains visible and the page has no horizontal overflow.
 - Resizing the editor or AI rail does not overlap file tabs, language selection,
   Run, AI status, usage metrics, or panel controls.
 - The task rail displays one active question with Previous, Next, and compact
@@ -42,6 +46,8 @@ the active requirements. It does not replace automated test files.
   for every question.
 - Starting an assessment shows a pending state while the backend resolves the
   real active attempt and prevents duplicate start clicks.
+- Revisiting the pre-start route during an active attempt offers Continue
+  attempt instead of implying that a new attempt will be created.
 
 ## AI Report Summary
 
@@ -57,6 +63,23 @@ the active requirements. It does not replace automated test files.
   accessible donut whose value matches the displayed percentage.
 - Student review Functional and AI Usage cards show the score donuts without
   redundant statistic icons; the Final Score label appears below its donut.
+- Dashboard average-score cards omit the redundant statistic icon when the
+  donut is present.
+- The dashboard assessment preview has no horizontal scrollbar at desktop
+  widths and keeps its visible columns inside the panel.
+- Duration changes accept direct numeric entry as well as slider and step-button
+  input, clamped to the supported 1-240 minute range.
+- A future assessment deadline uses neutral availability styling and copy;
+  expired or otherwise unavailable attempts still explain why they cannot open.
+- An expired pre-start page does not say that the student can continue working.
+- Expired attempts without a submission do not claim that a submitted result is
+  available for review.
+- A review deep link for an active, unsubmitted attempt offers Continue
+  assessment and does not claim that a submission was received.
+- A reflection deep link before submission shows an unavailable state and does
+  not claim that code is frozen or a draft is autosaving.
+- Completed student and administrator AI reports show the four rubric
+  subsections, each with its score and a concise stored-evidence summary.
 - After start succeeds, the start page verifies the real backend workspace is
   readable before navigating to the IDE.
 - Direct deep links to student assessment start, workspace, and review pages
@@ -93,8 +116,12 @@ the active requirements. It does not replace automated test files.
   container.
 - Local startup detects common Docker Desktop and Colima socket locations and
   reports sandbox runtime readiness in doctor/startup output.
+- A configured but unreachable Docker host is reported as unreachable, not
+  detected or ready.
 - Student workspace Run and Submit controls are disabled when backend config
   reports the real sandbox runtime is unavailable.
+- A sandbox-disabled Submit control is visibly disabled and labeled
+  unavailable instead of looking actionable.
 - If the sandbox grader is unavailable, run and submit report `internal_error`
   rather than static task-specific pass/fail results.
 - Submit evaluates final work and returns visible and hidden test summary counts
@@ -226,6 +253,10 @@ the active requirements. It does not replace automated test files.
 - After local default administrator login, `/api/v1/admin/dashboard` returns a
   successful response under SQLite.
 - Backend 401 responses clear stored auth before navigation to `/login`.
+- Logout from dashboards and the workspace clears local auth immediately and
+  navigates to `/login` without waiting indefinitely for the backend.
+- The compact workspace Logout control remains visible and clickable above
+  local development overlays.
 - Non-auth backend data errors remain on the current page and show the real
   error instead of clearing auth or returning to `/login`.
 
@@ -285,3 +316,21 @@ the active requirements. It does not replace automated test files.
 - Draft generation validates the requested task category before language-test coverage and retries missing test-code entries with explicit required-language guidance.
 - Duration sliders serialize a positive 1–240 minute value on create and edit.
 - A frontend task explicitly requiring optimistic UI and conflict resolution satisfies the frontend advanced-concern threshold.
+
+# Added verification cases (2026-06-22)
+
+- Generated HTML starter workspaces contain the exact canonical Todo
+  `index.html`, `styles.css`, and `app.js` contents.
+- Generated Python starter workspaces contain the packaged canonical FastAPI,
+  Peewee, controller, service, repository, schema, and environment files.
+- Generated SQL starter workspaces contain the packaged canonical Todo schema,
+  seed data, and extension file.
+- Task-specific files returned by the LLM remain available alongside canonical
+  files, while conflicting canonical file names are overwritten from source.
+- Canonical files are included in editable starter-file metadata and use the
+  `default-todo-list` prototype reference.
+- Docker-backed execution tests run without skip when Docker Desktop is
+  available and cover successful Python/JavaScript execution, DOM support,
+  timeouts, network isolation, aliases, and syntax errors.
+- Routine loading, saving, AI, submission, and execution-unavailable messages
+  avoid backend/provider/sandbox implementation wording.

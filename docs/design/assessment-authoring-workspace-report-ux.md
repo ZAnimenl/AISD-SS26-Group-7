@@ -37,8 +37,20 @@ Generation creates a backend draft because generated tasks must be persisted bef
 ### AI assessment summary
 
 - Completed grading shows the stored automatic grading summary, a reflection-understanding statement, and concise usage evidence.
+- Completed grading also shows all four rubric subsections with scores and
+  short summaries derived from criterion-level evidence when available.
 - Pending/failed grading shows an explicit status message without fabricating a summary.
 - AI-disabled attempts do not show an AI assessment summary.
+
+### Dashboard and assessment timing controls
+
+- The dashboard uses a compact assessment preview so its split layout does not
+  force horizontal scrolling.
+- Percentage donuts replace, rather than duplicate, the statistic icon in the
+  same card.
+- Duration supports direct numeric entry alongside the range and step controls.
+- A future expiration timestamp is presented as neutral availability
+  information; unavailable states retain explicit explanatory copy.
 
 ## Impact surface
 

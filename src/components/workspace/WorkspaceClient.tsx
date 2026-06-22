@@ -75,7 +75,7 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
   debugging: "debugging"
 };
 
-const SANDBOX_UNAVAILABLE_MESSAGE = "Run environment unavailable. The sandbox grader is not reachable from the backend right now.";
+const SANDBOX_UNAVAILABLE_MESSAGE = "Run and submit are temporarily unavailable. Please try again later or contact an administrator.";
 const MAX_PROBLEM_STATEMENT_WORDS = 150;
 
 function limitProblemStatement(markdown: string) {
@@ -711,7 +711,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
         clientId: pendingAssistantId,
         role: "assistant",
         status: "pending",
-        text: "Waiting for the backend to get a real AI provider response..."
+        text: "Preparing a response..."
       }
     ]);
     setAiMessage("");
@@ -1123,9 +1123,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           </div>
           <span className="badge hidden xl:inline-flex"><SemanticIcon name="clock" size={14} /> {frozenTimeLabel ?? remainingTime}</span>
           <span className="badge">{saveState}</span>
-          <button className="btn-primary px-4 py-2" onClick={() => setConfirmSubmit(true)} disabled={isSubmitPending || !sandboxAvailable}>
+          <button className="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-45" onClick={() => setConfirmSubmit(true)} disabled={isSubmitPending || !sandboxAvailable}>
             {isSubmitPending ? <Loader2 className="animate-spin" size={16} /> : null}
-            {submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit"}
+            {!sandboxAvailable ? "Submit unavailable" : submitState === "saving" ? "Saving..." : submitState === "submitting" ? "Submitting..." : "Submit"}
           </button>
         </div>
         {!sandboxAvailable ? <p className="relative border-b border-amber-500/20 bg-[#241d0d] px-4 py-2 text-sm text-amber-100/80">{SANDBOX_UNAVAILABLE_MESSAGE}</p> : null}
@@ -1134,7 +1134,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           <p className="relative border-b border-white/10 px-4 py-2 text-sm text-white/55" aria-live="polite">
             {submitState === "saving"
               ? "Saving current workspace before final submission..."
-              : "Submitting to backend for hidden-test evaluation. This page will move to review only after the backend confirms."}
+              : "Submitting your solution for final evaluation. You will continue to review when it is complete."}
           </p>
         ) : null}
         <div className="relative grid gap-2 border-b border-white/10 px-3 py-2.5">
@@ -1277,12 +1277,12 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               {message.status === "pending" ? (
                 <span className="mb-2 inline-flex items-center gap-2 text-xs text-white/45">
                   <Loader2 className="animate-spin" size={13} />
-                  Provider request in progress
+                  Response in progress
                 </span>
               ) : null}
               {message.status === "failed" ? (
                 <span className="mb-2 inline-flex items-center gap-2 text-xs text-pinkGlow">
-                  Backend/provider error
+                  Response unavailable
                 </span>
               ) : null}
               {renderMarkdown(message.text)}

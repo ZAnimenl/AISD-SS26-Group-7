@@ -75,7 +75,7 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
         })}
       </nav>
 
-      <div className="relative mt-auto space-y-3">
+      <div className={`relative mt-auto space-y-3 ${compact ? "pb-14" : ""}`}>
         <div className={`scanline rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-white/45 ${compact ? "hidden" : ""}`}>
           Role: <span className="text-white/75">{role === "student" ? "Student" : "Administrator"}</span>
         </div>
@@ -84,8 +84,8 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
             compact ? "flex flex-col items-center gap-1 px-1 py-2" : "flex items-center gap-3 px-4 py-2.5"
           }`}
           title={compact ? "Logout" : undefined}
-          onClick={async () => {
-            await logout();
+          onClick={() => {
+            void logout();
             router.push("/login");
           }}
         >
@@ -96,10 +96,6 @@ export function AppSidebar({ role }: { role: "student" | "administrator" }) {
             <span>Logout</span>
           )}
         </button>
-        <div className={`flex items-center gap-3 px-4 py-2.5 text-xs text-white/35 ${compact ? "hidden" : ""}`}>
-          <SemanticIcon name="settings" size={16} />
-          Backend API mode
-        </div>
       </div>
     </aside>
   );

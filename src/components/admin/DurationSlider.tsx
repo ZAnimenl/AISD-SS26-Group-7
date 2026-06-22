@@ -24,9 +24,24 @@ export function DurationSlider({
       <input type="hidden" name="duration_minutes" value={value} />
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-white/60">Duration</span>
-        <span className="min-w-20 rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-1.5 text-center font-mono text-sm text-cyanGlow">
-          {value} min
-        </span>
+        <label className="flex items-center rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 px-2 py-1 text-cyanGlow focus-within:border-cyanGlow/70">
+          <span className="sr-only">Duration in minutes</span>
+          <input
+            className="w-14 appearance-none bg-transparent text-right font-mono text-sm text-cyanGlow outline-none disabled:opacity-45"
+            type="number"
+            min={MIN_DURATION_MINUTES}
+            max={MAX_DURATION_MINUTES}
+            step={1}
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              if (event.target.value !== "") {
+                update(Number(event.target.value));
+              }
+            }}
+          />
+          <span className="ml-1 font-mono text-sm">min</span>
+        </label>
       </div>
       <div className="grid grid-cols-[36px_1fr_36px] items-center gap-3">
         <button

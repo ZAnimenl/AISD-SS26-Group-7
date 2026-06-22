@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, RotateCcw } from "lucide-react";
+import { ArrowLeft, BarChart3, CheckCircle2, FileCode2, Home, PlayCircle, RotateCcw } from "lucide-react";
 import { getStudentAssessments, getStudentResults, isAuthenticationError } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AiAssessmentSummary } from "@/components/reports/AiAssessmentSummary";
+import { AiRubricBreakdown } from "@/components/reports/AiRubricBreakdown";
 import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import type { Assessment } from "@/lib/types";
 import { hasAssessmentExpired } from "@/lib/assessmentSchedule";
@@ -62,12 +63,15 @@ export default function StudentAssessmentReviewPage() {
       question_count: nextResult.question_count || assessment?.question_count || assessment?.questions.length || 0
     };
   }, [assessmentId, assessments, results, submissionId]);
-  const canStartAnotherAttempt = assessments.some((assessment) =>
-    assessment.assessment_id === assessmentId
-    && assessment.status === "active"
-    && !hasAssessmentExpired(assessment.expires_at)
-    && assessment.attempt_status !== "expired"
+  const currentAssessment = assessments.find((assessment) => assessment.assessment_id === assessmentId);
+  const assessmentAcceptsWork = Boolean(
+    currentAssessment
+    && currentAssessment.status === "active"
+    && !hasAssessmentExpired(currentAssessment.expires_at)
   );
+  const canContinueAttempt = assessmentAcceptsWork && currentAssessment?.attempt_status === "active";
+  const canStartAttempt = assessmentAcceptsWork && (!currentAssessment?.attempt_status || currentAssessment.attempt_status === "not_started");
+  const canStartAnotherAttempt = assessmentAcceptsWork && currentAssessment?.attempt_status === "submitted";
 
   if (isLoading) {
     return <SectionHeader eyebrow="Assessment review" title="Loading result..." />;
@@ -83,13 +87,19 @@ export default function StudentAssessmentReviewPage() {
         />
         <section className="panel">
           <p className="relative text-white/60">
-            The submission was received, but the published result for this assessment is not available in the student results feed yet.
+            {canContinueAttempt
+              ? "This assessment does not have a submitted result yet. Continue your active attempt to create one."
+              : currentAssessment?.attempt_status === "submitted"
+                ? "Your submission was received, but its published result is not available yet."
+                : "No submitted result is available for this assessment yet."}
           </p>
           <div className="relative mt-6 flex flex-wrap gap-3">
             <Link className="btn-primary" href="/student/dashboard"><Home size={16} /> Dashboard</Link>
             <Link className="btn-secondary" href="/student/results"><BarChart3 size={16} /> Results</Link>
-            {canStartAnotherAttempt ? (
-              <Link className="btn-secondary" href={`/student/assessments/${assessmentId}/start`}><RotateCcw size={16} /> Start another attempt</Link>
+            {canContinueAttempt ? (
+              <Link className="btn-secondary" href={`/student/assessments/${assessmentId}/workspace`}><FileCode2 size={16} /> Continue assessment</Link>
+            ) : canStartAttempt ? (
+              <Link className="btn-secondary" href={`/student/assessments/${assessmentId}/start`}><PlayCircle size={16} /> Start assessment</Link>
             ) : null}
           </div>
         </section>
@@ -168,13 +178,18 @@ export default function StudentAssessmentReviewPage() {
             Your final submission for this assessment has been recorded. Hidden test inputs and expected outputs remain private; only the published score and status are shown here.
           </p>
           {result.ai_enabled ? (
-            <AiAssessmentSummary
-              status={result.ai_grading_status ?? "pending"}
-              summary={result.ai_grading_summary}
-              reflectionText={result.reflection_text}
-              details={result.ai_grading_details}
-              confidence={result.ai_grading_confidence}
-            />
+            <>
+              <AiAssessmentSummary
+                status={result.ai_grading_status ?? "pending"}
+                summary={result.ai_grading_summary}
+                reflectionText={result.reflection_text}
+                details={result.ai_grading_details}
+                confidence={result.ai_grading_confidence}
+              />
+              {(result.ai_grading_status ?? "pending") === "completed" ? (
+                <AiRubricBreakdown details={result.ai_grading_details} />
+              ) : null}
+            </>
           ) : null}
           {result.ai_enabled && result.reflection_text ? (
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">

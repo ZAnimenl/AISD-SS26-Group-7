@@ -71,7 +71,7 @@ export default function AdminAssessmentsPage() {
       />
       {actionError ? <section className="panel mb-4 text-sm text-pinkGlow">{actionError}</section> : null}
       {isLoading ? (
-        <section className="panel text-sm text-white/55" aria-live="polite">Loading assessments from backend...</section>
+        <section className="panel text-sm text-white/55" aria-live="polite">Loading assessments...</section>
       ) : (
         <AdminAssessmentTable assessments={assessments} deletingAssessmentId={deletingAssessmentId} onDeleteAssessment={handleDeleteAssessment} />
       )}

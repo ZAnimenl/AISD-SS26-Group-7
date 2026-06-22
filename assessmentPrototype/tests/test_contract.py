@@ -11,6 +11,9 @@ def test_canonical_stack_and_contract_files_exist():
     assert "FastAPI" in (ROOT / "backend/main.py").read_text(encoding="utf-8")
     assert "SqliteDatabase" in (ROOT / "backend/models.py").read_text(encoding="utf-8")
     assert "class Todo" in (ROOT / "backend/models.py").read_text(encoding="utf-8")
+    assert (ROOT / "database/schema.sql").exists()
+    assert (ROOT / "database/seed.sql").exists()
+    assert (ROOT / "database/solution.sql").exists()
 
 
 def test_browser_ui_has_no_remote_dependencies():
@@ -19,4 +22,3 @@ def test_browser_ui_has_no_remote_dependencies():
     assert "https://" not in html
     assert 'href="styles.css"' in html
     assert 'src="app.js"' in html
-

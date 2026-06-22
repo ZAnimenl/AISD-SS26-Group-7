@@ -63,8 +63,10 @@ export default function EditAssessmentPage() {
       setError("Duration must be a whole number greater than zero.");
       return;
     }
-    const startsAt = startMode === "scheduled" ? toUtcIso(scheduledStart) : currentUtcIso();
-    const expiry = toUtcIso(expiresAt);
+    const submittedStart = String(form.get("starts_at") ?? scheduledStart);
+    const submittedExpiry = String(form.get("expires_at") ?? expiresAt);
+    const startsAt = startMode === "scheduled" ? toUtcIso(submittedStart) : currentUtcIso();
+    const expiry = toUtcIso(submittedExpiry);
     if (!expiry || new Date(expiry).getTime() <= new Date(startsAt ?? currentUtcIso()).getTime()) {
       setError("Assessment expiration must be later than its start time.");
       return;
@@ -132,7 +134,7 @@ export default function EditAssessmentPage() {
   }
 
   if (isLoading) {
-    return <SectionHeader eyebrow="Administrator" title="Connecting to backend..." />;
+    return <SectionHeader eyebrow="Administrator" title="Loading assessment..." />;
   }
 
   if (!assessment) {
@@ -171,12 +173,12 @@ export default function EditAssessmentPage() {
               {startMode === "scheduled" ? (
                 <label className="grid gap-2 text-sm text-white/60 sm:col-span-2">
                   Start date and time
-                  <input className="field [color-scheme:dark]" type="datetime-local" value={scheduledStart} required onChange={(event) => setScheduledStart(event.target.value)} />
+                  <input className="field [color-scheme:dark]" name="starts_at" type="datetime-local" value={scheduledStart} required onChange={(event) => setScheduledStart(event.target.value)} />
                 </label>
               ) : null}
               <label className="grid gap-2 text-sm text-white/60 sm:col-span-2">
                 Assessment expires
-                <input className="field [color-scheme:dark]" type="datetime-local" value={expiresAt} required onChange={(event) => setExpiresAt(event.target.value)} />
+                <input className="field [color-scheme:dark]" name="expires_at" type="datetime-local" value={expiresAt} required onChange={(event) => setExpiresAt(event.target.value)} />
                 <span className="text-xs text-white/35">After this deadline students can review results, but cannot start or continue an attempt.</span>
               </label>
               <label className="grid gap-2 text-sm text-white/60">Status<CustomDropdown name="status" ariaLabel="Status" value={statusValue} onChange={setStatusValue} options={["draft", "active", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} /></label>
@@ -185,15 +187,14 @@ export default function EditAssessmentPage() {
             <div className="flex flex-wrap gap-3">
               <button className="btn-primary" disabled={isSaving || isDeleting}>
                 {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
-                {isSaving ? "Saving in backend..." : "Save changes"}
+                {isSaving ? "Saving..." : "Save changes"}
               </button>
               <button className="btn-secondary text-pinkGlow" type="button" disabled={isSaving || isDeleting} onClick={handleDeleteAssessment}>
                 {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                 {isDeleting ? "Deleting..." : "Delete assessment"}
               </button>
             </div>
-            {isSaving ? <p className="text-sm text-white/55" aria-live="polite">Waiting for backend confirmation before marking this assessment saved.</p> : null}
-            {saved ? <p className="text-sm text-cyanGlow">Saved in backend.</p> : null}
+            {saved ? <p className="text-sm text-cyanGlow">Changes saved.</p> : null}
             {error ? <p className="text-sm text-pinkGlow">{error}</p> : null}
           </form>
         </section>

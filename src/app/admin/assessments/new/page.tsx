@@ -234,9 +234,25 @@ export default function NewAssessmentPage() {
                             <span className="grid h-9 min-w-9 place-items-center rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 font-mono text-sm text-cyanGlow">{count}</span>
                           </div>
                           <div className="mt-4 grid grid-cols-[36px_1fr_36px] items-center gap-3">
-                            <button className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30" type="button" disabled={count === 0} onClick={() => updateTaskCount(blueprint.type, count - 1)}><Minus size={15} /></button>
+                            <button
+                              className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30"
+                              type="button"
+                              aria-label={`Decrease ${blueprint.label} question count`}
+                              disabled={count === 0}
+                              onClick={() => updateTaskCount(blueprint.type, count - 1)}
+                            >
+                              <Minus size={15} />
+                            </button>
                             <input className="h-2 w-full accent-cyan-400" type="range" min={0} max={MAX_TASKS_PER_TYPE} value={count} aria-label={`${blueprint.label} question count`} onChange={(event) => updateTaskCount(blueprint.type, Number(event.target.value))} />
-                            <button className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30" type="button" disabled={totalTasks >= MAX_TOTAL_TASKS || count >= MAX_TASKS_PER_TYPE} onClick={() => updateTaskCount(blueprint.type, count + 1)}><Plus size={15} /></button>
+                            <button
+                              className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30"
+                              type="button"
+                              aria-label={`Increase ${blueprint.label} question count`}
+                              disabled={totalTasks >= MAX_TOTAL_TASKS || count >= MAX_TASKS_PER_TYPE}
+                              onClick={() => updateTaskCount(blueprint.type, count + 1)}
+                            >
+                              <Plus size={15} />
+                            </button>
                           </div>
                         </div>
                       );

@@ -50,7 +50,7 @@ function getVerificationLabel(mode?: VerificationMode) {
 function getVerificationCopy(question: Question | undefined) {
   switch (question?.verification_mode) {
     case "browser_ui_preview":
-      return "Run executes public checks and renders the browser UI preview returned by the sandbox.";
+      return "Run executes public checks and renders the browser UI preview.";
     case "api_response_check":
       return "Run will verify the selected route handler and show public request/response test output.";
     case "database_result_check":
@@ -86,7 +86,7 @@ function BrowserPreviewFrame({ runResult }: {
     return (
       <div className="grid h-[170px] place-items-center rounded-xl border border-white/10 bg-slate-950 px-6 text-center xl:h-[190px]">
         <div>
-          <p className="text-sm font-semibold text-white">No sandbox preview output</p>
+          <p className="text-sm font-semibold text-white">Preview not available yet</p>
           <p className="mt-2 text-xs leading-5 text-white/50">
             Run must return browser HTML before this panel can render a preview.
           </p>
@@ -98,7 +98,7 @@ function BrowserPreviewFrame({ runResult }: {
   return (
     <div className="relative h-full min-h-[280px] overflow-hidden rounded-xl border border-white/10 bg-white">
       <span className="absolute right-2 top-2 z-10 rounded border border-emerald-500/25 bg-[#07111d] px-2 py-1 text-[10px] text-emerald-300">
-        Sandbox output
+        Live preview
       </span>
       <iframe
         className="h-full min-h-[280px] w-full bg-white"

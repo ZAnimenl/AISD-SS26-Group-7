@@ -51,7 +51,9 @@ the local seed administrator before the login page offers those credentials.
   dashboard; local demo fill populates the form only; successful login stores
   token and user then routes to the role dashboard; backend 401 clears stored
   auth and routes to login; wrong role routes to the other role dashboard;
-  non-auth backend errors stay on the current page with the real error message.
+  non-auth backend errors stay on the current page with the real error message;
+  explicit logout clears local auth and routes to login immediately while
+  backend token revocation completes best-effort.
 - Side effects: run the backend EF Core seed path in CLI-only mode; write or
   clear localStorage auth keys; emit a same-tab auth change event; show
   development-only local administrator credentials.

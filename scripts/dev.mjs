@@ -78,6 +78,7 @@ export {
   resolveUrlPort
 } from "./dev-port-processes.mjs";
 export {
+  describeSandboxRuntime,
   normalizeDockerHost,
   resolveDockerSocketHost
 };
@@ -401,16 +402,39 @@ function describeAiConfig(config) {
     : "invalid; rerun npm run dev to repair";
 }
 
-function describeSandboxRuntime(config) {
+function describeSandboxRuntime(config, probe = isDockerRuntimeReachable) {
   const dockerHost = resolveDockerSocketHost(
     config.DOCKER_HOST || process.env.DOCKER_HOST,
     os.homedir(),
     fs.existsSync,
     process.platform);
 
-  return dockerHost
+  if (!dockerHost) {
+    return "not detected; workspace Run and Submit stay disabled until a Docker-compatible runtime is available";
+  }
+
+  return probe(dockerHost)
     ? `detected (${dockerHost})`
-    : "not detected; workspace Run and Submit stay disabled until a Docker-compatible runtime is available";
+    : `configured but unreachable (${dockerHost}); workspace Run and Submit stay disabled until the runtime is available`;
+}
+
+function isDockerRuntimeReachable(dockerHost) {
+  const cliDockerHost = dockerHost?.startsWith("npipe://./pipe/")
+    ? dockerHost.replace("npipe://./pipe/", "npipe:////./pipe/")
+    : dockerHost;
+  const result = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...(cliDockerHost ? { DOCKER_HOST: cliDockerHost } : {})
+    },
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5000,
+    windowsHide: true
+  });
+
+  return result.status === 0 && Boolean(result.stdout.trim());
 }
 
 async function ensureLocalConfig(fileConfig, options) {
