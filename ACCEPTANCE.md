@@ -126,6 +126,8 @@
 - Each generated task has an administrator-only AI-usage benchmark that considers
   reference token efficiency and the task goal, code context, observed behavior,
   and constraint information supplied to the AI agent.
+- Each generated task runs a provider-measured complete-versus-compact public-context baseline after generation. Its stored compression rate, compression ratio, structural-retention score, and availability state remain administrator-only.
+- The active AI panel shows only that task's observable prompt CpT, prompt TpC, and context-signal coverage; it does not expose hidden tests, baseline prompts, or grading implementation.
 - Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
 - The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
 - Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.

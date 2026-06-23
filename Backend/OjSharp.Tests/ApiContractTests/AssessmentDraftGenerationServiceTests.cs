@@ -208,7 +208,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             CancellationToken.None);
 
         Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
-        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(3, handler.CallCount);
         Assert.Contains("Every public and hidden test_cases item", handler.CapturedBodies[1]);
         Assert.Contains("required language", handler.CapturedBodies[1]);
     }
@@ -472,7 +472,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             CancellationToken.None);
 
         Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
-        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(3, handler.CallCount);
         Assert.Contains("previous draft was rejected", handler.CapturedBodies[1]);
         Assert.Contains("still tutorial-level", handler.CapturedBodies[1]);
         Assert.Contains("exact vocabulary", handler.CapturedBodies[1]);
@@ -509,7 +509,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             CancellationToken.None);
 
         Assert.Equal("Transaction-Safe Todo Audit Reconciliation", question.Title);
-        Assert.Equal(4, handler.CallCount);
+        Assert.Equal(5, handler.CallCount);
     }
 
     [Fact]
@@ -561,7 +561,10 @@ public sealed class AssessmentDraftGenerationServiceTests
             }),
             NullLogger<AiCompletionService>.Instance);
 
-        return new AssessmentDraftGenerationService(completionService, new CanonicalPrototypeSource());
+        return new AssessmentDraftGenerationService(
+            completionService,
+            new CanonicalPrototypeSource(),
+            new TokenEfficiencyReferenceBaselineService(completionService));
     }
 
     private static Dictionary<string, int> RequiredTaskTypeCounts(int count)

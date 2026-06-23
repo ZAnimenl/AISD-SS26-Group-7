@@ -151,6 +151,13 @@ the active requirements. It does not replace automated test files.
 - Generated tasks contain a versioned, deterministic AI-usage benchmark with a
   reference token budget, recommended interaction count, and required context
   signals. AI-usage grading receives actual per-task token/context evidence.
+- Generated tasks run matched full and compact public-context provider prompts;
+  a completed baseline stores the resulting token compression ratio and a
+  structural-retention reference score, while unavailable provider runs are
+  explicitly marked unavailable rather than estimated.
+- The active AI panel shows only that task's prompt CpT, TpC, and context-signal
+  coverage. It does not show the administrator-only reference baseline or
+  represent a proxy as the research underthinking metric.
 - AI requests include active file name, selected language, visible
   selected-language file contents, active file content, and latest public run
   output when available.

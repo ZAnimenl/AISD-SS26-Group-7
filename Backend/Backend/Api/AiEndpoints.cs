@@ -304,6 +304,9 @@ public static class AiEndpoints
         var totalOutputTokens = interactions.Sum(i => i.OutputTokens);
         var totalTokens = interactions.Sum(i => i.TotalTokens);
         var avgTokensPerInteraction = interactions.Count > 0 ? totalTokens / interactions.Count : 0;
+        var interactionsByQuestion = interactions
+            .GroupBy(interaction => interaction.QuestionId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<AiInteraction>)group.ToArray());
 
         return ApiResults.Success(new
         {
@@ -322,7 +325,9 @@ public static class AiEndpoints
                     total_interactions = item.Value.TotalInteractions,
                     total_input_tokens = item.Value.TotalInputTokens,
                     total_output_tokens = item.Value.TotalOutputTokens,
-                    total_tokens = item.Value.TotalTokens
+                    total_tokens = item.Value.TotalTokens,
+                    token_efficiency = TokenEfficiencyMetrics.Calculate(
+                        interactionsByQuestion.GetValueOrDefault(item.Key, []))
                 }),
             main_semantic_tags = interactions
                 .SelectMany(interaction => JsonDocumentSerializer.Deserialize(interaction.SemanticTagsJson, Array.Empty<string>()))

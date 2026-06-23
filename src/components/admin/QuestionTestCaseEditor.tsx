@@ -56,6 +56,73 @@ interface PendingEditorAction {
   label: string;
 }
 
+type TokenEfficiencyReferenceBaseline = {
+  status?: string;
+  Status?: string;
+  referenceScore?: number;
+  ReferenceScore?: number;
+  compressionRatio?: number;
+  CompressionRatio?: number;
+  structuralUtilityRetention?: number;
+  StructuralUtilityRetention?: number;
+  compactInputTokens?: number;
+  CompactInputTokens?: number;
+  fullInputTokens?: number;
+  FullInputTokens?: number;
+};
+
+function readTokenEfficiencyBaseline(question: Question): TokenEfficiencyReferenceBaseline | null {
+  const serializedBenchmark = question.grading_configuration?.ai_usage_benchmark;
+  if (!serializedBenchmark) return null;
+
+  try {
+    const benchmark = JSON.parse(serializedBenchmark) as Record<string, unknown>;
+    const baseline = benchmark.referenceBaseline ?? benchmark.ReferenceBaseline;
+    return baseline && typeof baseline === "object" ? baseline as TokenEfficiencyReferenceBaseline : null;
+  } catch {
+    return null;
+  }
+}
+
+function baselineValue(baseline: TokenEfficiencyReferenceBaseline, camel: keyof TokenEfficiencyReferenceBaseline, pascal: keyof TokenEfficiencyReferenceBaseline) {
+  return baseline[camel] ?? baseline[pascal];
+}
+
+function TokenEfficiencyBaselineCard({ question }: { question: Question }) {
+  const baseline = readTokenEfficiencyBaseline(question);
+  if (!baseline) return null;
+
+  const status = baseline.status ?? baseline.Status ?? "unavailable";
+  if (status !== "complete") {
+    return (
+      <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 p-3 text-sm text-amber-100/80">
+        <p className="font-medium">Reference token baseline unavailable</p>
+        <p className="mt-1 text-xs text-white/45">The generated task remains a draft. Generate again when a provider is available to record its reference baseline.</p>
+      </div>
+    );
+  }
+
+  const score = Number(baselineValue(baseline, "referenceScore", "ReferenceScore") ?? 0);
+  const ratio = Number(baselineValue(baseline, "compressionRatio", "CompressionRatio") ?? 0);
+  const retention = Number(baselineValue(baseline, "structuralUtilityRetention", "StructuralUtilityRetention") ?? 0);
+  const compactTokens = Number(baselineValue(baseline, "compactInputTokens", "CompactInputTokens") ?? 0);
+  const fullTokens = Number(baselineValue(baseline, "fullInputTokens", "FullInputTokens") ?? 0);
+  return (
+    <div className="rounded-xl border border-cyanGlow/25 bg-cyanGlow/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-cyanGlow">Provider-measured reference baseline</p>
+        <span className="font-mono text-sm text-white/85">{score}/100</span>
+      </div>
+      <div className="mt-3 grid gap-2 text-xs text-white/55 sm:grid-cols-3">
+        <p>Compression ratio <span className="font-mono text-white/80">{ratio.toFixed(2)}×</span></p>
+        <p>Structural retention <span className="font-mono text-white/80">{Math.round(retention * 100)}%</span></p>
+        <p>Input tokens <span className="font-mono text-white/80">{compactTokens} / {fullTokens}</span></p>
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-white/35">Administrator-only reference metadata; it is not a student grade.</p>
+    </div>
+  );
+}
+
 export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: QuestionTestCaseEditorProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -503,6 +570,7 @@ export function QuestionTestCaseEditor({ assessment, onAssessmentChange }: Quest
                     <CustomDropdown ariaLabel="Authoring source" value={question.authoring_source ?? "manual"} options={authoringSources.map((value) => ({ value, label: value }))} onChange={(value) => updateQuestionState(question.question_id, { authoring_source: value })} />
                   </label>
                 </div>
+                <TokenEfficiencyBaselineCard question={question} />
                 <div className="grid gap-3 lg:grid-cols-1">
                   <div className="grid gap-2 text-sm text-white/60">
                     Supported student languages

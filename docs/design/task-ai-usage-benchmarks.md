@@ -6,12 +6,17 @@ AI-usage grading currently considers the whole attempt without a consistent task
 
 ## Decision
 
-Every generated task receives a deterministic, administrator-only AI-usage benchmark. It defines a reference token budget, a recommended interaction count, and four context signals: task goal, active-file/code context, observed behavior or test output, and a desired constraint or acceptance condition. The benchmark is reference evidence for the AI-usage grader, not a hard token cap.
+Every generated task receives an administrator-only AI-usage benchmark. The platform retains a deterministic reference token budget, recommended interaction count, and four context signals: task goal, active-file/code context, observed behavior or test output, and a desired constraint or acceptance condition.
+
+After generation, the platform also asks the configured provider to summarize the same public task context in a full and compact prompt. From the provider-reported input token counts it records the compression rate and ratio; from the required structured summary fields it records structural utility retention and a reference score. The measured reference is evidence for the AI-usage grader, not a hard token cap or a student-visible grade. If the provider cannot produce a valid baseline, the benchmark records `unavailable` and retains the deterministic fallback rather than inventing measurements.
 
 ## State machine
 
-- `task_generated` -> `benchmark_attached` when the platform derives the standard from task type and difficulty.
-- `benchmark_attached` -> `administrator_review` with the generated task.
+- `task_generated` -> `benchmark_attached` when the platform derives the deterministic standard from task type and difficulty.
+- `benchmark_attached` -> `reference_measuring` when public task context is sent to the configured provider in full and compact forms.
+- `reference_measuring` -> `reference_measured` when both provider responses contain valid token counts and required summary fields.
+- `reference_measuring` -> `reference_unavailable` when the provider fails or returns invalid evidence; the deterministic reference remains active.
+- `reference_measured` or `reference_unavailable` -> `administrator_review` with the generated task.
 - `administrator_review` -> `published` only through the existing approval flow.
 - `published` -> `attempt_graded` when the AI-usage grader compares task interactions to the stored benchmark.
 - Legacy or manually-authored tasks -> `attempt_graded` with a deterministic fallback benchmark; no migration is required.
@@ -22,7 +27,8 @@ Benchmarks live in grading configuration and are returned only through administr
 
 ## Primitive acceptance criteria
 
-- A generated task includes a versioned benchmark derived from its type and difficulty.
-- The benchmark records token-efficiency references and required context signals.
+- A generated task includes a versioned deterministic benchmark derived from its type and difficulty.
+- When provider measurement succeeds, the benchmark records full and compact token counts, compression rate and ratio, structural utility retention, and a reference score.
+- When provider measurement fails, the benchmark explicitly records an unavailable measured reference and retains deterministic fallback values.
 - Grading receives a per-task actual-versus-benchmark summary without treating low token use alone as success.
 - Students cannot retrieve benchmark metadata from the workspace API.
