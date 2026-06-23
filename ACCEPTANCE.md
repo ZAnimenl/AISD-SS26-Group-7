@@ -84,8 +84,10 @@
 - AI Usage Score weights are Prompt quality and context 30%, Token and
   interaction efficiency 40%, Critical evaluation and adaptation 20%, and
   Reflection quality and consistency 10%.
-- Token and interaction efficiency contains a 30-point structured LLM
-  behavioral assessment and a 10-point objective repetition metric.
+- Token and interaction efficiency contains a semantic behavioral assessment,
+  a 0-15 deterministic reference-efficiency component for measured fully
+  passing tasks, and a 10-point objective repetition metric. A missing
+  reference baseline preserves the legacy 30-point semantic assessment.
 - No fixed absolute token threshold, including 2,500 tokens, and no
   cohort-relative token usage contributes to the AI Usage Score.
 - Automatic grading stores rubric version, model identifier, criterion scores,
@@ -127,7 +129,8 @@
   reference token efficiency and the task goal, code context, observed behavior,
   and constraint information supplied to the AI agent.
 - Each generated task runs a provider-measured complete-versus-compact public-context baseline after generation. Its stored compression rate, compression ratio, structural-retention score, and availability state remain administrator-only.
-- The active AI panel shows only that task's observable prompt CpT, prompt TpC, and context-signal coverage; it does not expose hidden tests, baseline prompts, or grading implementation.
+- Each completed baseline stores two to five administrator-only minimal-input standard steps with public verification actions; it contains no hidden test or grading implementation.
+- The active AI panel shows only that task's observable prompt CpT, prompt TpC, response CpT, response TpC, and context-signal coverage; these inform reference-relative AI Usage scoring only after the task receives a full automated-submission score. It does not expose hidden tests, baseline prompts, or grading implementation.
 - Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
 - The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
 - Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.

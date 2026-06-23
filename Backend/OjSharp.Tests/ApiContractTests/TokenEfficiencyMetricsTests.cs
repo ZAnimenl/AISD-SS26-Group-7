@@ -39,8 +39,8 @@ public sealed class TokenEfficiencyMetricsTests
     public async Task Reference_baseline_uses_provider_measured_full_and_compact_input_tokens()
     {
         var completionService = CreateCompletionService(new SequenceHandler(
-            Completion("{\"goal\":\"g\",\"code_context\":\"c\",\"observed_behavior\":\"o\",\"constraint\":\"k\"}", 100, 10),
-            Completion("{\"goal\":\"g\",\"code_context\":\"c\",\"observed_behavior\":\"o\",\"constraint\":\"k\"}", 40, 5)));
+            Completion(ReferenceResponse(), 100, 10),
+            Completion(ReferenceResponse(), 40, 5)));
         var service = new TokenEfficiencyReferenceBaselineService(completionService);
         var question = new Question
         {
@@ -62,11 +62,34 @@ public sealed class TokenEfficiencyMetricsTests
         Assert.Equal(2.5, baseline.CompressionRatio);
         Assert.Equal(1, baseline.StructuralUtilityRetention);
         Assert.Equal(60, baseline.ReferenceScore);
+        Assert.Equal(2, baseline.StandardSteps!.Count);
+        Assert.NotNull(baseline.CompactPromptDensity);
+        Assert.NotNull(baseline.CompactResponseDensity);
 
         TaskAiUsageBenchmarkFactory.AttachReferenceBaseline(question, baseline);
         var benchmark = TaskAiUsageBenchmarkFactory.Read(question.GradingConfigurationJson, question.TaskType, question.Difficulty);
         Assert.Equal(45, benchmark.ReferenceTotalTokens);
-        Assert.Equal(baseline, benchmark.ReferenceBaseline);
+        Assert.NotNull(benchmark.ReferenceBaseline);
+        Assert.Equal(baseline.ReferenceScore, benchmark.ReferenceBaseline!.ReferenceScore);
+        Assert.Equal(baseline.CompactPromptDensity, benchmark.ReferenceBaseline.CompactPromptDensity);
+        Assert.Equal(2, benchmark.ReferenceBaseline.StandardSteps!.Count);
+    }
+
+    [Fact]
+    public async Task Reference_baseline_is_unavailable_without_minimal_input_standard_steps()
+    {
+        var completionService = CreateCompletionService(new SequenceHandler(
+            Completion("{\"goal\":\"g\",\"code_context\":\"c\",\"observed_behavior\":\"o\",\"constraint\":\"k\"}", 100, 10),
+            Completion("{\"goal\":\"g\",\"code_context\":\"c\",\"observed_behavior\":\"o\",\"constraint\":\"k\"}", 40, 5)));
+        var baseline = await new TokenEfficiencyReferenceBaselineService(completionService).RunAsync(new Question
+        {
+            Title = "A task",
+            ProblemDescriptionMarkdown = "A public task description.",
+            StarterCodeJson = "{}"
+        }, CancellationToken.None);
+
+        Assert.Equal("unavailable", baseline.Status);
+        Assert.Equal("baseline_response_missing_required_context", baseline.FailureReason);
     }
 
     private static AiCompletionService CreateCompletionService(HttpMessageHandler handler) => new(
@@ -85,6 +108,10 @@ public sealed class TokenEfficiencyMetricsTests
         choices = new[] { new { finish_reason = "stop", message = new { content } } },
         usage = new { prompt_tokens = inputTokens, completion_tokens = outputTokens }
     });
+
+    private static string ReferenceResponse() => """
+    {"goal":"g","code_context":"c","observed_behavior":"o","constraint":"k","standard_steps":[{"purpose":"Inspect the failing public contract","minimal_input":"Explain the failing public request using the active file.","public_verification":"Run the public request check."},{"purpose":"Validate the change","minimal_input":"Review the smallest compatible fix.","public_verification":"Run the public regression check."}]}
+    """;
 
     private sealed class SequenceHandler(params string[] responses) : HttpMessageHandler
     {

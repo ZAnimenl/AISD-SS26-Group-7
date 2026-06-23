@@ -123,8 +123,10 @@ Score equal to their arithmetic mean.
 The AI Usage Score must use Prompt quality and context 30%, Token and
 interaction efficiency 40%, Critical evaluation and adaptation 20%, and
 Reflection quality and consistency 10%. Token and interaction efficiency must
-contain a 30-point structured LLM behavioral assessment and 10 points of
-objective repetition metrics.
+combine semantic behavioral assessment with up to 15 points of deterministic,
+reference-relative efficiency for fully passing generated tasks and 10 points
+of objective repetition metrics. When a measured reference is unavailable, the
+legacy 30-point semantic behavioral assessment remains in effect.
 
 Reports must include criterion-level grading evidence, reflection and
 consistency assessment, total token consumption, number of AI interactions,

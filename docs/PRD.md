@@ -26,7 +26,10 @@ and reporting.
   reflection, and descriptive token metrics.
 - Generated tasks record an administrator-only, provider-measured compact
   reference baseline; the student AI panel shows descriptive per-task density
-  and context-coverage metrics without exposing grading internals.
+  and context-coverage metrics without exposing grading internals. For a fully
+  passing task, those metrics provide a bounded reference-relative contribution
+  to AI Usage scoring; unavailable provider measurements do not penalize a
+  student.
 
 ## First Implementation Task Categories
 
@@ -47,8 +50,10 @@ and reporting.
 - AI Usage Score weights are Prompt quality and context 30%, Token and
   interaction efficiency 40%, Critical evaluation and adaptation 20%, and
   Reflection quality and consistency 10%.
-- Token and interaction efficiency uses a 30-point structured LLM behavioral
-  assessment and 10 points of objective repetition metrics.
+- Token and interaction efficiency uses a semantic behavioral assessment, a
+  0-15 deterministic reference-efficiency component for measured fully passing
+  tasks, and 10 points of objective repetition metrics. If no measured task is
+  used, the semantic behavioral assessment retains its legacy 30-point range.
 - AI grading does not use a fixed absolute token threshold or cohort-relative
   token usage.
 - Automatic AI grading failures preserve the Functional Score and surface a
