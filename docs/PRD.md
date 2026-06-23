@@ -24,6 +24,9 @@ and reporting.
   a reflection.
 - Reports show criterion scores, grading evidence, interaction events,
   reflection, and descriptive token metrics.
+- Generated tasks record an administrator-only, provider-measured compact
+  reference baseline; the student AI panel shows descriptive per-task density
+  and context-coverage metrics without exposing grading internals.
 
 ## First Implementation Task Categories
 

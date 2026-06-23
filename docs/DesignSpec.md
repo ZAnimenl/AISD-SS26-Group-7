@@ -40,11 +40,14 @@ feedback, and report review.
 - Each task has an independent embedded AI conversation. Opening a task restores
   only its persisted prompts and responses, and students can download that
   task's JSON transcript.
-- The AI panel shows token and interaction totals for the active task only;
-  assessment-wide totals remain available to reporting surfaces.
+- The AI panel shows token and interaction totals plus descriptive prompt CpT,
+  TpC, and context-signal coverage for the active task only; assessment-wide
+  totals remain available to reporting surfaces.
 - Generated tasks receive an administrator-only AI-usage benchmark derived from
-  task type and difficulty. It supplies token-efficiency references and required
-  agent-context signals to assessment grading without being shown to students.
+  task type and difficulty. After generation, the platform runs a real
+  provider-measured full-versus-compact public-context reference test; its
+  compression and retention metrics supply token-efficiency evidence to
+  assessment grading without being shown to students.
 - The verification area adapts to task type.
 - Frontend UI extension tasks show direct browser UI preview.
 - Browser preview renders only sandbox-produced HTML; when no preview output is

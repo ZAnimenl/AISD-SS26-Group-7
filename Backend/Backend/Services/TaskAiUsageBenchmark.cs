@@ -8,7 +8,8 @@ public sealed record TaskAiUsageBenchmark(
     int ReferenceTotalTokens,
     int RecommendedInteractions,
     int MinimumContextSignals,
-    string[] RequiredContextSignals);
+    string[] RequiredContextSignals,
+    TokenEfficiencyReferenceBaseline? ReferenceBaseline = null);
 
 public static class TaskAiUsageBenchmarkFactory
 {
@@ -66,6 +67,24 @@ public static class TaskAiUsageBenchmarkFactory
         result["requires_student_install"] = "false";
         result[ConfigurationKey] = JsonSerializer.Serialize(Create(taskType, difficulty));
         return result;
+    }
+
+    public static void AttachReferenceBaseline(Question question, TokenEfficiencyReferenceBaseline baseline)
+    {
+        var configuration = JsonDocumentSerializer.Deserialize(
+            question.GradingConfigurationJson,
+            new Dictionary<string, string>());
+        var benchmark = Read(question.GradingConfigurationJson, question.TaskType, question.Difficulty);
+        var referenceTotalTokens = baseline.Status == "complete"
+            ? baseline.CompactTotalTokens
+            : benchmark.ReferenceTotalTokens;
+        var updated = benchmark with
+        {
+            ReferenceTotalTokens = referenceTotalTokens,
+            ReferenceBaseline = baseline
+        };
+        configuration[ConfigurationKey] = JsonSerializer.Serialize(updated);
+        question.GradingConfigurationJson = JsonDocumentSerializer.Serialize(configuration);
     }
 
     public static TaskAiUsageBenchmark Read(string configurationJson, string taskType, string difficulty)

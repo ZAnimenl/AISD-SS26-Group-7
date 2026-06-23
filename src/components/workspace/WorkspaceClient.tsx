@@ -48,6 +48,18 @@ type WorkspaceAiUsageSummary = {
   by_question?: Record<string, {
     total_interactions: number;
     total_tokens: number;
+    token_efficiency?: {
+      prompt_source: {
+        characters_per_token: number;
+        tokens_per_character: number;
+      };
+      response: {
+        characters_per_token: number;
+        tokens_per_character: number;
+      };
+      context_signals_provided: number;
+      required_context_signals: number;
+    };
   }>;
 };
 
@@ -787,11 +799,20 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             ...(current?.by_question ?? {}),
             [questionId]: {
               total_interactions: currentTaskUsage.total_interactions + 1,
-              total_tokens: currentTaskUsage.total_tokens + response.token_usage.total_tokens
+              total_tokens: currentTaskUsage.total_tokens + response.token_usage.total_tokens,
+              token_efficiency: currentTaskUsage.token_efficiency
             }
           }
         };
       });
+      void getAiUsage(assessment.assessment_id).then((usage) => {
+        setAiUsageSummary({
+          total_interactions: usage.total_interactions,
+          total_tokens: usage.total_tokens,
+          average_tokens_per_interaction: usage.average_tokens_per_interaction,
+          by_question: usage.by_question ?? {}
+        });
+      }).catch(() => undefined);
       const suggestion = response.suggestion;
       const workspaceActions = response.workspace_actions?.length
         ? response.workspace_actions
@@ -1335,6 +1356,33 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                 {" tokens · "}
                 {activeTaskAiUsage.total_interactions} interactions
               </p>
+            </div>
+          ) : null}
+          {assessment.ai_enabled && activeTaskAiUsage.token_efficiency ? (
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/20 p-2 text-[10px] text-white/45 sm:grid-cols-3">
+              <div>
+                <p className="uppercase tracking-[0.1em]">Prompt CpT</p>
+                <p className="mt-0.5 font-mono text-xs text-white/80">{activeTaskAiUsage.token_efficiency.prompt_source.characters_per_token.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="uppercase tracking-[0.1em]">Prompt TpC</p>
+                <p className="mt-0.5 font-mono text-xs text-white/80">{activeTaskAiUsage.token_efficiency.prompt_source.tokens_per_character.toFixed(3)}</p>
+              </div>
+              <div>
+                <p className="uppercase tracking-[0.1em]">Context</p>
+                <p className="mt-0.5 font-mono text-xs text-white/80">
+                  {activeTaskAiUsage.token_efficiency.context_signals_provided}/{activeTaskAiUsage.token_efficiency.required_context_signals}
+                </p>
+              </div>
+              <div>
+                <p className="uppercase tracking-[0.1em]">Response CpT</p>
+                <p className="mt-0.5 font-mono text-xs text-white/80">{activeTaskAiUsage.token_efficiency.response.characters_per_token.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="uppercase tracking-[0.1em]">Response TpC</p>
+                <p className="mt-0.5 font-mono text-xs text-white/80">{activeTaskAiUsage.token_efficiency.response.tokens_per_character.toFixed(3)}</p>
+              </div>
+              <p className="col-span-2 leading-4 text-white/30 sm:col-span-3">Density is informational and does not affect your grade.</p>
             </div>
           ) : null}
           {assessment.ai_enabled ? (

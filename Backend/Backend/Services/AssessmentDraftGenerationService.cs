@@ -72,13 +72,16 @@ public sealed class AssessmentDraftGenerationService
 
     private readonly AiCompletionService completionService;
     private readonly CanonicalPrototypeSource prototypeSource;
+    private readonly TokenEfficiencyReferenceBaselineService tokenEfficiencyBaselineService;
 
     public AssessmentDraftGenerationService(
         AiCompletionService completionService,
-        CanonicalPrototypeSource prototypeSource)
+        CanonicalPrototypeSource prototypeSource,
+        TokenEfficiencyReferenceBaselineService tokenEfficiencyBaselineService)
     {
         this.completionService = completionService;
         this.prototypeSource = prototypeSource;
+        this.tokenEfficiencyBaselineService = tokenEfficiencyBaselineService;
     }
 
     public async Task<IReadOnlyList<Question>> GenerateAssessmentDraftAsync(
@@ -107,6 +110,8 @@ public sealed class AssessmentDraftGenerationService
             tasks.Add(task);
         }
 
+        await AttachReferenceBaselinesAsync(tasks, cancellationToken);
+
         return tasks;
     }
 
@@ -128,7 +133,17 @@ public sealed class AssessmentDraftGenerationService
         draft.Difficulty = NormalizeDifficulty(request.Difficulty);
         draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages, taskType));
         draft.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
+        await AttachReferenceBaselinesAsync([draft], cancellationToken);
         return draft;
+    }
+
+    private async Task AttachReferenceBaselinesAsync(IEnumerable<Question> questions, CancellationToken cancellationToken)
+    {
+        foreach (var question in questions)
+        {
+            var baseline = await tokenEfficiencyBaselineService.RunAsync(question, cancellationToken);
+            TaskAiUsageBenchmarkFactory.AttachReferenceBaseline(question, baseline);
+        }
     }
 
     private async Task<List<Question>> GenerateValidatedTasksAsync(

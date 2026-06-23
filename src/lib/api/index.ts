@@ -891,6 +891,22 @@ export async function getAiUsage(assessmentId: string) {
       total_input_tokens: number;
       total_output_tokens: number;
       total_tokens: number;
+      token_efficiency: {
+        prompt_source: {
+          characters: number;
+          tokens: number;
+          characters_per_token: number;
+          tokens_per_character: number;
+        };
+        response: {
+          characters: number;
+          tokens: number;
+          characters_per_token: number;
+          tokens_per_character: number;
+        };
+        context_signals_provided: number;
+        required_context_signals: number;
+      };
     }>;
   }>(`/assessments/${assessmentId}/ai-usage`);
 }

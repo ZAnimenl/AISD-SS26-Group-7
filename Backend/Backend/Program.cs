@@ -74,6 +74,7 @@ builder.Services.AddScoped<AiUsageGradingService>();
 builder.Services.AddHostedService<ReflectionDeadlineWorker>();
 builder.Services.AddSingleton<CanonicalPrototypeSource>();
 builder.Services.AddSingleton<AssessmentDraftGenerationService>();
+builder.Services.AddSingleton<TokenEfficiencyReferenceBaselineService>();
 builder.Services.AddScoped<SeedAdminSeeder>();
 builder.Services.AddScoped<SchemaCompatibilityService>();
 builder.Services.AddScoped<SqliteAuthSchemaMigrator>();
