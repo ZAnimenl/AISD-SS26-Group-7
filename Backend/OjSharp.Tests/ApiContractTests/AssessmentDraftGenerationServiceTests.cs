@@ -304,6 +304,12 @@ public sealed class AssessmentDraftGenerationServiceTests
         Assert.Contains("CREATE TABLE IF NOT EXISTS todos", starterCode["sql"]["schema.sql"]);
         Assert.Contains("canonical Todo schema", starterCode["sql"]["solution.sql"]);
         Assert.Equal(PrototypeDefaults.TodoListReference, question.StarterPrototypeReference);
+        var benchmark = TaskAiUsageBenchmarkFactory.Read(
+            question.GradingConfigurationJson,
+            question.TaskType,
+            question.Difficulty);
+        Assert.Equal(TaskAiUsageBenchmarkFactory.Version, benchmark.Version);
+        Assert.Equal(1375, benchmark.ReferenceTotalTokens);
         var metadata = JsonDocumentSerializer.Deserialize(
             question.StarterFilesMetadataJson,
             new Dictionary<string, Dictionary<string, string>>());

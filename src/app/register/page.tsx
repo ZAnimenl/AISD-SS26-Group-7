@@ -26,7 +26,7 @@ export default function RegisterPage() {
   // Step 2: code
   const [code, setCode] = useState("");
   const [codeExpiresAt, setCodeExpiresAt] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 
   // Step 3: password
@@ -74,12 +74,10 @@ export default function RegisterPage() {
         email: email.trim()
       });
       setCodeExpiresAt(result.expiresAt);
-      setDevCode(result.devCode);
+      setVerificationCode(result.verificationCode);
       setNotice(result.sent
-        ? `We sent a 6-digit code to ${email}. It expires in 15 minutes.`
-        : result.devCode
-          ? `Email delivery is offline. Use this code: ${result.devCode}`
-          : "Code generated, but the email was not sent.");
+        ? `A 6-digit code was sent to ${email}. It expires in 15 minutes.`
+        : "Your verification code is ready below. It expires in 15 minutes.");
       setStep("code");
     } catch (exception) {
       if (exception instanceof ApiRequestError && exception.code === "EMAIL_TAKEN") {
@@ -123,12 +121,10 @@ export default function RegisterPage() {
     try {
       const result = await registerResendCode(email.trim());
       setCodeExpiresAt(result.expiresAt);
-      setDevCode(result.devCode);
+      setVerificationCode(result.verificationCode);
       setNotice(result.sent
         ? `New code sent to ${email}.`
-        : result.devCode
-          ? `Email delivery is offline. Use this code: ${result.devCode}`
-          : "New code generated, but the email was not sent.");
+        : "A new verification code is ready below.");
       setCode("");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Could not resend the code.");
@@ -170,6 +166,7 @@ export default function RegisterPage() {
     setNotice(null);
     setStep("details");
     setCode("");
+    setVerificationCode(null);
   }
 
   function goBackToCode() {
@@ -300,9 +297,10 @@ export default function RegisterPage() {
 
         {step === "code" ? (
           <form onSubmit={handleVerifyCode} className="mt-8 grid gap-4">
-            <p className="text-sm text-white/70">
-              We sent a 6-digit code to <span className="text-white">{email}</span>. Enter it below to confirm your email.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-4 py-3 text-sm">
+              <span className="text-white/70">Verification code for <span className="text-white">{email}</span></span>
+              <span className="font-mono text-lg font-bold tracking-[0.25em] text-cyanGlow">{verificationCode ?? "------"}</span>
+            </div>
             <label className="grid gap-2 text-sm text-white/60">
               Verification code
               <input
@@ -319,9 +317,6 @@ export default function RegisterPage() {
               />
             </label>
             <CodeExpiry expiresAt={codeExpiresAt} />
-            {devCode ? (
-              <p className="text-xs text-amber-300">Dev fallback code (email delivery is off): <span className="font-mono text-white">{devCode}</span></p>
-            ) : null}
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="btn-primary" type="submit" disabled={submitting}>
                 <ShieldCheck size={18} />

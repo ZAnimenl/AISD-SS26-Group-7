@@ -322,7 +322,7 @@ export async function registerStart(input: { full_name: string; username: string
   const raw = await apiRequest<{
     sent: boolean;
     expires_at?: string;
-    dev_code?: string | null;
+    verification_code: string;
   }>("/auth/register/start", {
     method: "POST",
     body: JSON.stringify(input)
@@ -330,7 +330,7 @@ export async function registerStart(input: { full_name: string; username: string
   return {
     sent: raw.sent,
     expiresAt: raw.expires_at ?? null,
-    devCode: raw.dev_code ?? null
+    verificationCode: raw.verification_code
   };
 }
 
@@ -368,7 +368,7 @@ export async function registerResendCode(email: string) {
   const raw = await apiRequest<{
     sent: boolean;
     expires_at?: string;
-    dev_code?: string | null;
+    verification_code: string;
   }>("/auth/register/resend-code", {
     method: "POST",
     body: JSON.stringify({ email })
@@ -376,7 +376,7 @@ export async function registerResendCode(email: string) {
   return {
     sent: raw.sent,
     expiresAt: raw.expires_at ?? null,
-    devCode: raw.dev_code ?? null
+    verificationCode: raw.verification_code
   };
 }
 

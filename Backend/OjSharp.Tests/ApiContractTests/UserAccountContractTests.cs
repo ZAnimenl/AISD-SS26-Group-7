@@ -55,4 +55,23 @@ public sealed class UserAccountContractTests
         Assert.Contains("\"username\":\"ada-admin\"", json);
         Assert.DoesNotContain("\"Role\"", json);
     }
+
+    [Fact]
+    public void Registration_code_delivery_response_exposes_the_visible_verification_code()
+    {
+        var response = new RegistrationCodeDeliveryResponse(
+            Sent: false,
+            ExpiresAt: new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero),
+            VerificationCode: "123456");
+
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        });
+
+        Assert.Contains("\"sent\":false", json);
+        Assert.Contains("\"expires_at\"", json);
+        Assert.Contains("\"verification_code\":\"123456\"", json);
+        Assert.DoesNotContain("devCode", json, StringComparison.OrdinalIgnoreCase);
+    }
 }

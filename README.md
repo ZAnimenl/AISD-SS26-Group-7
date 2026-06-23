@@ -100,6 +100,7 @@ Things users may configure:
 - `ConnectionStrings__DefaultConnection` - local startup writes a SQLite `Data Source=...` connection string automatically. Deployment/external database users may provide a real PostgreSQL connection string.
 - `DOCKER_HOST` - optional Docker socket for run/submit verification when the sandbox runtime is not available at `/var/run/docker.sock`. Local startup also detects common Docker Desktop and Colima sockets such as `unix://$HOME/.docker/run/docker.sock`, `unix://$HOME/.docker/desktop/docker.sock`, and `unix://$HOME/.colima/default/docker.sock`.
 - `SeedAdmin__Email` and `SeedAdmin__Password` - real initial administrator credentials. Required for every backend run. Local startup uses `admin@example.com` / `Admin123!` when values are missing.
+- `Smtp__Host`, `Smtp__Port`, `Smtp__EnableSsl`, `Smtp__Username`, `Smtp__Password`, `Smtp__FromAddress`, and `Smtp__FromName` - optional SMTP delivery settings. Store real credentials in `.env.local`, environment variables, or .NET user-secrets; `npm run dev` preserves them. For Gmail, use port `587`, TLS enabled, and an app password.
 
 AI provider keys:
 
