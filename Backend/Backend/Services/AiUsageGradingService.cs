@@ -27,14 +27,30 @@ public sealed record TaskAiUsageBenchmarkEvidence(
     TaskAiUsageBenchmark Benchmark,
     int TotalTokens,
     int InteractionCount,
-    string[] ProvidedContextSignals);
+    string[] ProvidedContextSignals,
+    TaskTokenEfficiencyMetrics TokenEfficiency,
+    TaskReferenceEfficiencyEvidence ReferenceEfficiency);
+
+public sealed record TaskReferenceEfficiencyEvidence(
+    bool IsMeasured,
+    bool TaskGoalAchieved,
+    int Score,
+    double CostScore,
+    double ContextScore,
+    double PromptDensityScore,
+    double ResponseDensityScore);
+
+public sealed record ReferenceEfficiencyComponent(
+    bool IsAvailable,
+    int Score,
+    IReadOnlyList<TaskReferenceEfficiencyEvidence> Tasks);
 
 public sealed class AiUsageGradingService(
     OjSharpDbContext dbContext,
     AiCompletionService completionService,
     ILogger<AiUsageGradingService> logger)
 {
-    public const string RubricVersion = "ai-usage-v1";
+    public const string RubricVersion = "ai-usage-v2";
 
     public async Task GradeAsync(AssessmentSession session, CancellationToken cancellationToken)
     {
@@ -66,6 +82,16 @@ public sealed class AiUsageGradingService(
                     item.ProblemDescriptionMarkdown
                 })
                 .ToListAsync(cancellationToken);
+            var taskGoalAchievement = await dbContext.Submissions
+                .Where(item => item.SessionId == session.Id)
+                .GroupBy(item => item.QuestionId)
+                .Select(group => new
+                {
+                    QuestionId = group.Key,
+                    Achieved = group.Any(item => item.EvaluationStatus == ExecutionStatuses.Passed
+                        && item.Score >= item.MaxScore)
+                })
+                .ToDictionaryAsync(item => item.QuestionId, item => item.Achieved, cancellationToken);
 
             var objectiveRepetition = CalculateObjectiveRepetition(interactions, events);
             var rapidAcceptDeduction = CalculateRapidAcceptDeduction(events);
@@ -78,15 +104,21 @@ public sealed class AiUsageGradingService(
                     item.GradingConfigurationJson,
                     item.TaskType,
                     item.Difficulty));
-            var benchmarkEvidence = BuildBenchmarkEvidence(interactions, taskBenchmarks);
+            var benchmarkEvidence = BuildBenchmarkEvidence(interactions, taskBenchmarks, taskGoalAchievement);
+            var referenceEfficiency = CalculateReferenceEfficiencyComponent(benchmarkEvidence);
             var completion = await completionService.GenerateAsync(
                 BuildSystemPrompt(),
-                BuildUserPrompt(session, interactions, events, executions, benchmarkEvidence, objectiveRepetition, rapidAcceptDeduction),
+                BuildUserPrompt(session, interactions, events, executions, benchmarkEvidence, objectiveRepetition, rapidAcceptDeduction, referenceEfficiency),
                 AiResponseFormat.Json,
                 cancellationToken,
                 maxTokens: 1800);
             var grade = ApplyProblemStatementCopyCap(
-                ParseGrade(completion.Content, objectiveRepetition, rapidAcceptDeduction),
+                ParseGrade(
+                    completion.Content,
+                    objectiveRepetition,
+                    rapidAcceptDeduction,
+                    referenceEfficiency.IsAvailable ? 15 : 30,
+                    referenceEfficiency.Score),
                 problemCopy);
 
             session.AiUsageScore = grade.Score;
@@ -108,6 +140,7 @@ public sealed class AiUsageGradingService(
                 {
                     objective_repetition_score = objectiveRepetition,
                     rapid_accept_deduction = rapidAcceptDeduction,
+                    reference_efficiency = referenceEfficiency,
                     problem_statement_copy_detected = problemCopy is not null,
                     prompt_quality_cap_reason = problemCopy?.Reason,
                     task_benchmarks = benchmarkEvidence
@@ -188,7 +221,8 @@ public sealed class AiUsageGradingService(
 
     internal static IReadOnlyList<TaskAiUsageBenchmarkEvidence> BuildBenchmarkEvidence(
         IEnumerable<AiInteraction> interactions,
-        IReadOnlyDictionary<Guid, TaskAiUsageBenchmark> benchmarks)
+        IReadOnlyDictionary<Guid, TaskAiUsageBenchmark> benchmarks,
+        IReadOnlyDictionary<Guid, bool>? taskGoalAchievement = null)
     {
         var byQuestion = interactions.GroupBy(interaction => interaction.QuestionId)
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -198,35 +232,84 @@ public sealed class AiUsageGradingService(
             .Select(item =>
             {
                 var taskInteractions = byQuestion.GetValueOrDefault(item.Key, []);
+                var tokenEfficiency = TokenEfficiencyMetrics.Calculate(taskInteractions);
                 return new TaskAiUsageBenchmarkEvidence(
                     item.Key,
                     item.Value,
                     taskInteractions.Sum(interaction => interaction.TotalTokens),
                     taskInteractions.Length,
-                    DetectProvidedContextSignals(taskInteractions));
+                    DetectProvidedContextSignals(taskInteractions),
+                    tokenEfficiency,
+                    CalculateReferenceEfficiency(
+                        item.Value.ReferenceBaseline,
+                        tokenEfficiency,
+                        taskInteractions.Sum(interaction => interaction.TotalTokens),
+                        taskGoalAchievement?.GetValueOrDefault(item.Key) ?? false));
             })
             .ToArray();
     }
 
-    private static string[] DetectProvidedContextSignals(IEnumerable<AiInteraction> interactions)
+    internal static ReferenceEfficiencyComponent CalculateReferenceEfficiencyComponent(
+        IEnumerable<TaskAiUsageBenchmarkEvidence> benchmarkEvidence)
     {
-        var interactionList = interactions.ToArray();
-        var prompts = string.Join("\n", interactionList.Select(interaction => interaction.Message)).ToLowerInvariant();
-        var signals = new List<string>();
-        if (interactionList.Any(interaction => CountWords(interaction.Message) >= 5))
-            signals.Add("task_goal");
-        if (interactionList.Any(interaction => !string.IsNullOrWhiteSpace(interaction.ActiveFileContent)))
-            signals.Add("active_file_or_code_context");
-        if (ContainsAny(prompts, "error", "fail", "test", "expected", "actual", "stdout", "stderr"))
-            signals.Add("observed_behavior_or_test_output");
-        if (ContainsAny(prompts, "must", "should", "preserve", "require", "acceptance", "constraint", "edge case", "validation"))
-            signals.Add("desired_constraint_or_acceptance_condition");
-        return signals.ToArray();
+        var measured = benchmarkEvidence
+            .Select(item => item.ReferenceEfficiency)
+            .Where(item => item.IsMeasured)
+            .ToArray();
+        return measured.Length == 0
+            ? new ReferenceEfficiencyComponent(false, 0, [])
+            : new ReferenceEfficiencyComponent(
+                true,
+                (int)Math.Round(measured.Average(item => item.Score), MidpointRounding.AwayFromZero),
+                measured);
     }
 
-    private static bool ContainsAny(string value, params string[] terms)
+    internal static TaskReferenceEfficiencyEvidence CalculateReferenceEfficiency(
+        TokenEfficiencyReferenceBaseline? baseline,
+        TaskTokenEfficiencyMetrics studentMetrics,
+        int studentTotalTokens,
+        bool taskGoalAchieved)
     {
-        return terms.Any(term => value.Contains(term, StringComparison.Ordinal));
+        if (baseline is not { Status: "complete", CompactPromptDensity: not null, CompactResponseDensity: not null }
+            || baseline.CompactTotalTokens <= 0
+            || studentTotalTokens <= 0)
+        {
+            return new TaskReferenceEfficiencyEvidence(false, taskGoalAchieved, 0, 0, 0, 0, 0);
+        }
+
+        var cost = Math.Min(1, baseline.CompactTotalTokens / (double)studentTotalTokens);
+        var context = Math.Min(1, studentMetrics.ContextSignalsProvided / (double)studentMetrics.RequiredContextSignals);
+        var promptDensity = CalculateDensityScore(studentMetrics.PromptSource, baseline.CompactPromptDensity);
+        var responseDensity = CalculateDensityScore(studentMetrics.Response, baseline.CompactResponseDensity);
+        var score = taskGoalAchieved
+            ? (int)Math.Round(15 * (0.35 * cost + 0.25 * context + 0.20 * promptDensity + 0.20 * responseDensity), MidpointRounding.AwayFromZero)
+            : 0;
+        return new TaskReferenceEfficiencyEvidence(
+            true,
+            taskGoalAchieved,
+            Math.Clamp(score, 0, 15),
+            Math.Round(cost, 4),
+            Math.Round(context, 4),
+            Math.Round(promptDensity, 4),
+            Math.Round(responseDensity, 4));
+    }
+
+    private static string[] DetectProvidedContextSignals(IEnumerable<AiInteraction> interactions)
+    {
+        return TokenEfficiencyMetrics.DetectContextSignals(interactions);
+    }
+
+    private static double CalculateDensityScore(TokenDensity student, TokenDensity reference)
+    {
+        if (student.CharactersPerToken <= 0 || student.TokensPerCharacter <= 0
+            || reference.CharactersPerToken <= 0 || reference.TokensPerCharacter <= 0)
+        {
+            return 0;
+        }
+
+        var charactersPerToken = Math.Min(1, student.CharactersPerToken / reference.CharactersPerToken);
+        var tokensPerCharacter = Math.Min(1, reference.TokensPerCharacter / student.TokensPerCharacter);
+        return Math.Sqrt(charactersPerToken * tokensPerCharacter);
     }
 
     private static double Similarity(string first, string second)
@@ -263,7 +346,8 @@ public sealed class AiUsageGradingService(
         - behavioral_efficiency: integer 0-30
         - critical_evaluation_before_deduction: integer 0-20
         - reflection_quality_and_consistency: integer 0-10
-        The platform supplies objective_repetition_score (0-10) and rapid_accept_deduction (0-8). Do not alter them.
+        The platform supplies objective_repetition_score (0-10), rapid_accept_deduction (0-8), and a reference_efficiency score (0-15). Do not alter them.
+        The payload supplies semantic_behavioral_efficiency_max. Score behavioral_efficiency only for semantic behavior up to that maximum; the platform adds the deterministic reference_efficiency score after your response.
         Task benchmarks contain a reference token budget, interaction count, and required context signals. Use them to assess whether each task received sufficient useful context and proportionate token use. Do not reward low token counts by themselves or apply a hard cap.
         Evaluate productive progress, use of context, refinement, response-to-action-to-test sequences, critical adaptation, and whether the reflection agrees with the logs.
         Include concise criterion-level evidence referencing interaction_id or execution_id.
@@ -278,13 +362,16 @@ public sealed class AiUsageGradingService(
         IReadOnlyList<ExecutionRecord> executions,
         IReadOnlyList<TaskAiUsageBenchmarkEvidence> benchmarkEvidence,
         int objectiveRepetition,
-        int rapidAcceptDeduction)
+        int rapidAcceptDeduction,
+        ReferenceEfficiencyComponent referenceEfficiency)
     {
         var payload = new
         {
             reflection = session.ReflectionText,
             objective_repetition_score = objectiveRepetition,
             rapid_accept_deduction = rapidAcceptDeduction,
+            semantic_behavioral_efficiency_max = referenceEfficiency.IsAvailable ? 15 : 30,
+            reference_efficiency = referenceEfficiency,
             task_benchmarks = benchmarkEvidence,
             interactions = interactions.Select(item => new
             {
@@ -322,12 +409,21 @@ public sealed class AiUsageGradingService(
         return JsonDocumentSerializer.Serialize(payload);
     }
 
-    internal static AiUsageGrade ParseGrade(string content, int objectiveRepetition, int rapidAcceptDeduction)
+    internal static AiUsageGrade ParseGrade(
+        string content,
+        int objectiveRepetition,
+        int rapidAcceptDeduction,
+        int semanticBehavioralEfficiencyMaximum = 30,
+        int referenceEfficiencyScore = 0)
     {
         using var document = JsonDocument.Parse(content);
         var root = document.RootElement;
         var prompt = ReadScore(root, "prompt_quality_and_context", 30);
-        var efficiency = ReadScore(root, "behavioral_efficiency", 30);
+        var efficiency = Math.Clamp(
+            ReadScore(root, "behavioral_efficiency", semanticBehavioralEfficiencyMaximum)
+                + referenceEfficiencyScore,
+            0,
+            30);
         var criticalBeforeDeduction = ReadScore(root, "critical_evaluation_before_deduction", 20);
         var reflection = ReadScore(root, "reflection_quality_and_consistency", 10);
         var critical = Math.Max(0, criticalBeforeDeduction - rapidAcceptDeduction);

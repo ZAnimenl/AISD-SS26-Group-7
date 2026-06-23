@@ -1382,7 +1382,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                 <p className="uppercase tracking-[0.1em]">Response TpC</p>
                 <p className="mt-0.5 font-mono text-xs text-white/80">{activeTaskAiUsage.token_efficiency.response.tokens_per_character.toFixed(3)}</p>
               </div>
-              <p className="col-span-2 leading-4 text-white/30 sm:col-span-3">Density is informational and does not affect your grade.</p>
+              <p className="col-span-2 leading-4 text-white/30 sm:col-span-3">These metrics inform AI Usage scoring only after this task fully passes.</p>
             </div>
           ) : null}
           {assessment.ai_enabled ? (

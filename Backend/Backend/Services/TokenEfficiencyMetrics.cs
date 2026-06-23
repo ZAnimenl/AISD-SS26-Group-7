@@ -16,6 +16,11 @@ public sealed record TaskTokenEfficiencyMetrics(
     int ContextSignalsProvided,
     int RequiredContextSignals);
 
+public sealed record TokenEfficiencyStandardStep(
+    string Purpose,
+    string MinimalInput,
+    string PublicVerification);
+
 public sealed record TokenEfficiencyReferenceBaseline(
     string Version,
     string Status,
@@ -27,7 +32,10 @@ public sealed record TokenEfficiencyReferenceBaseline(
     double CompressionRatio,
     double StructuralUtilityRetention,
     int ReferenceScore,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    TokenDensity? CompactPromptDensity = null,
+    TokenDensity? CompactResponseDensity = null,
+    IReadOnlyList<TokenEfficiencyStandardStep>? StandardSteps = null);
 
 public static class TokenEfficiencyMetrics
 {
@@ -50,8 +58,8 @@ public static class TokenEfficiencyMetrics
         var providedSignals = DetectContextSignals(interactionList);
 
         return new TaskTokenEfficiencyMetrics(
-            CreateDensity(promptText, promptTokens),
-            CreateDensity(responseText, responseTokens),
+            CalculateDensity(promptText, promptTokens),
+            CalculateDensity(responseText, responseTokens),
             providedSignals.Length,
             RequiredContextSignalCount);
     }
@@ -74,7 +82,7 @@ public static class TokenEfficiencyMetrics
 
     public static int CountCharacters(string value) => value.EnumerateRunes().Count();
 
-    private static TokenDensity CreateDensity(string text, int tokens)
+    public static TokenDensity CalculateDensity(string text, int tokens)
     {
         var characters = CountCharacters(text);
         return new TokenDensity(
@@ -100,15 +108,17 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
     {
         try
         {
-            var systemPrompt = "Return a JSON object with four non-empty string fields only: goal, code_context, observed_behavior, constraint. Do not propose a solution.";
+            var systemPrompt = "Return a JSON object with non-empty string fields goal, code_context, observed_behavior, constraint, and a standard_steps array of 2 to 5 objects. Each step object must contain non-empty string fields purpose, minimal_input, and public_verification. Minimal input must be the smallest useful student request to an AI assistant for that step. Use only public task context. Do not provide a code solution, hidden test, or grading rule.";
             var fullPrompt = BuildFullPrompt(question);
             var compactPrompt = BuildCompactPrompt(question);
             var full = await completionService.GenerateAsync(systemPrompt, fullPrompt, AiResponseFormat.Json, cancellationToken, MaxOutputTokens);
             var compact = await completionService.GenerateAsync(systemPrompt, compactPrompt, AiResponseFormat.Json, cancellationToken, MaxOutputTokens);
             var fullCoverage = CountUtilityFields(full.Content);
             var compactCoverage = CountUtilityFields(compact.Content);
+            var fullSteps = ParseStandardSteps(full.Content);
+            var compactSteps = ParseStandardSteps(compact.Content);
 
-            if (full.InputTokens <= 0 || compact.InputTokens <= 0 || fullCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || compactCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount)
+            if (full.InputTokens <= 0 || compact.InputTokens <= 0 || fullCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || compactCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || fullSteps.Count is < 2 or > 5 || compactSteps.Count is < 2 or > 5)
             {
                 return Unavailable("baseline_response_missing_required_context");
             }
@@ -127,7 +137,10 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
                 compressionRate,
                 compressionRatio,
                 retention,
-                Math.Clamp(score, 0, 100));
+                Math.Clamp(score, 0, 100),
+                CompactPromptDensity: TokenEfficiencyMetrics.CalculateDensity(compactPrompt, compact.InputTokens),
+                CompactResponseDensity: TokenEfficiencyMetrics.CalculateDensity(compact.Content, compact.OutputTokens),
+                StandardSteps: compactSteps);
         }
         catch (AiProviderUnavailableException exception)
         {
@@ -186,4 +199,36 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
             return 0;
         }
     }
+
+    private static IReadOnlyList<TokenEfficiencyStandardStep> ParseStandardSteps(string content)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (!document.RootElement.TryGetProperty("standard_steps", out var steps)
+                || steps.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return steps.EnumerateArray()
+                .Select(step => new TokenEfficiencyStandardStep(
+                    ReadRequiredString(step, "purpose"),
+                    ReadRequiredString(step, "minimal_input"),
+                    ReadRequiredString(step, "public_verification")))
+                .Where(step => !string.IsNullOrWhiteSpace(step.Purpose)
+                    && !string.IsNullOrWhiteSpace(step.MinimalInput)
+                    && !string.IsNullOrWhiteSpace(step.PublicVerification))
+                .ToArray();
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string ReadRequiredString(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
 }

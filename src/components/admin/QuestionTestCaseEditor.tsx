@@ -69,6 +69,17 @@ type TokenEfficiencyReferenceBaseline = {
   CompactInputTokens?: number;
   fullInputTokens?: number;
   FullInputTokens?: number;
+  standardSteps?: TokenEfficiencyStandardStep[];
+  StandardSteps?: TokenEfficiencyStandardStep[];
+};
+
+type TokenEfficiencyStandardStep = {
+  purpose?: string;
+  Purpose?: string;
+  minimalInput?: string;
+  MinimalInput?: string;
+  publicVerification?: string;
+  PublicVerification?: string;
 };
 
 function readTokenEfficiencyBaseline(question: Question): TokenEfficiencyReferenceBaseline | null {
@@ -107,6 +118,7 @@ function TokenEfficiencyBaselineCard({ question }: { question: Question }) {
   const retention = Number(baselineValue(baseline, "structuralUtilityRetention", "StructuralUtilityRetention") ?? 0);
   const compactTokens = Number(baselineValue(baseline, "compactInputTokens", "CompactInputTokens") ?? 0);
   const fullTokens = Number(baselineValue(baseline, "fullInputTokens", "FullInputTokens") ?? 0);
+  const standardSteps = baseline.standardSteps ?? baseline.StandardSteps ?? [];
   return (
     <div className="rounded-xl border border-cyanGlow/25 bg-cyanGlow/5 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -118,6 +130,25 @@ function TokenEfficiencyBaselineCard({ question }: { question: Question }) {
         <p>Structural retention <span className="font-mono text-white/80">{Math.round(retention * 100)}%</span></p>
         <p>Input tokens <span className="font-mono text-white/80">{compactTokens} / {fullTokens}</span></p>
       </div>
+      {standardSteps.length > 0 ? (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <p className="text-xs font-medium text-white/75">Minimal-input standard steps</p>
+          <ol className="mt-2 grid gap-2 text-xs text-white/50">
+            {standardSteps.map((step, index) => {
+              const purpose = step.purpose ?? step.Purpose ?? "Reference step";
+              const minimalInput = step.minimalInput ?? step.MinimalInput ?? "";
+              const verification = step.publicVerification ?? step.PublicVerification ?? "";
+              return (
+                <li key={`${purpose}-${index}`} className="rounded-lg bg-black/20 p-2">
+                  <p className="font-medium text-white/75">{index + 1}. {purpose}</p>
+                  <p className="mt-1"><span className="text-white/35">Minimal input:</span> {minimalInput}</p>
+                  <p className="mt-1"><span className="text-white/35">Public verification:</span> {verification}</p>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ) : null}
       <p className="mt-2 text-[11px] leading-4 text-white/35">Administrator-only reference metadata; it is not a student grade.</p>
     </div>
   );

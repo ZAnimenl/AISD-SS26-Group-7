@@ -103,6 +103,14 @@
   `docs/design/automatic-ai-usage-scoring.md`.
 - Deterministic repetition metrics are calculated by platform logic. The
   grading LLM may explain but may not override those fixed measurements.
+- For generated tasks with a completed administrator-only reference baseline,
+  platform logic also calculates a bounded 0-15 reference-efficiency component
+  from prompt/response CpT and TpC, context coverage, and compact-reference-
+  relative token cost. It is available only after a fully passing submission;
+  unavailable baselines preserve the legacy semantic behavioral score.
+- A completed reference baseline stores two to five minimal-input standard
+  steps with public verification only. Hidden tests and grading implementation
+  are never sent to the baseline provider or returned to students.
 - Functional and AI usage grading remain separate. Module 4 cannot modify the
   Functional Score produced from Module 3 evaluation results.
 - No absolute token cutoff or cohort-relative token measure contributes to the

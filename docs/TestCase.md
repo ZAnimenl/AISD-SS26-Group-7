@@ -155,9 +155,15 @@ the active requirements. It does not replace automated test files.
   a completed baseline stores the resulting token compression ratio and a
   structural-retention reference score, while unavailable provider runs are
   explicitly marked unavailable rather than estimated.
-- The active AI panel shows only that task's prompt CpT, TpC, and context-signal
-  coverage. It does not show the administrator-only reference baseline or
-  represent a proxy as the research underthinking metric.
+- A completed baseline stores two to five administrator-only standard steps,
+  each with minimal AI input and a public verification action. No standard step
+  exposes a hidden test or grading rule.
+- The active AI panel shows only that task's prompt/response CpT, TpC, and
+  context-signal coverage. For a fully passing submission, deterministic
+  reference-relative density, context, and token-cost evidence contributes up
+  to 15 behavioral-efficiency points; unavailable baselines retain the legacy
+  semantic score. It does not show the administrator-only reference baseline
+  or represent a proxy as the research underthinking metric.
 - AI requests include active file name, selected language, visible
   selected-language file contents, active file content, and latest public run
   output when available.
@@ -288,8 +294,10 @@ the active requirements. It does not replace automated test files.
 - The AI Usage Score contains Prompt quality and context `0-30`, Token and
   interaction efficiency `0-40`, Critical evaluation and adaptation `0-20`,
   and Reflection quality and consistency `0-10`.
-- Token and interaction efficiency contains LLM behavioral assessment `0-30`
-  and objective repetition metrics `0-10`.
+- Token and interaction efficiency contains a semantic behavioral assessment,
+  deterministic reference-efficiency `0-15` for measured fully passing tasks,
+  and objective repetition metrics `0-10`; without a measured task, the
+  semantic behavioral assessment retains its legacy `0-30` range.
 - Reports do not use or display a fixed 2,500-token efficiency threshold and do
   not use cohort-relative token grading.
 - Automatic grading returns criterion-level evidence, rubric version, model,

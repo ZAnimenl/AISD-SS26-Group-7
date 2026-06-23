@@ -21,7 +21,8 @@
 - Practical task categories based on a shared starter prototype.
 - Embedded AI agent behavior tracked as part of assessment evidence.
 - Automatic evidence-backed AI Usage Score with prompt, interaction, suggestion
-  decision, token, execution, and reflection evidence.
+  decision, token, execution, and reflection evidence, including a
+  reference-relative efficiency component for fully passing generated tasks.
 - Timed reflection after AI-enabled code submission.
 - Platform-managed task execution so students do not install dependencies.
 

@@ -148,6 +148,58 @@ public sealed class AiUsageGradingServiceTests
         Assert.DoesNotContain("observed_behavior_or_test_output", second.ProvidedContextSignals);
     }
 
+    [Fact]
+    public void Reference_efficiency_uses_density_context_and_cost_only_after_the_task_goal_passes()
+    {
+        var interaction = Interaction(
+            "The test fails. Use this active file, preserve the constraint, and validate the expected output.",
+            DateTimeOffset.UtcNow);
+        interaction.ActiveFileContent = "public string Update() => \"ok\";";
+        interaction.ResponseMarkdown = "Apply the smallest compatible update, then run the public check.";
+        interaction.InputTokens = 20;
+        interaction.OutputTokens = 15;
+        interaction.TotalTokens = 35;
+        var metrics = TokenEfficiencyMetrics.Calculate([interaction]);
+        var baseline = new TokenEfficiencyReferenceBaseline(
+            "v1",
+            "complete",
+            100,
+            20,
+            120,
+            35,
+            0.2,
+            5,
+            1,
+            80,
+            CompactPromptDensity: metrics.PromptSource,
+            CompactResponseDensity: metrics.Response);
+
+        var passed = AiUsageGradingService.CalculateReferenceEfficiency(baseline, metrics, 35, true);
+        var failed = AiUsageGradingService.CalculateReferenceEfficiency(baseline, metrics, 35, false);
+
+        Assert.True(passed.IsMeasured);
+        Assert.Equal(15, passed.Score);
+        Assert.Equal(1, passed.CostScore);
+        Assert.Equal(1, passed.ContextScore);
+        Assert.Equal(1, passed.PromptDensityScore);
+        Assert.Equal(1, passed.ResponseDensityScore);
+        Assert.Equal(0, failed.Score);
+    }
+
+    [Fact]
+    public void Measured_reference_efficiency_replaces_half_of_semantic_behavioral_score()
+    {
+        var grade = AiUsageGradingService.ParseGrade(
+            """{"prompt_quality_and_context":30,"behavioral_efficiency":15,"critical_evaluation_before_deduction":20,"reflection_quality_and_consistency":10}""",
+            objectiveRepetition: 10,
+            rapidAcceptDeduction: 0,
+            semanticBehavioralEfficiencyMaximum: 15,
+            referenceEfficiencyScore: 12);
+
+        Assert.Equal(27, grade.Criteria.BehavioralEfficiency);
+        Assert.Equal(97, grade.Score);
+    }
+
     private static AiInteraction Interaction(string message, DateTimeOffset createdAt)
     {
         return new AiInteraction
