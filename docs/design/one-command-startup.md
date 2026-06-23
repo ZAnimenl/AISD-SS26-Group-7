@@ -27,6 +27,10 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - ASP.NET Core configuration reads environment variables, and `__` is the
   cross-platform delimiter for nested configuration keys:
   https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/
+- `SmtpClient.EnableSsl` uses SMTP STARTTLS, so the local SMTP defaults use
+  port 587 with TLS enabled; port 465 implicit TLS is not supported by this
+  client:
+  https://learn.microsoft.com/en-us/dotnet/api/system.net.mail.smtpclient.enablessl
 - Next.js supports `.env.local` for local environment variables:
   https://nextjs.org/docs/pages/building-your-application/configuring/environment-variables
 - EF Core lists `Microsoft.EntityFrameworkCore.Sqlite` as the SQLite provider:
@@ -61,8 +65,9 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
 - Guards: Node 20+ is required; `npm` and `dotnet` must be available for
   dependency restoration; local startup always supplies
   `Database__Provider=Sqlite`, `ConnectionStrings__DefaultConnection`,
-  `SeedAdmin__Email`, and `SeedAdmin__Password`; only `Deepseek__ApiKey` may be
-  requested from the user.
+  `SeedAdmin__Email`, and `SeedAdmin__Password`; SMTP settings are optional,
+  never prompted for, and may come from environment variables, user secrets,
+  or `.env.local`; only `Deepseek__ApiKey` may be requested from the user.
 - Transitions: Windows npm discovery prefers an executable shim such as
   `npm.cmd`; stale `LocalLlm__*` values move to local AI cleanup; repeated
   DeepSeek key pastes move to key normalization; missing SQLite directory moves
@@ -148,6 +153,8 @@ require PostgreSQL, Docker, administrator database setup, or database passwords.
   rewrites it to a single key value.
 - If `.env.local` contains stale `LocalLlm__*` provider settings, startup
   removes those values and disables LocalLlm for the one-command local run.
+- SMTP settings supplied through environment variables or .NET user-secrets
+  take precedence over `.env.local` and remain available to the backend.
 - On Windows, startup resolves npm to an executable shim instead of an
   extensionless command path.
 - When frontend startup begins, startup prints `http://localhost:3000`.

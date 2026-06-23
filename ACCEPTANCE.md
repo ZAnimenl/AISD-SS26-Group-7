@@ -123,6 +123,9 @@
   JSON transcript download containing that task's persisted AI inputs and outputs.
 - The workspace AI usage card is separated by task and does not show another
   task's tokens or interactions as the active task's usage.
+- Each generated task has an administrator-only AI-usage benchmark that considers
+  reference token efficiency and the task goal, code context, observed behavior,
+  and constraint information supplied to the AI agent.
 - Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
 - The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
 - Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.
@@ -177,6 +180,7 @@
 - After local default administrator sign-in, the administrator dashboard API succeeds under the repository-owned SQLite database.
 - Local SQLite-backed active-attempt checks for start, workspace, run, submit, and AI request flows do not fail on `DateTimeOffset` ordering or expiry comparisons.
 - Authentication state is cleared on backend 401 responses or explicit logout, not merely because the login page mounted or a non-auth data request failed.
+- Registration always shows the six-digit verification code beside the submitted email, including when SMTP delivery is delayed or unavailable; the code can complete the existing verification flow.
 - Backend config reports `real_sandbox_enabled=false` when no Docker-compatible runtime is reachable, and the student workspace disables Run and Submit in that state.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.

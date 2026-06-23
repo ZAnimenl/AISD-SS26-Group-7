@@ -120,6 +120,13 @@ const managedConfigKeys = [
   "DOCKER_HOST",
   "SeedAdmin__Email",
   "SeedAdmin__Password",
+  "Smtp__Host",
+  "Smtp__Port",
+  "Smtp__EnableSsl",
+  "Smtp__Username",
+  "Smtp__Password",
+  "Smtp__FromAddress",
+  "Smtp__FromName",
   "Deepseek__Enabled",
   "Deepseek__ApiKey",
   "Deepseek__BaseUrl",
@@ -534,6 +541,27 @@ async function discoverLocalConfig(fileConfig) {
   applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", process.env.SeedAdmin__Password);
   applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", userSecrets["SeedAdmin:Password"]);
   applyDiscoveredValue(discovered, fileConfig, "SeedAdmin__Password", userSecrets.SeedAdmin__Password);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Host", process.env.Smtp__Host);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Host", userSecrets["Smtp:Host"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Host", userSecrets.Smtp__Host);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Port", process.env.Smtp__Port);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Port", userSecrets["Smtp:Port"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Port", userSecrets.Smtp__Port);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__EnableSsl", process.env.Smtp__EnableSsl);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__EnableSsl", userSecrets["Smtp:EnableSsl"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__EnableSsl", userSecrets.Smtp__EnableSsl);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Username", process.env.Smtp__Username);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Username", userSecrets["Smtp:Username"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Username", userSecrets.Smtp__Username);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Password", process.env.Smtp__Password);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Password", userSecrets["Smtp:Password"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__Password", userSecrets.Smtp__Password);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromAddress", process.env.Smtp__FromAddress);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromAddress", userSecrets["Smtp:FromAddress"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromAddress", userSecrets.Smtp__FromAddress);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromName", process.env.Smtp__FromName);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromName", userSecrets["Smtp:FromName"]);
+  applyDiscoveredValue(discovered, fileConfig, "Smtp__FromName", userSecrets.Smtp__FromName);
   applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", process.env.Deepseek__ApiKey);
   applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", userSecrets["Deepseek:ApiKey"]);
   applyDiscoveredValue(discovered, fileConfig, "Deepseek__ApiKey", userSecrets.Deepseek__ApiKey);

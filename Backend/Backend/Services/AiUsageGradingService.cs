@@ -22,6 +22,13 @@ public sealed record AiUsageGrade(
 
 public sealed record ProblemStatementCopyEvidence(Guid InteractionId, Guid QuestionId, string Reason);
 
+public sealed record TaskAiUsageBenchmarkEvidence(
+    Guid QuestionId,
+    TaskAiUsageBenchmark Benchmark,
+    int TotalTokens,
+    int InteractionCount,
+    string[] ProvidedContextSignals);
+
 public sealed class AiUsageGradingService(
     OjSharpDbContext dbContext,
     AiCompletionService completionService,
@@ -48,19 +55,33 @@ public sealed class AiUsageGradingService(
             interactions = interactions.OrderBy(item => item.CreatedAt).ToList();
             events = events.OrderBy(item => item.CreatedAt).ToList();
             executions = executions.OrderBy(item => item.CreatedAt).ToList();
-            var problemStatements = await dbContext.Questions
+            var taskDefinitions = await dbContext.Questions
                 .Where(item => item.AssessmentId == session.AssessmentId)
-                .Select(item => new { item.Id, item.ProblemDescriptionMarkdown })
+                .Select(item => new
+                {
+                    item.Id,
+                    item.TaskType,
+                    item.Difficulty,
+                    item.GradingConfigurationJson,
+                    item.ProblemDescriptionMarkdown
+                })
                 .ToListAsync(cancellationToken);
 
             var objectiveRepetition = CalculateObjectiveRepetition(interactions, events);
             var rapidAcceptDeduction = CalculateRapidAcceptDeduction(events);
             var problemCopy = DetectProblemStatementCopy(
                 interactions,
-                problemStatements.ToDictionary(item => item.Id, item => item.ProblemDescriptionMarkdown));
+                taskDefinitions.ToDictionary(item => item.Id, item => item.ProblemDescriptionMarkdown));
+            var taskBenchmarks = taskDefinitions.ToDictionary(
+                item => item.Id,
+                item => TaskAiUsageBenchmarkFactory.Read(
+                    item.GradingConfigurationJson,
+                    item.TaskType,
+                    item.Difficulty));
+            var benchmarkEvidence = BuildBenchmarkEvidence(interactions, taskBenchmarks);
             var completion = await completionService.GenerateAsync(
                 BuildSystemPrompt(),
-                BuildUserPrompt(session, interactions, events, executions, objectiveRepetition, rapidAcceptDeduction),
+                BuildUserPrompt(session, interactions, events, executions, benchmarkEvidence, objectiveRepetition, rapidAcceptDeduction),
                 AiResponseFormat.Json,
                 cancellationToken,
                 maxTokens: 1800);
@@ -88,8 +109,9 @@ public sealed class AiUsageGradingService(
                     objective_repetition_score = objectiveRepetition,
                     rapid_accept_deduction = rapidAcceptDeduction,
                     problem_statement_copy_detected = problemCopy is not null,
-                    prompt_quality_cap_reason = problemCopy?.Reason
-                }
+                    prompt_quality_cap_reason = problemCopy?.Reason,
+                    task_benchmarks = benchmarkEvidence
+                },
             });
             session.AiGradedAt = DateTimeOffset.UtcNow;
         }
@@ -164,6 +186,49 @@ public sealed class AiUsageGradingService(
         return Math.Max(0, 10 - deductions);
     }
 
+    internal static IReadOnlyList<TaskAiUsageBenchmarkEvidence> BuildBenchmarkEvidence(
+        IEnumerable<AiInteraction> interactions,
+        IReadOnlyDictionary<Guid, TaskAiUsageBenchmark> benchmarks)
+    {
+        var byQuestion = interactions.GroupBy(interaction => interaction.QuestionId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
+
+        return benchmarks
+            .OrderBy(item => item.Key)
+            .Select(item =>
+            {
+                var taskInteractions = byQuestion.GetValueOrDefault(item.Key, []);
+                return new TaskAiUsageBenchmarkEvidence(
+                    item.Key,
+                    item.Value,
+                    taskInteractions.Sum(interaction => interaction.TotalTokens),
+                    taskInteractions.Length,
+                    DetectProvidedContextSignals(taskInteractions));
+            })
+            .ToArray();
+    }
+
+    private static string[] DetectProvidedContextSignals(IEnumerable<AiInteraction> interactions)
+    {
+        var interactionList = interactions.ToArray();
+        var prompts = string.Join("\n", interactionList.Select(interaction => interaction.Message)).ToLowerInvariant();
+        var signals = new List<string>();
+        if (interactionList.Any(interaction => CountWords(interaction.Message) >= 5))
+            signals.Add("task_goal");
+        if (interactionList.Any(interaction => !string.IsNullOrWhiteSpace(interaction.ActiveFileContent)))
+            signals.Add("active_file_or_code_context");
+        if (ContainsAny(prompts, "error", "fail", "test", "expected", "actual", "stdout", "stderr"))
+            signals.Add("observed_behavior_or_test_output");
+        if (ContainsAny(prompts, "must", "should", "preserve", "require", "acceptance", "constraint", "edge case", "validation"))
+            signals.Add("desired_constraint_or_acceptance_condition");
+        return signals.ToArray();
+    }
+
+    private static bool ContainsAny(string value, params string[] terms)
+    {
+        return terms.Any(term => value.Contains(term, StringComparison.Ordinal));
+    }
+
     private static double Similarity(string first, string second)
     {
         var firstTerms = Terms(first);
@@ -199,6 +264,7 @@ public sealed class AiUsageGradingService(
         - critical_evaluation_before_deduction: integer 0-20
         - reflection_quality_and_consistency: integer 0-10
         The platform supplies objective_repetition_score (0-10) and rapid_accept_deduction (0-8). Do not alter them.
+        Task benchmarks contain a reference token budget, interaction count, and required context signals. Use them to assess whether each task received sufficient useful context and proportionate token use. Do not reward low token counts by themselves or apply a hard cap.
         Evaluate productive progress, use of context, refinement, response-to-action-to-test sequences, critical adaptation, and whether the reflection agrees with the logs.
         Include concise criterion-level evidence referencing interaction_id or execution_id.
         Required JSON fields: prompt_quality_and_context, behavioral_efficiency, critical_evaluation_before_deduction, reflection_quality_and_consistency, reflection_consistency, confidence, summary, evidence.
@@ -210,6 +276,7 @@ public sealed class AiUsageGradingService(
         IReadOnlyList<AiInteraction> interactions,
         IReadOnlyList<AiInteractionEvent> events,
         IReadOnlyList<ExecutionRecord> executions,
+        IReadOnlyList<TaskAiUsageBenchmarkEvidence> benchmarkEvidence,
         int objectiveRepetition,
         int rapidAcceptDeduction)
     {
@@ -218,6 +285,7 @@ public sealed class AiUsageGradingService(
             reflection = session.ReflectionText,
             objective_repetition_score = objectiveRepetition,
             rapid_accept_deduction = rapidAcceptDeduction,
+            task_benchmarks = benchmarkEvidence,
             interactions = interactions.Select(item => new
             {
                 interaction_id = item.Id,

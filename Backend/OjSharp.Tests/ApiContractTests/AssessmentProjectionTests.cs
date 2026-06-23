@@ -52,7 +52,9 @@ public sealed class AssessmentProjectionTests
                     }),
                     GradingConfigurationJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
                     {
-                        ["hidden_runner"] = "pytest"
+                        ["hidden_runner"] = "pytest",
+                        [TaskAiUsageBenchmarkFactory.ConfigurationKey] = JsonSerializer.Serialize(
+                            TaskAiUsageBenchmarkFactory.Create(TaskTypes.FrontendUiExtension, "medium"))
                     }),
                     TestCases =
                     [
@@ -94,6 +96,7 @@ public sealed class AssessmentProjectionTests
         Assert.Contains("preview_route", json);
         Assert.DoesNotContain("test_secret", json);
         Assert.DoesNotContain("hidden_runner", json);
+        Assert.DoesNotContain(TaskAiUsageBenchmarkFactory.ConfigurationKey, json);
         Assert.DoesNotContain("expected_output", json);
         Assert.DoesNotContain("Do not show this.", json);
     }

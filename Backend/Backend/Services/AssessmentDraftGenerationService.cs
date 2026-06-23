@@ -227,6 +227,7 @@ public sealed class AssessmentDraftGenerationService
             "Require cross-file behavior, input validation, error handling, state or data-flow consistency, and at least one backward-compatibility or regression constraint.",
             "Name and require at least four advanced engineering concerns appropriate to the task type, such as asynchronous coordination, persistence, state machines, idempotency, authorization, pagination, concurrency, transactions, migrations, rollback, caching, accessibility, auditability, or conflict resolution.",
             "Every task must include at least two public and two hidden test cases. Tests must exercise behavior across the provided files, including edge cases and failure paths.",
+            "The platform attaches the administrator-only AI-usage benchmark after generation; do not include student-visible AI grading criteria in the task description.",
             "Supported student languages are python, javascript, typescript, html, and sql.",
             "Use html for frontend_ui_extension tasks and sql for database_query_schema tasks unless the administrator explicitly asks for another supported language.",
             "For frontend_ui_extension, use index.html, styles.css, and app.js adapted from the canonical browser-safe UI and require accessible interactions, derived state, responsive behavior, and robust empty/error states.",
@@ -414,6 +415,7 @@ public sealed class AssessmentDraftGenerationService
                 $"Generated task '{title}' returned task type '{taskType}' but the required task type is '{expectedTaskType}'.");
         }
         var verificationMode = NormalizeVerificationMode(OptionalString(element, "verification_mode"), taskType);
+        var difficulty = NormalizeDifficulty(OptionalString(element, "difficulty"));
         var starterCode = RequiredNestedStringDictionary(element, "starter_code");
         var languageConstraints = NormalizeStudentLanguages(ReadStringArray(element, "language_constraints"), taskType);
         var questionId = Guid.NewGuid();
@@ -446,7 +448,7 @@ public sealed class AssessmentDraftGenerationService
             AssessmentId = assessmentId,
             Title = title,
             TaskType = taskType,
-            Difficulty = NormalizeDifficulty(OptionalString(element, "difficulty")),
+            Difficulty = difficulty,
             VerificationMode = verificationMode,
             StarterPrototypeReference = PrototypeDefaults.TodoListReference,
             ProblemDescriptionMarkdown = problemDescription,
@@ -456,11 +458,10 @@ public sealed class AssessmentDraftGenerationService
             VerificationMetadataJson = JsonDocumentSerializer.Serialize(
                 ReadStringDictionary(element, "verification_metadata") ?? new Dictionary<string, string> { ["primary_view"] = verificationMode }),
             GradingConfigurationJson = JsonDocumentSerializer.Serialize(
-                ReadStringDictionary(element, "grading_configuration") ?? new Dictionary<string, string>
-                {
-                    ["runner"] = "automated_tests",
-                    ["requires_student_install"] = "false"
-                }),
+                TaskAiUsageBenchmarkFactory.AddToConfiguration(
+                    ReadStringDictionary(element, "grading_configuration"),
+                    taskType,
+                    difficulty)),
             AuthoringSource = AuthoringSources.LlmGenerated,
             TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(AddDraftTraceability(
                 ReadStringDictionary(element, "traceability_metadata"))),

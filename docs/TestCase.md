@@ -9,6 +9,12 @@ the active requirements. It does not replace automated test files.
   routes.
 - Students cannot access administrator-only features.
 - Administrators can access assessment management and reports.
+- Starting or resending registration returns a six-digit code that the
+  registration page displays beside the submitted email, whether or not SMTP
+  delivery succeeds.
+- SMTP settings supplied through environment variables override local settings
+  during one-command startup, and TLS is enabled by default for STARTTLS
+  providers such as Gmail on port 587.
 
 ## Assessment Management
 
@@ -142,6 +148,9 @@ the active requirements. It does not replace automated test files.
   downloading its transcript returns those same records in JSON form.
 - The workspace AI usage card shows only the active task's token and interaction
   totals, including newly completed requests without requiring a page refresh.
+- Generated tasks contain a versioned, deterministic AI-usage benchmark with a
+  reference token budget, recommended interaction count, and required context
+  signals. AI-usage grading receives actual per-task token/context evidence.
 - AI requests include active file name, selected language, visible
   selected-language file contents, active file content, and latest public run
   output when available.

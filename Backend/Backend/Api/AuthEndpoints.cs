@@ -256,16 +256,15 @@ public static class AuthEndpoints
 
         if (!emailSent)
         {
-            logger.LogWarning("Verification code email failed for {Email}. Code (dev): {Code}", pending.Email, code);
+            logger.LogWarning("Verification code email failed for {Email}; the registration response contains the fallback code.", pending.Email);
         }
 
-        return ApiResults.Success(new
-        {
-            sent = emailSent,
-            expires_at = pending.ExpiresAt,
-            // In development only when email delivery fails, surface the code so manual testing can continue.
-            dev_code = emailSent ? null : code
-        });
+        // The registration window displays the generated code as a reliable fallback
+        // when SMTP delivery is delayed or unavailable.
+        return ApiResults.Success(new RegistrationCodeDeliveryResponse(
+            emailSent,
+            pending.ExpiresAt,
+            code));
     }
 
     private static IResult RegisterVerifyCodeAsync(
@@ -402,15 +401,13 @@ public static class AuthEndpoints
 
         if (!emailSent)
         {
-            logger.LogWarning("Verification code email failed for {Email}. Code (dev): {Code}", refreshed.Email, newCode);
+            logger.LogWarning("Verification code email failed for {Email}; the registration response contains the fallback code.", refreshed.Email);
         }
 
-        return ApiResults.Success(new
-        {
-            sent = emailSent,
-            expires_at = refreshed.ExpiresAt,
-            dev_code = emailSent ? null : newCode
-        });
+        return ApiResults.Success(new RegistrationCodeDeliveryResponse(
+            emailSent,
+            refreshed.ExpiresAt,
+            newCode));
     }
 
     // ===== Google OAuth =====

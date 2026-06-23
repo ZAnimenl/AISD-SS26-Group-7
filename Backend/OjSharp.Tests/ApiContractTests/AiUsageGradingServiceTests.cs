@@ -114,6 +114,40 @@ public sealed class AiUsageGradingServiceTests
         Assert.Equal(interaction.Id, evidence!.InteractionId);
     }
 
+    [Fact]
+    public void Task_benchmark_evidence_keeps_tokens_and_context_signals_separate()
+    {
+        var firstQuestionId = Guid.NewGuid();
+        var secondQuestionId = Guid.NewGuid();
+        var benchmarks = new Dictionary<Guid, TaskAiUsageBenchmark>
+        {
+            [firstQuestionId] = TaskAiUsageBenchmarkFactory.Create(TaskTypes.RestApiDevelopment, "medium"),
+            [secondQuestionId] = TaskAiUsageBenchmarkFactory.Create(TaskTypes.BugFix, "hard")
+        };
+        var firstInteraction = Interaction(
+            "The PUT test fails with 409. Preserve optimistic locking and validate the If-Match constraint.",
+            DateTimeOffset.UtcNow);
+        firstInteraction.QuestionId = firstQuestionId;
+        firstInteraction.ActiveFileContent = "@app.put('/api/todos/{todo_id}')\ndef update_todo(): pass";
+        firstInteraction.TotalTokens = 300;
+        var secondInteraction = Interaction("Please help.", DateTimeOffset.UtcNow);
+        secondInteraction.QuestionId = secondQuestionId;
+        secondInteraction.TotalTokens = 900;
+
+        var evidence = AiUsageGradingService.BuildBenchmarkEvidence(
+            [firstInteraction, secondInteraction],
+            benchmarks);
+
+        var first = Assert.Single(evidence, item => item.QuestionId == firstQuestionId);
+        var second = Assert.Single(evidence, item => item.QuestionId == secondQuestionId);
+        Assert.Equal(300, first.TotalTokens);
+        Assert.Equal(900, second.TotalTokens);
+        Assert.Contains("active_file_or_code_context", first.ProvidedContextSignals);
+        Assert.Contains("observed_behavior_or_test_output", first.ProvidedContextSignals);
+        Assert.Contains("desired_constraint_or_acceptance_condition", first.ProvidedContextSignals);
+        Assert.DoesNotContain("observed_behavior_or_test_output", second.ProvidedContextSignals);
+    }
+
     private static AiInteraction Interaction(string message, DateTimeOffset createdAt)
     {
         return new AiInteraction

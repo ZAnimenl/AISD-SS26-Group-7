@@ -47,6 +47,26 @@ test("parseEnvFileContent reads quoted and plain local values", () => {
   assert.equal(parsed.BROKEN, undefined);
 });
 
+test("serializeEnvFile retains SMTP settings for local mail delivery", () => {
+  const serialized = serializeEnvFile({
+    Smtp__Host: "smtp.example.test",
+    Smtp__Port: "587",
+    Smtp__EnableSsl: "true",
+    Smtp__Username: "mailer",
+    Smtp__Password: "app-password",
+    Smtp__FromAddress: "mailer@example.test",
+    Smtp__FromName: "Assessment Mailer"
+  });
+
+  assert.match(serialized, /^Smtp__Host=smtp\.example\.test$/m);
+  assert.match(serialized, /^Smtp__Port=587$/m);
+  assert.match(serialized, /^Smtp__EnableSsl=true$/m);
+  assert.match(serialized, /^Smtp__Username=mailer$/m);
+  assert.match(serialized, /^Smtp__Password=app-password$/m);
+  assert.match(serialized, /^Smtp__FromAddress=mailer@example\.test$/m);
+  assert.match(serialized, /^Smtp__FromName="Assessment Mailer"$/m);
+});
+
 test("serializeEnvFile preserves unknown keys and protects values that need quoting", () => {
   const serialized = serializeEnvFile({
     SeedAdmin__Password: "secret # with hash",
@@ -75,6 +95,16 @@ test("mergeEffectiveConfig lets explicit process config override local file conf
   assert.equal(merged.BackendUrls, "http://127.0.0.1:6000");
   assert.equal(merged.Deepseek__ApiKey, key);
   assert.equal(merged.NEXT_PUBLIC_API_BASE_URL, "http://localhost:5140/api/v1");
+});
+
+test("mergeEffectiveConfig lets SMTP environment settings override local settings", () => {
+  const merged = mergeEffectiveConfig(
+    { Smtp__Host: "smtp.local.test", Smtp__Password: "old-password" },
+    { Smtp__Host: "smtp.deployment.test", Smtp__Password: "new-password" }
+  );
+
+  assert.equal(merged.Smtp__Host, "smtp.deployment.test");
+  assert.equal(merged.Smtp__Password, "new-password");
 });
 
 test("normalizeDeepseekApiKey collapses accidental repeated pastes", () => {

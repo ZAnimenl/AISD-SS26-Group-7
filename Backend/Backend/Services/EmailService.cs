@@ -85,7 +85,7 @@ public sealed class EmailService(
 
             using var client = new SmtpClient(options.Host, options.Port)
             {
-                EnableSsl = true,
+                EnableSsl = options.EnableSsl,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
                 UseDefaultCredentials = false,
                 Credentials = new NetworkCredential(options.Username, options.Password),
