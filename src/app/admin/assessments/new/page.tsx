@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Clock3, FileText, ListChecks, Loader2, Minus, Plus, Wand2 } from "lucide-react";
-import { createAssessment, generateAssessment, getAdminAssessment, updateAssessment } from "@/lib/api";
+import { generateAssessment, getAdminAssessment, updateAssessment } from "@/lib/api";
 import { currentUtcIso, defaultAssessmentExpiry, toLocalDateTimeInput, toUtcIso } from "@/lib/assessmentSchedule";
 import { QuestionTestCaseEditor } from "@/components/admin/QuestionTestCaseEditor";
 import { DurationSlider } from "@/components/admin/DurationSlider";
@@ -13,7 +13,7 @@ import { CustomDropdown } from "@/components/ui/CustomDropdown";
 import type { Assessment, AssessmentStatus, Difficulty, TaskType } from "@/lib/types";
 
 type CreateStep = 1 | 2 | 3;
-type PendingAction = "generate" | "empty" | "save" | null;
+type PendingAction = "generate" | "save" | null;
 
 const MAX_TASKS_PER_TYPE = 5;
 const MAX_TOTAL_TASKS = 12;
@@ -35,11 +35,13 @@ export default function NewAssessmentPage() {
   const router = useRouter();
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const reviewSectionRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<CreateStep>(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [draftAssessment, setDraftAssessment] = useState<Assessment | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [shouldScrollToReview, setShouldScrollToReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [taskCounts, setTaskCounts] = useState<Record<TaskType, number>>({
@@ -56,6 +58,16 @@ export default function NewAssessmentPage() {
   const [aiAccess, setAiAccess] = useState<"enabled" | "disabled">("enabled");
   const isPending = pendingAction !== null;
   const totalTasks = Object.values(taskCounts).reduce((sum, count) => sum + count, 0);
+  const isBlueprintFrozen = isPending || Boolean(draftAssessment);
+
+  useEffect(() => {
+    if (!shouldScrollToReview || !draftAssessment?.questions.length) return;
+
+    window.requestAnimationFrame(() => {
+      reviewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setShouldScrollToReview(false);
+    });
+  }, [draftAssessment, shouldScrollToReview]);
 
   function updateTaskCount(taskType: TaskType, requestedCount: number) {
     setTaskCounts((current) => {
@@ -71,15 +83,14 @@ export default function NewAssessmentPage() {
     setStep(2);
   }
 
-  async function createDraft(generateQuestions: boolean) {
+  async function createDraft() {
     if (isPending || draftAssessment) return;
     setError(null);
-    setPendingAction(generateQuestions ? "generate" : "empty");
+    setPendingAction("generate");
     try {
       const provisionalStart = currentUtcIso();
       const provisionalExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const create = generateQuestions ? generateAssessment : createAssessment;
-      const created = await create({
+      const created = await generateAssessment({
         title: title.trim(),
         description: description.trim(),
         duration_minutes: durationMinutes,
@@ -93,6 +104,7 @@ export default function NewAssessmentPage() {
         difficulty
       });
       setDraftAssessment(await getAdminAssessment(created.assessment_id));
+      setShouldScrollToReview(true);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Unable to create the assessment draft.");
     } finally {
@@ -211,72 +223,82 @@ export default function NewAssessmentPage() {
 
           {step === 2 ? (
             <div className="mt-6 space-y-5">
-              {!draftAssessment ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question blueprint</p>
-                      <h2 className="mt-1 text-xl font-semibold">Generate the task set</h2>
-                      <p className="mt-1 text-sm text-white/45">Choose the mix, generate the questions, then review every task and test before scheduling.</p>
-                    </div>
-                    <div className="grid min-w-28 place-items-center rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-4 py-2">
-                      <span className="text-[10px] uppercase tracking-[0.14em] text-white/40">Total tasks</span>
-                      <span className="text-2xl font-semibold text-cyanGlow">{totalTasks}</span>
-                    </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Question blueprint</p>
+                    <h2 className="mt-1 text-xl font-semibold">Generate the task set</h2>
+                    <p className="mt-1 text-sm text-white/45">
+                      {draftAssessment
+                        ? "Blueprint locked. Review every generated task and test before scheduling."
+                        : "Choose the mix, generate the questions, then review every task and test before scheduling."}
+                    </p>
                   </div>
-                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                    {taskBlueprints.map((blueprint) => {
-                      const count = taskCounts[blueprint.type];
-                      return (
-                        <div key={blueprint.type} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div><p className="font-medium text-white/85">{blueprint.label}</p><p className="mt-1 text-xs text-white/40">{blueprint.description}</p></div>
-                            <span className="grid h-9 min-w-9 place-items-center rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 font-mono text-sm text-cyanGlow">{count}</span>
-                          </div>
-                          <div className="mt-4 grid grid-cols-[36px_1fr_36px] items-center gap-3">
-                            <button
-                              className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30"
-                              type="button"
-                              aria-label={`Decrease ${blueprint.label} question count`}
-                              disabled={count === 0}
-                              onClick={() => updateTaskCount(blueprint.type, count - 1)}
-                            >
-                              <Minus size={15} />
-                            </button>
-                            <input className="h-2 w-full accent-cyan-400" type="range" min={0} max={MAX_TASKS_PER_TYPE} value={count} aria-label={`${blueprint.label} question count`} onChange={(event) => updateTaskCount(blueprint.type, Number(event.target.value))} />
-                            <button
-                              className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:opacity-30"
-                              type="button"
-                              aria-label={`Increase ${blueprint.label} question count`}
-                              disabled={totalTasks >= MAX_TOTAL_TASKS || count >= MAX_TASKS_PER_TYPE}
-                              onClick={() => updateTaskCount(blueprint.type, count + 1)}
-                            >
-                              <Plus size={15} />
-                            </button>
-                          </div>
+                  <div className="grid min-w-28 place-items-center rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-4 py-2">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-white/40">Total tasks</span>
+                    <span className="text-2xl font-semibold text-cyanGlow">{totalTasks}</span>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                  {taskBlueprints.map((blueprint) => {
+                    const count = taskCounts[blueprint.type];
+                    return (
+                      <div key={blueprint.type} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div><p className="font-medium text-white/85">{blueprint.label}</p><p className="mt-1 text-xs text-white/40">{blueprint.description}</p></div>
+                          <span className="grid h-9 min-w-9 place-items-center rounded-lg border border-cyanGlow/25 bg-cyanGlow/10 font-mono text-sm text-cyanGlow">{count}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-black/20 p-4 sm:grid-cols-[1fr_180px] sm:items-center">
-                    <div><p className="text-sm font-medium text-white/80">Shared difficulty</p><p className="mt-1 text-xs text-white/40">Applied to each generated task; individual tasks remain editable afterward.</p></div>
-                    <CustomDropdown ariaLabel="Shared difficulty" value={difficulty} options={difficultyOptions.map((value) => ({ value, label: value }))} onChange={setDifficulty} />
-                  </div>
+                        <div className="mt-4 grid grid-cols-[36px_1fr_36px] items-center gap-3">
+                          <button
+                            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:cursor-not-allowed disabled:opacity-30"
+                            type="button"
+                            aria-label={`Decrease ${blueprint.label} question count`}
+                            disabled={isBlueprintFrozen || count === 0}
+                            onClick={() => updateTaskCount(blueprint.type, count - 1)}
+                          >
+                            <Minus size={15} />
+                          </button>
+                          <input
+                            className="h-2 w-full accent-cyan-400 disabled:cursor-not-allowed disabled:opacity-45"
+                            type="range"
+                            min={0}
+                            max={MAX_TASKS_PER_TYPE}
+                            value={count}
+                            aria-label={`${blueprint.label} question count`}
+                            disabled={isBlueprintFrozen}
+                            onChange={(event) => updateTaskCount(blueprint.type, Number(event.target.value))}
+                          />
+                          <button
+                            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/65 disabled:cursor-not-allowed disabled:opacity-30"
+                            type="button"
+                            aria-label={`Increase ${blueprint.label} question count`}
+                            disabled={isBlueprintFrozen || totalTasks >= MAX_TOTAL_TASKS || count >= MAX_TASKS_PER_TYPE}
+                            onClick={() => updateTaskCount(blueprint.type, count + 1)}
+                          >
+                            <Plus size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-black/20 p-4 sm:grid-cols-[1fr_180px] sm:items-center">
+                  <div><p className="text-sm font-medium text-white/80">Shared difficulty</p><p className="mt-1 text-xs text-white/40">Applied to each generated task; individual tasks remain editable afterward.</p></div>
+                  <CustomDropdown ariaLabel="Shared difficulty" value={difficulty} disabled={isBlueprintFrozen} options={difficultyOptions.map((value) => ({ value, label: value }))} onChange={setDifficulty} />
+                </div>
+                {!draftAssessment ? (
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button className="btn-secondary" type="button" disabled={isPending} onClick={() => setStep(1)}><ArrowLeft size={16} /> Previous</button>
-                    <button className="btn-secondary" type="button" disabled={isPending} onClick={() => void createDraft(false)}>
-                      {pendingAction === "empty" ? <Loader2 className="animate-spin" size={16} /> : null}
-                      Create empty draft
-                    </button>
-                    <button className="btn-primary ml-auto" type="button" disabled={isPending || totalTasks === 0} onClick={() => void createDraft(true)}>
+                    <button className="btn-primary ml-auto" type="button" disabled={isPending || totalTasks === 0} onClick={() => void createDraft()}>
                       {pendingAction === "generate" ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
                       {pendingAction === "generate" ? "Generating questions..." : "Generate questions"}
                     </button>
                   </div>
-                </div>
-              ) : (
+                ) : null}
+              </div>
+              {draftAssessment ? (
                 <>
-                  <div className="rounded-2xl border border-cyanGlow/25 bg-cyanGlow/[0.06] p-4">
+                  <div ref={reviewSectionRef} className="scroll-mt-6 rounded-2xl border border-cyanGlow/25 bg-cyanGlow/[0.06] p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-cyanGlow/70">Review checkpoint</p>
                     <h2 className="mt-1 text-lg font-semibold">Review every generated task and test</h2>
                     <p className="mt-1 text-sm text-white/50">Save any edits below. Delivery settings remain separate in the final step.</p>
@@ -289,7 +311,7 @@ export default function NewAssessmentPage() {
                     </button>
                   </div>
                 </>
-              )}
+              ) : null}
             </div>
           ) : null}
 

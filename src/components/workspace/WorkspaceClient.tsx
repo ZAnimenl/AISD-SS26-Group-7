@@ -21,6 +21,7 @@ interface WorkspaceClientProps {
 }
 
 type SaveState = "saved" | "unsaved" | "saving";
+type AiAgentPage = "chat" | "usage";
 
 type AiChatMessage = {
   clientId?: string;
@@ -458,6 +459,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [frozenTimeLabel, setFrozenTimeLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outputTab, setOutputTab] = useState<"preview" | "console">("preview");
+  const [aiAgentPage, setAiAgentPage] = useState<AiAgentPage>("chat");
   const [aiMessagesByQuestion, setAiMessagesByQuestion] = useState<Record<string, AiChatMessage[]>>({
     [firstQuestion.question_id]: createInitialAiMessages()
   });
@@ -1346,7 +1348,28 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               <span>Hide</span>
             </button>
           </div>
-          {assessment.ai_enabled ? (
+          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/20 p-1">
+            {([
+              { page: "chat" as const, label: "Chat", icon: "ai" as const },
+              { page: "usage" as const, label: "Usage", icon: "results" as const }
+            ]).map(({ page, label, icon }) => (
+              <button
+                key={page}
+                type="button"
+                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
+                  aiAgentPage === page
+                    ? "bg-cyanGlow/15 text-cyanGlow"
+                    : "text-white/45 hover:bg-white/5 hover:text-white/70"
+                }`}
+                aria-pressed={aiAgentPage === page}
+                onClick={() => setAiAgentPage(page)}
+              >
+                <SemanticIcon name={icon} size={13} />
+                {label}
+              </button>
+            ))}
+          </div>
+          {aiAgentPage === "usage" && assessment.ai_enabled ? (
             <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-cyanGlow/25 bg-cyanGlow/10 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">This task&apos;s AI usage</p>
               <p className="truncate text-right text-xs text-white/50">
@@ -1358,7 +1381,24 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               </p>
             </div>
           ) : null}
-          {assessment.ai_enabled && activeTaskAiUsage.token_efficiency ? (
+          {aiAgentPage === "usage" && assessment.ai_enabled ? (
+            <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">Assessment total</p>
+              <p className="truncate text-right text-xs text-white/50">
+                <span className="font-mono font-semibold text-white/85">
+                  {formatTokenCount(aiUsageSummary?.total_tokens ?? 0)}
+                </span>
+                {" tokens - "}
+                {aiUsageSummary?.total_interactions ?? 0} interactions
+              </p>
+            </div>
+          ) : null}
+          {aiAgentPage === "usage" && !assessment.ai_enabled ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/45">
+              AI disabled for this assessment
+            </div>
+          ) : null}
+          {aiAgentPage === "usage" && assessment.ai_enabled && activeTaskAiUsage.token_efficiency ? (
             <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/20 p-2 text-[10px] text-white/45 sm:grid-cols-3">
               <div>
                 <p className="uppercase tracking-[0.1em]">Prompt CpT</p>
@@ -1385,7 +1425,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               <p className="col-span-2 leading-4 text-white/30 sm:col-span-3">These metrics inform AI Usage scoring only after this task fully passes.</p>
             </div>
           ) : null}
-          {assessment.ai_enabled ? (
+          {aiAgentPage === "usage" && assessment.ai_enabled ? (
             <button
               type="button"
               className="w-fit text-xs text-cyanGlow/80 underline-offset-4 hover:text-cyanGlow hover:underline"
@@ -1395,6 +1435,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             </button>
           ) : null}
         </div>
+        {aiAgentPage === "chat" ? (
+          <>
         <div className="relative mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {(["code_suggestion", "explanation", "debugging"] as AiInteractionType[]).map((type) => (
             <button
@@ -1469,6 +1511,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
             <SemanticIcon name="send" size={16} />
           </button>
         </div>
+          </>
+        ) : null}
           </>
         )}
       </aside>
