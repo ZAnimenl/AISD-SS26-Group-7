@@ -1127,7 +1127,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-[0.16em] text-cyanGlow/70">Assessment tasks</p>
-              <h2 className="mt-1 text-base font-semibold leading-snug">{assessment.title}</h2>
             </div>
             <button
               type="button"
@@ -1140,7 +1139,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               <span className="hidden sm:inline">Hide</span>
             </button>
           </div>
-          <span className="badge mt-3 hidden w-fit shrink-0 xl:inline-flex">Active attempt</span>
         </div>
         <div className="relative mt-3 shrink-0 rounded-[16px] border border-cyanGlow/25 bg-gradient-to-br from-cyanGlow/10 to-purpleGlow/[0.06] p-3">
           <div className="flex items-center justify-between gap-3">
@@ -1155,10 +1153,12 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               <ChevronLeft size={17} />
             </button>
             <div className="min-w-0 text-center">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-cyanGlow/70">
+              <p className="whitespace-nowrap text-[10px] uppercase tracking-[0.16em] text-cyanGlow/70">
                 Question {activeQuestionIndex + 1} of {assessment.questions.length}
               </p>
-              <p className="mt-1 truncate text-sm font-semibold text-white">{activeQuestion?.title}</p>
+              <p className="mt-1 truncate whitespace-nowrap text-sm font-semibold text-white" title={activeQuestion?.title}>
+                {activeQuestion?.title}
+              </p>
             </div>
             <button
               type="button"
@@ -1220,8 +1220,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       >
         <div className="relative flex flex-wrap items-center gap-2 border-b border-white/10 p-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-[0.16em] text-white/35">IDE workspace</p>
-            <h1 className="truncate text-lg font-semibold xl:text-xl">{activeQuestion?.title ?? assessment.title}</h1>
+            <p className="truncate text-xs uppercase tracking-[0.16em] text-white/35">{assessment.title}</p>
+            <h1 className="break-words text-lg font-semibold leading-tight xl:text-xl">{activeQuestion?.title ?? assessment.title}</h1>
             <p className="mt-1 truncate text-xs text-white/40">{formatTaskType(activeQuestion?.task_type)} / {formatVerificationMode(activeQuestion?.verification_mode)}</p>
           </div>
           <span className="badge hidden xl:inline-flex"><SemanticIcon name="clock" size={14} /> {frozenTimeLabel ?? remainingTime}</span>
