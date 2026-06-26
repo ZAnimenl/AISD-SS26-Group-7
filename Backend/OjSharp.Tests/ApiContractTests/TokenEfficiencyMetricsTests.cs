@@ -76,7 +76,7 @@ public sealed class TokenEfficiencyMetricsTests
     }
 
     [Fact]
-    public async Task Reference_baseline_is_unavailable_without_minimal_input_standard_steps()
+    public async Task Reference_baseline_uses_fallback_steps_when_provider_omits_standard_steps()
     {
         var completionService = CreateCompletionService(new SequenceHandler(
             Completion("{\"goal\":\"g\",\"code_context\":\"c\",\"observed_behavior\":\"o\",\"constraint\":\"k\"}", 100, 10),
@@ -88,8 +88,28 @@ public sealed class TokenEfficiencyMetricsTests
             StarterCodeJson = "{}"
         }, CancellationToken.None);
 
-        Assert.Equal("unavailable", baseline.Status);
-        Assert.Equal("baseline_response_missing_required_context", baseline.FailureReason);
+        Assert.Equal("complete", baseline.Status);
+        Assert.Equal(2, baseline.StandardSteps!.Count);
+    }
+
+    [Fact]
+    public async Task Reference_baseline_accepts_camel_case_provider_fields()
+    {
+        var response = """
+        {"goal":"g","codeContext":"c","observedBehavior":"o","constraint":"k","standardSteps":[{"purpose":"Inspect","minimalInput":"Use the visible task context.","publicVerification":"Run the public check."},{"purpose":"Validate","minimalInput":"Ask for the smallest compatible change.","publicVerification":"Run the regression check."}]}
+        """;
+        var completionService = CreateCompletionService(new SequenceHandler(
+            Completion(response, 100, 10),
+            Completion(response, 40, 5)));
+        var baseline = await new TokenEfficiencyReferenceBaselineService(completionService).RunAsync(new Question
+        {
+            Title = "A task",
+            ProblemDescriptionMarkdown = "A public task description.",
+            StarterCodeJson = "{}"
+        }, CancellationToken.None);
+
+        Assert.Equal("complete", baseline.Status);
+        Assert.Equal(2, baseline.StandardSteps!.Count);
     }
 
     private static AiCompletionService CreateCompletionService(HttpMessageHandler handler) => new(

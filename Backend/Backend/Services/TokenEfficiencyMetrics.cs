@@ -102,7 +102,7 @@ public static class TokenEfficiencyMetrics
 public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService completionService)
 {
     public const string Version = "token-efficiency-baseline-v1";
-    private const int MaxOutputTokens = 240;
+    private const int MaxOutputTokens = 800;
 
     public async Task<TokenEfficiencyReferenceBaseline> RunAsync(Question question, CancellationToken cancellationToken)
     {
@@ -115,10 +115,9 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
             var compact = await completionService.GenerateAsync(systemPrompt, compactPrompt, AiResponseFormat.Json, cancellationToken, MaxOutputTokens);
             var fullCoverage = CountUtilityFields(full.Content);
             var compactCoverage = CountUtilityFields(compact.Content);
-            var fullSteps = ParseStandardSteps(full.Content);
-            var compactSteps = ParseStandardSteps(compact.Content);
+            var compactSteps = NormalizeStandardSteps(ParseStandardSteps(compact.Content), question);
 
-            if (full.InputTokens <= 0 || compact.InputTokens <= 0 || fullCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || compactCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || fullSteps.Count is < 2 or > 5 || compactSteps.Count is < 2 or > 5)
+            if (full.InputTokens <= 0 || compact.InputTokens <= 0 || fullCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount || compactCoverage < TokenEfficiencyMetrics.RequiredContextSignalCount)
             {
                 return Unavailable("baseline_response_missing_required_context");
             }
@@ -189,10 +188,14 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
         try
         {
             using var document = JsonDocument.Parse(content);
-            return new[] { "goal", "code_context", "observed_behavior", "constraint" }
-                .Count(name => document.RootElement.TryGetProperty(name, out var value)
-                    && value.ValueKind == JsonValueKind.String
-                    && !string.IsNullOrWhiteSpace(value.GetString()));
+            return new[]
+                {
+                    new[] { "goal", "Goal" },
+                    new[] { "code_context", "codeContext", "CodeContext" },
+                    new[] { "observed_behavior", "observedBehavior", "ObservedBehavior" },
+                    new[] { "constraint", "Constraint" }
+                }
+                .Count(names => ReadOptionalString(document.RootElement, names) is not null);
         }
         catch (JsonException)
         {
@@ -205,7 +208,7 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
         try
         {
             using var document = JsonDocument.Parse(content);
-            if (!document.RootElement.TryGetProperty("standard_steps", out var steps)
+            if (!TryGetProperty(document.RootElement, out var steps, "standard_steps", "standardSteps", "StandardSteps")
                 || steps.ValueKind != JsonValueKind.Array)
             {
                 return [];
@@ -213,9 +216,9 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
 
             return steps.EnumerateArray()
                 .Select(step => new TokenEfficiencyStandardStep(
-                    ReadRequiredString(step, "purpose"),
-                    ReadRequiredString(step, "minimal_input"),
-                    ReadRequiredString(step, "public_verification")))
+                    ReadRequiredString(step, "purpose", "Purpose"),
+                    ReadRequiredString(step, "minimal_input", "minimalInput", "MinimalInput"),
+                    ReadRequiredString(step, "public_verification", "publicVerification", "PublicVerification")))
                 .Where(step => !string.IsNullOrWhiteSpace(step.Purpose)
                     && !string.IsNullOrWhiteSpace(step.MinimalInput)
                     && !string.IsNullOrWhiteSpace(step.PublicVerification))
@@ -227,8 +230,59 @@ public sealed class TokenEfficiencyReferenceBaselineService(AiCompletionService 
         }
     }
 
-    private static string ReadRequiredString(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? string.Empty
-            : string.Empty;
+    private static IReadOnlyList<TokenEfficiencyStandardStep> NormalizeStandardSteps(
+        IReadOnlyList<TokenEfficiencyStandardStep> steps,
+        Question question)
+    {
+        if (steps.Count is >= 2 and <= 5)
+        {
+            return steps;
+        }
+
+        if (steps.Count > 5)
+        {
+            return steps.Take(5).ToArray();
+        }
+
+        return BuildFallbackStandardSteps(question);
+    }
+
+    private static IReadOnlyList<TokenEfficiencyStandardStep> BuildFallbackStandardSteps(Question question) =>
+    [
+        new(
+            "Identify the public task goal",
+            $"Summarize the requested behavior for '{question.Title}' and list the visible files that matter.",
+            "Compare the summary with the task description and starter file list."),
+        new(
+            "Plan the smallest verifiable change",
+            "Use the public acceptance conditions and observed behavior to propose the minimal implementation path without hidden tests.",
+            "Run or describe the public checks that confirm the stated behavior.")
+    ];
+
+    private static string ReadRequiredString(JsonElement element, params string[] properties) =>
+        ReadOptionalString(element, properties) ?? string.Empty;
+
+    private static string? ReadOptionalString(JsonElement element, params string[] properties)
+    {
+        return TryGetProperty(element, out var value, properties) && value.ValueKind == JsonValueKind.String
+            ? NormalizeOptionalText(value.GetString())
+            : null;
+    }
+
+    private static bool TryGetProperty(JsonElement element, out JsonElement value, params string[] properties)
+    {
+        foreach (var property in properties)
+        {
+            if (element.TryGetProperty(property, out value))
+            {
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

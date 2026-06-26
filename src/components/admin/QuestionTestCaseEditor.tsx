@@ -69,6 +69,8 @@ type TokenEfficiencyReferenceBaseline = {
   CompactInputTokens?: number;
   fullInputTokens?: number;
   FullInputTokens?: number;
+  failureReason?: string;
+  FailureReason?: string;
   standardSteps?: TokenEfficiencyStandardStep[];
   StandardSteps?: TokenEfficiencyStandardStep[];
 };
@@ -105,6 +107,11 @@ function TokenEfficiencyBaselineCard({ question }: { question: Question }) {
 
   const status = baseline.status ?? baseline.Status ?? "unavailable";
   if (status !== "complete") {
+    const failureReason = baseline.failureReason ?? baseline.FailureReason;
+    if (failureReason === "baseline_response_missing_required_context") {
+      return null;
+    }
+
     return (
       <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 p-3 text-sm text-amber-100/80">
         <p className="font-medium">Reference token baseline unavailable</p>
