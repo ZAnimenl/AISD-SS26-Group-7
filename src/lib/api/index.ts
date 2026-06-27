@@ -247,13 +247,15 @@ export async function forgotPassword(email: string) {
   const raw = await apiRequest<{
     sent: boolean;
     dev_temporary_password?: string | null;
+    dev_account_status?: "not_found" | "inactive" | "not_email_password" | null;
   }>("/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email })
   });
   return {
     sent: raw.sent,
-    devTemporaryPassword: raw.dev_temporary_password ?? null
+    devTemporaryPassword: raw.dev_temporary_password ?? null,
+    devAccountStatus: raw.dev_account_status ?? null
   };
 }
 
@@ -322,7 +324,7 @@ export async function registerStart(input: { full_name: string; username: string
   const raw = await apiRequest<{
     sent: boolean;
     expires_at?: string;
-    verification_code: string;
+    verification_code?: string | null;
   }>("/auth/register/start", {
     method: "POST",
     body: JSON.stringify(input)
@@ -330,7 +332,7 @@ export async function registerStart(input: { full_name: string; username: string
   return {
     sent: raw.sent,
     expiresAt: raw.expires_at ?? null,
-    verificationCode: raw.verification_code
+    verificationCode: raw.verification_code ?? null
   };
 }
 
@@ -368,7 +370,7 @@ export async function registerResendCode(email: string) {
   const raw = await apiRequest<{
     sent: boolean;
     expires_at?: string;
-    verification_code: string;
+    verification_code?: string | null;
   }>("/auth/register/resend-code", {
     method: "POST",
     body: JSON.stringify({ email })
@@ -376,7 +378,7 @@ export async function registerResendCode(email: string) {
   return {
     sent: raw.sent,
     expiresAt: raw.expires_at ?? null,
-    verificationCode: raw.verification_code
+    verificationCode: raw.verification_code ?? null
   };
 }
 

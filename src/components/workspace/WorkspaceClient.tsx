@@ -92,7 +92,7 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
   debugging: "debugging"
 };
 
-const SANDBOX_UNAVAILABLE_MESSAGE = "Run and submit are temporarily unavailable. Please try again later or contact an administrator.";
+const SANDBOX_UNAVAILABLE_MESSAGE = "Final submit is unavailable because the sandbox grader is not reachable. You can still run public checks to see the runner error in Console.";
 const MAX_PROBLEM_STATEMENT_WORDS = 150;
 
 function createInitialAiMessages(): AiChatMessage[] {
@@ -710,12 +710,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   }
 
   async function runPublicChecksForState(state: WorkspaceQuestionState) {
-    if (!sandboxAvailable) {
-      setTaskErrors((current) => ({ ...current, [activeQuestionId]: SANDBOX_UNAVAILABLE_MESSAGE }));
-      setError(SANDBOX_UNAVAILABLE_MESSAGE);
-      return null;
-    }
-
+    setOutputTab("console");
     setRunState("running");
     setRunningQuestionId(activeQuestionId);
     setRunResults((current) => ({ ...current, [activeQuestionId]: null }));
@@ -1274,9 +1269,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               options={STUDENT_LANGUAGE_OPTIONS.filter((option) => visibleLanguages.includes(option.value))}
               onChange={switchLanguage}
             />
-            <button className="btn-secondary shrink-0 px-4 py-2" onClick={handleRun} disabled={workspaceFrozen || runState === "running" || !sandboxAvailable}>
+            <button className="btn-secondary shrink-0 px-4 py-2" onClick={handleRun} disabled={workspaceFrozen || runState === "running"}>
               <SemanticIcon name="play" size={16} />
-              {!sandboxAvailable ? "Unavailable" : isRunningActiveTask ? "Running..." : "Run"}
+              {isRunningActiveTask ? "Running..." : "Run"}
             </button>
           </div>
         </div>
@@ -1474,7 +1469,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                   language={language}
                   isApplying={workspaceFrozen || agentActionState === "applying"}
                   isRunning={runState === "running"}
-                  canRun={sandboxAvailable}
+                  canRun
                   onExecute={(runAfterApply, eventTimestamp) => void executeAiWorkspaceActions(message, runAfterApply, eventTimestamp)}
                   onReject={(eventTimestamp) => rejectAiSuggestion(message, eventTimestamp)}
                 />

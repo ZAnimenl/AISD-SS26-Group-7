@@ -99,6 +99,20 @@ public sealed class BackendConfigurationTests
     }
 
     [Fact]
+    public void Forgot_password_returns_local_development_temporary_password_fallback()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindSolutionDirectory().FullName,
+            "Backend",
+            "Api",
+            "AuthEndpoints.cs"));
+
+        Assert.Contains("IWebHostEnvironment environment", source);
+        Assert.Contains("dev_account_status", source);
+        Assert.Contains("environment.IsDevelopment() || !emailSent ? tempPassword : null", source);
+    }
+
+    [Fact]
     public void Schema_compatibility_sql_escapes_json_default_for_execute_sql_raw()
     {
         var source = File.ReadAllText(Path.Combine(

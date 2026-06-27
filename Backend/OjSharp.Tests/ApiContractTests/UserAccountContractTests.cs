@@ -57,7 +57,26 @@ public sealed class UserAccountContractTests
     }
 
     [Fact]
-    public void Registration_code_delivery_response_exposes_the_visible_verification_code()
+    public void Registration_code_delivery_response_hides_code_when_email_was_sent()
+    {
+        var response = new RegistrationCodeDeliveryResponse(
+            Sent: true,
+            ExpiresAt: new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero),
+            VerificationCode: null);
+
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        });
+
+        Assert.Contains("\"sent\":true", json);
+        Assert.Contains("\"expires_at\"", json);
+        Assert.Contains("\"verification_code\":null", json);
+        Assert.DoesNotContain("123456", json);
+    }
+
+    [Fact]
+    public void Registration_code_delivery_response_exposes_fallback_code_when_email_fails()
     {
         var response = new RegistrationCodeDeliveryResponse(
             Sent: false,
@@ -72,6 +91,5 @@ public sealed class UserAccountContractTests
         Assert.Contains("\"sent\":false", json);
         Assert.Contains("\"expires_at\"", json);
         Assert.Contains("\"verification_code\":\"123456\"", json);
-        Assert.DoesNotContain("devCode", json, StringComparison.OrdinalIgnoreCase);
     }
 }

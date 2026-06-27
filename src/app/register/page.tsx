@@ -297,10 +297,16 @@ export default function RegisterPage() {
 
         {step === "code" ? (
           <form onSubmit={handleVerifyCode} className="mt-8 grid gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-4 py-3 text-sm">
-              <span className="text-white/70">Verification code for <span className="text-white">{email}</span></span>
-              <span className="font-mono text-lg font-bold tracking-[0.25em] text-cyanGlow">{verificationCode ?? "------"}</span>
-            </div>
+            {verificationCode ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm">
+                <span className="text-white/70">Local fallback code for <span className="text-white">{email}</span></span>
+                <span className="font-mono text-lg font-bold tracking-[0.25em] text-amber-300">{verificationCode}</span>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-4 py-3 text-sm text-white/75">
+                Enter the 6-digit code sent to <span className="text-white">{email}</span>.
+              </div>
+            )}
             <label className="grid gap-2 text-sm text-white/60">
               Verification code
               <input

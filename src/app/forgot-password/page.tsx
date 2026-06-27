@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, Code2, Mail, LogIn } from "lucide-react";
 import { forgotPassword } from "@/lib/api";
 
+type DevAccountStatus = "not_found" | "inactive" | "not_email_password";
+
 export default function ForgotPasswordPage() {
   return (
     <Suspense fallback={<ForgotPasswordShell />}>
@@ -20,6 +22,7 @@ function ForgotPasswordContent() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [devTemp, setDevTemp] = useState<string | null>(null);
+  const [devAccountStatus, setDevAccountStatus] = useState<DevAccountStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -27,6 +30,7 @@ function ForgotPasswordContent() {
     setError(null);
     setDone(false);
     setDevTemp(null);
+    setDevAccountStatus(null);
     if (!email.includes("@")) {
       setError("Please enter a valid email address.");
       return;
@@ -36,6 +40,7 @@ function ForgotPasswordContent() {
       const result = await forgotPassword(email.trim());
       setDone(true);
       setDevTemp(result.devTemporaryPassword);
+      setDevAccountStatus(result.devAccountStatus);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Could not send the reset email.");
     } finally {
@@ -64,7 +69,12 @@ function ForgotPasswordContent() {
               </p>
               {devTemp ? (
                 <p className="mt-3 text-xs text-amber-300">
-                  Dev fallback (email delivery is off): <span className="font-mono text-white">{devTemp}</span>
+                  Local development fallback: <span className="font-mono text-white">{devTemp}</span>
+                </p>
+              ) : null}
+              {devAccountStatus ? (
+                <p className="mt-3 text-xs text-amber-300">
+                  Local development: {getDevAccountStatusMessage(devAccountStatus)}
                 </p>
               ) : null}
             </div>
@@ -103,6 +113,17 @@ function ForgotPasswordContent() {
       </section>
     </main>
   );
+}
+
+function getDevAccountStatusMessage(status: DevAccountStatus) {
+  switch (status) {
+    case "not_found":
+      return "no local account exists for this email. Register first or use an existing account.";
+    case "inactive":
+      return "this account exists but is inactive. Ask an administrator to reactivate it.";
+    case "not_email_password":
+      return "this account does not use an email/password login. Try Google sign-in.";
+  }
 }
 
 function ForgotPasswordShell() {
