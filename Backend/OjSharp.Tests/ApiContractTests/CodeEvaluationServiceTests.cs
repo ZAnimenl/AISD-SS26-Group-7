@@ -272,6 +272,43 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
+    public void Python_grader_test_files_provide_legacy_sqlite_helpers_for_generated_tests()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-sqlite-helper-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["models.py"] = """
+                    from peewee import AutoField, Model, SqliteDatabase
+
+                    db = SqliteDatabase(":memory:")
+
+                    class Todo(Model):
+                        id = AutoField()
+
+                        class Meta:
+                            database = db
+                    """
+                },
+                "from models import init_db, get_db\n\ndef test_helpers():\n    init_db()\n    assert get_db() is not None\n",
+                GradingLanguage.Python);
+
+            var models = File.ReadAllText(Path.Combine(directory.FullName, "models.py"));
+            Assert.Contains("def init_db():", models);
+            Assert.Contains("def get_db():", models);
+            Assert.Contains("Todo._meta.table_name = \"todos\"", models);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Grader_test_files_create_legacy_pascal_case_aliases_for_snake_case_starter_files()
     {
         var factory = new GradingTestFileFactory();
@@ -354,6 +391,7 @@ public sealed class CodeEvaluationServiceTests
                 mockFetch.mockResolvedValueOnce({ json: () => Promise.resolve([]) });
                 expect(document.querySelector('input[type="checkbox"]')).not.toBeNull();
                 expect(document.querySelector('.todo-item')).not.toBeNull();
+                expect(todos[0].title).toBe('Persist Test');
                 """,
                 GradingLanguage.JavaScript,
                 isHtmlWorkspace: true);
@@ -363,6 +401,12 @@ public sealed class CodeEvaluationServiceTests
             Assert.DoesNotContain("global.document = document", testFile);
             Assert.Contains("globalThis.__ojSharpFirstUncheckedCheckbox()", testFile);
             Assert.Contains("globalThis.__ojSharpLastTodoItem()", testFile);
+            Assert.Contains("'new-todo-title': '#todo-title'", testFile);
+            Assert.Contains("'#new-todo-title': '#todo-title'", testFile);
+            Assert.Contains("test('generated public check', (ojSharpDone)", testFile);
+            Assert.Contains("const done = (error) =>", testFile);
+            Assert.Contains("globalThis.setTimeout = ojSharpSafeSetTimeout;", testFile);
+            Assert.Contains("todos.some(todo => todo.title === 'Persist Test')", testFile);
             Assert.Contains("mockFetch.mockResolvedValue({ json: () => Promise.resolve([]) });", testFile);
         }
         finally
