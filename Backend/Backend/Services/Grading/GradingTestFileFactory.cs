@@ -20,7 +20,9 @@ internal sealed class GradingTestFileFactory
             WriteJestSetup(directory);
             File.WriteAllText(
                 Path.Combine(directory, "solution.test.js"),
-                isHtmlWorkspace ? BuildHtmlTestHarness(testCode) : testCode);
+                language == GradingLanguage.Sql
+                    ? BuildSqlTestHarness(testCode)
+                    : isHtmlWorkspace ? BuildHtmlTestHarness(testCode) : testCode);
             return;
         }
 
@@ -280,6 +282,99 @@ internal sealed class GradingTestFileFactory
             testCode,
             @"\b(?:test|it)\s*\(",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    }
+
+    private static string BuildSqlTestHarness(string testCode)
+    {
+        if (ContainsJestTest(testCode))
+        {
+            return testCode;
+        }
+
+        var encodedTestCode = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(testCode));
+        return $$"""
+        const fs = require('fs');
+        const { spawnSync } = require('child_process');
+
+        function readIfExists(fileName) {
+          return fs.existsSync(fileName) ? fs.readFileSync(fileName, 'utf8') : '';
+        }
+
+        test('generated SQL check', () => {
+          const payload = {
+            schemaSql: readIfExists('schema.sql'),
+            seedSql: readIfExists('seed.sql'),
+            solutionSql: readIfExists('solution.sql'),
+            testSql: Buffer.from('{{encodedTestCode}}', 'base64').toString('utf8')
+          };
+          const runner = String.raw`
+        import json
+        import re
+        import sqlite3
+        import sys
+
+        payload = json.load(sys.stdin)
+        connection = sqlite3.connect(":memory:")
+        connection.execute("PRAGMA foreign_keys = ON")
+
+        def run_script(sql):
+            if sql and sql.strip():
+                connection.executescript(sql)
+
+        def split_statements(sql):
+            statements = []
+            buffer = []
+            for line in sql.splitlines():
+                buffer.append(line)
+                candidate = "\n".join(buffer).strip()
+                if candidate and sqlite3.complete_statement(candidate):
+                    statements.append(candidate)
+                    buffer = []
+            remainder = "\n".join(buffer).strip()
+            if remainder:
+                statements.append(remainder)
+            return statements
+
+        run_script(payload.get("schemaSql", ""))
+        run_script(payload.get("seedSql", ""))
+        solution_sql = payload.get("solutionSql", "")
+        test_sql = payload.get("testSql", "")
+        run_script(solution_sql)
+
+        statements = split_statements(test_sql)
+        if not statements or not re.match(r"\s*select\b", statements[-1], flags=re.IGNORECASE):
+            run_script(test_sql)
+            print(json.dumps({"rows": []}))
+            sys.exit(0)
+
+        for statement in statements[:-1]:
+            run_script(statement)
+        select_sql = statements[-1].strip().rstrip(";")
+        rows = connection.execute(select_sql).fetchall()
+        print(json.dumps({"rows": rows}))
+        `;
+          const result = spawnSync('python3', ['-c', runner], {
+            input: JSON.stringify(payload),
+            encoding: 'utf8',
+            timeout: 7000
+          });
+
+          if (result.error) {
+            throw result.error;
+          }
+
+          if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || `SQL runner exited with status ${result.status}`);
+          }
+          const output = JSON.parse(result.stdout || '{"rows":[]}');
+          if (/\bselect\b/i.test(payload.testSql)) {
+            expect(output.rows.length).toBeGreaterThan(0);
+            if (typeof output.rows[0]?.[0] === 'number') {
+              expect(output.rows[0][0]).toBeGreaterThan(0);
+            }
+          }
+        });
+        """;
     }
 
     private static void WriteJestSetup(string directory)

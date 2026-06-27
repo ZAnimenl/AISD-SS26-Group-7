@@ -372,6 +372,35 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
+    public void Sql_grader_wraps_raw_sql_test_code_in_jest_harness()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-sql-raw-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["schema.sql"] = "CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
+                    ["seed.sql"] = "INSERT INTO todos (title) VALUES ('Seed');",
+                    ["solution.sql"] = "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY);"
+                },
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log';",
+                GradingLanguage.Sql);
+
+            var testFile = File.ReadAllText(Path.Combine(directory.FullName, "solution.test.js"));
+            Assert.Contains("generated SQL check", testFile);
+            Assert.Contains("spawnSync('python3'", testFile);
+            Assert.False(testFile.TrimStart().StartsWith("SELECT name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public async Task Docker_runner_rejects_unsupported_language_without_starting_container()
     {
         var runner = new DockerCodeRunner();
