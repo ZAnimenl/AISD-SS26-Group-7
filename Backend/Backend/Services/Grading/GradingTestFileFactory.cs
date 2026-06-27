@@ -24,7 +24,72 @@ internal sealed class GradingTestFileFactory
             return;
         }
 
+        WritePythonCompatibilityFiles(directory, testCode);
         File.WriteAllText(Path.Combine(directory, "test_solution.py"), testCode);
+    }
+
+    private static void WritePythonCompatibilityFiles(string directory, string testCode)
+    {
+        WritePeeweeDatabaseAlias(directory);
+        WriteMissingMigrationStub(directory, testCode);
+    }
+
+    private static void WritePeeweeDatabaseAlias(string directory)
+    {
+        var modelsPath = Path.Combine(directory, "models.py");
+        if (!File.Exists(modelsPath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(modelsPath);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^db\s*=")
+            || System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^database\s*="))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            modelsPath,
+            """
+
+            # Compatibility alias for generated tests that refer to the canonical Peewee database as `database`.
+            database = db
+            """);
+    }
+
+    private static void WriteMissingMigrationStub(string directory, string testCode)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(testCode, @"\b(?:from\s+migration\s+import|import\s+migration)\b"))
+        {
+            return;
+        }
+
+        var migrationPath = Path.Combine(directory, "migration.py");
+        if (!File.Exists(migrationPath))
+        {
+            File.WriteAllText(
+                migrationPath,
+                """
+                def run_migration():
+                    return None
+                """);
+            return;
+        }
+
+        var content = File.ReadAllText(migrationPath);
+        if (System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^def\s+run_migration\s*\("))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            migrationPath,
+            """
+
+            def run_migration():
+                return None
+            """);
     }
 
     private static string BuildHtmlTestHarness(string testCode)

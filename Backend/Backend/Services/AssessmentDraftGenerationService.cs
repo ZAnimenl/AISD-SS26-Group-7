@@ -230,6 +230,8 @@ public sealed class AssessmentDraftGenerationService
             "The canonical Todo entity has exactly id, title, description, and completed fields. Extensions may add focused fields only when the task explicitly requires the schema/API/UI change.",
             "Preserve the canonical REST routes: GET/POST /api/todos, GET/PUT/DELETE /api/todos/{todo_id}, and POST /api/todos/{todo_id}/toggle.",
             "Preserve the canonical module contracts: browser-safe frontend/index.html, frontend/styles.css, frontend/app.js; FastAPI backend/main.py and controllers.py; Peewee backend/models.py and repositories.py; backend/services.py and schemas.py; SQLite persistence.",
+            "For Python/Peewee tests, use the same database variable exposed by starter models.py. If tests refer to models.database, starter models.py must define database = db.",
+            "If any Python test imports a module or function such as migration.run_migration, that module must be included as an editable starter file with a realistic incomplete implementation.",
             "Starter code must be a task-focused copy or extension of those canonical contracts. Do not output React, Vite, Next.js, ASP.NET, Flask, SQLAlchemy, an in-memory replacement database, or a different Todo base application.",
             "Set the challenge level substantially above a tutorial or basic CRUD exercise. Even easy tasks must require non-trivial reasoning across modules; hard tasks should resemble a compact senior-level take-home exercise.",
             "Reject trivial themes such as a static card, simple list/filter/sort, one-endpoint CRUD, one-query lookup, or an isolated one-line bug.",

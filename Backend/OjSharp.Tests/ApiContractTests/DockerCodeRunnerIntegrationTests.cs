@@ -126,6 +126,77 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Python_runner_aliases_canonical_db_as_database_for_generated_tests()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            import models
+
+            def test_generated_database_alias_is_available():
+                assert models.database is models.db
+            """,
+            "");
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["models.py"] = """
+                from peewee import SqliteDatabase
+
+                db = SqliteDatabase(":memory:")
+
+                class Todo:
+                    class Meta:
+                        database = db
+                """
+            },
+            "python",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
+    public async Task Python_runner_provides_missing_migration_stub_for_generated_tasks()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            from migration import run_migration
+
+            def test_generated_migration_module_can_be_imported():
+                assert callable(run_migration)
+            """,
+            "");
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["models.py"] = "",
+                ["migration.py"] = "# Generated starter forgot to define run_migration.\n"
+            },
+            "python",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task JavaScript_successful_execution_returns_zero_exit_code()
     {
         if (!IsDockerAvailable())
