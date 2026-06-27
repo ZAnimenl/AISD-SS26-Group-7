@@ -159,8 +159,9 @@ public sealed class CodeEvaluationServiceTests
         var javascriptCommand = factory.Create(GradingLanguage.JavaScript);
         var typeScriptCommand = factory.Create(GradingLanguage.TypeScript);
 
-        Assert.Contains("pytest", pythonCommand);
-        Assert.Contains("no:cacheprovider", pythonCommand);
+        Assert.Contains("TODO_DATABASE_PATH=\"$PWD/todos.db\"", string.Join(" ", pythonCommand));
+        Assert.Contains("pytest", string.Join(" ", pythonCommand));
+        Assert.Contains("no:cacheprovider", string.Join(" ", pythonCommand));
         Assert.Contains("jest", javascriptCommand);
         Assert.Contains("--env=jsdom", javascriptCommand);
         Assert.Contains("tsc solution.ts", string.Join(" ", typeScriptCommand));
@@ -181,15 +182,92 @@ public sealed class CodeEvaluationServiceTests
             factory.Write(javascriptDirectory.FullName, new Dictionary<string, string> { ["solution.js"] = "function solve(value) {\n  return value;\n}\nmodule.exports = { solve };\n" }, "const { solve } = require(\"./solution.js\");\n", GradingLanguage.JavaScript);
             factory.Write(typeScriptDirectory.FullName, new Dictionary<string, string> { ["solution.ts"] = "function solve(value: string): string {\n  return value;\n}\n" }, "const solve = globalThis.__ojsharpSolve;\n", GradingLanguage.TypeScript);
 
-            Assert.Contains("from solution import solve", File.ReadAllText(Path.Combine(pythonDirectory.FullName, "test_solution.py")));
-            Assert.Contains("require(\"./solution.js\")", File.ReadAllText(Path.Combine(javascriptDirectory.FullName, "solution.test.js")));
-            Assert.True(File.Exists(Path.Combine(typeScriptDirectory.FullName, "solution.ts")));
+        Assert.Contains("from solution import solve", File.ReadAllText(Path.Combine(pythonDirectory.FullName, "test_solution.py")));
+        Assert.Contains("require(\"./solution.js\")", File.ReadAllText(Path.Combine(javascriptDirectory.FullName, "solution.test.js")));
+        Assert.True(File.Exists(Path.Combine(typeScriptDirectory.FullName, "solution.ts")));
         }
         finally
         {
             pythonDirectory.Delete(true);
             javascriptDirectory.Delete(true);
             typeScriptDirectory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Python_grader_test_files_align_audit_log_model_with_raw_sql_table_name()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-audit-table-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["models.py"] = """
+                    from peewee import AutoField, ForeignKeyField, Model, SqliteDatabase
+
+                    db = SqliteDatabase(":memory:")
+
+                    class Todo(Model):
+                        id = AutoField()
+
+                        class Meta:
+                            database = db
+
+                    class AuditLog(Model):
+                        audit_id = AutoField()
+                        todo = ForeignKeyField(Todo, backref='audit_logs')
+
+                        class Meta:
+                            database = db
+                    """
+                },
+                "from models import database\n\ndef test_audit_table_name():\n    database.execute_sql(\"select count(*) from audit_log\")\n",
+                GradingLanguage.Python);
+
+            var models = File.ReadAllText(Path.Combine(directory.FullName, "models.py"));
+            Assert.Contains("AuditLog._meta.table_name = \"audit_log\"", models);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Python_grader_test_files_bootstrap_todo_table_for_generated_direct_model_tests()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-todo-bootstrap-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["models.py"] = """
+                    from peewee import AutoField, Model, SqliteDatabase
+
+                    db = SqliteDatabase(":memory:")
+
+                    class Todo(Model):
+                        id = AutoField()
+
+                        class Meta:
+                            database = db
+                    """
+                },
+                "from models import Todo\n\ndef test_direct_create():\n    Todo.create()\n",
+                GradingLanguage.Python);
+
+            var models = File.ReadAllText(Path.Combine(directory.FullName, "models.py"));
+            Assert.Contains("__ojsharp_ensure_todo_table()", models);
+        }
+        finally
+        {
+            directory.Delete(true);
         }
     }
 
@@ -245,6 +323,47 @@ public sealed class CodeEvaluationServiceTests
             Assert.Contains("require('./app.js')", testFile);
             Assert.Contains("test('generated public check'", testFile);
             Assert.Contains("localStorage.getItem('docState') ?? '{}'", testFile);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Html_grader_strips_generated_jsdom_boilerplate_that_replaces_loaded_page()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-html-jsdom-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["index.html"] = "<!doctype html><html><body><ul id=\"todo-list\"><li><input type=\"checkbox\"></li></ul><script src=\"app.js\"></script></body></html>",
+                    ["app.js"] = ""
+                },
+                """
+                const { JSDOM } = require('jsdom');
+                const { window } = new JSDOM('<!DOCTYPE html><html><body><div id="app"></div></body></html>', { url: 'http://localhost' });
+                const { document, navigator } = window;
+                global.document = document;
+                global.window = window;
+                global.navigator = navigator;
+                mockFetch.mockResolvedValueOnce({ json: () => Promise.resolve([]) });
+                expect(document.querySelector('input[type="checkbox"]')).not.toBeNull();
+                expect(document.querySelector('.todo-item')).not.toBeNull();
+                """,
+                GradingLanguage.JavaScript,
+                isHtmlWorkspace: true);
+
+            var testFile = File.ReadAllText(Path.Combine(directory.FullName, "solution.test.js"));
+            Assert.DoesNotContain("new JSDOM", testFile);
+            Assert.DoesNotContain("global.document = document", testFile);
+            Assert.Contains("globalThis.__ojSharpFirstUncheckedCheckbox()", testFile);
+            Assert.Contains("globalThis.__ojSharpLastTodoItem()", testFile);
+            Assert.Contains("mockFetch.mockResolvedValue({ json: () => Promise.resolve([]) });", testFile);
         }
         finally
         {

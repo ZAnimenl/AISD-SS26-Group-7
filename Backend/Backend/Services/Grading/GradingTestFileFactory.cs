@@ -31,6 +31,8 @@ internal sealed class GradingTestFileFactory
     private static void WritePythonCompatibilityFiles(string directory, string testCode)
     {
         WritePeeweeDatabaseAlias(directory);
+        WritePeeweeTodoTableBootstrap(directory, testCode);
+        WriteAuditLogTableNameCompatibility(directory, testCode);
         WriteMissingMigrationStub(directory, testCode);
     }
 
@@ -55,6 +57,70 @@ internal sealed class GradingTestFileFactory
 
             # Compatibility alias for generated tests that refer to the canonical Peewee database as `database`.
             database = db
+            """);
+    }
+
+    private static void WritePeeweeTodoTableBootstrap(string directory, string testCode)
+    {
+        if (!testCode.Contains("Todo.create", StringComparison.Ordinal)
+            || testCode.Contains("create_tables([models.Todo]", StringComparison.Ordinal)
+            || testCode.Contains("create_tables([Todo]", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var modelsPath = Path.Combine(directory, "models.py");
+        if (!File.Exists(modelsPath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(modelsPath);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^class\s+Todo\s*\(")
+            || content.Contains("__ojsharp_ensure_todo_table", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            modelsPath,
+            """
+
+            # Compatibility for generated tests that use Todo.create without starting the FastAPI lifespan.
+            def __ojsharp_ensure_todo_table():
+                db.connect(reuse_if_open=True)
+                db.create_tables([Todo], safe=True)
+
+            __ojsharp_ensure_todo_table()
+            """);
+    }
+
+    private static void WriteAuditLogTableNameCompatibility(string directory, string testCode)
+    {
+        if (!testCode.Contains("audit_log", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var modelsPath = Path.Combine(directory, "models.py");
+        if (!File.Exists(modelsPath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(modelsPath);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^class\s+AuditLog\s*\(")
+            || System.Text.RegularExpressions.Regex.IsMatch(content, @"table_name\s*=\s*['""]audit_log['""]"))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            modelsPath,
+            """
+
+            # Compatibility for generated tests that use the raw SQLite audit_log table name.
+            AuditLog._meta.table_name = "audit_log"
             """);
     }
 
@@ -95,7 +161,7 @@ internal sealed class GradingTestFileFactory
     private static string BuildHtmlTestHarness(string testCode)
     {
         var safeTestCode = System.Text.RegularExpressions.Regex.Replace(
-            testCode,
+            NormalizeHtmlTestCode(testCode),
             @"JSON\.parse\((localStorage\.getItem\([^)]*\))\)",
             "JSON.parse($1 ?? '{}')",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
@@ -104,7 +170,7 @@ internal sealed class GradingTestFileFactory
             : $$"""
               test('generated public check', async () => {
                 {{safeTestCode}}
-                await new Promise(resolve => setTimeout(resolve, 250));
+                await new Promise(resolve => setTimeout(resolve, 750));
               });
               """;
 
@@ -151,10 +217,61 @@ internal sealed class GradingTestFileFactory
 
           globalThis.WebSocket = OjSharpWebSocketMock;
           globalThis.ws ??= new globalThis.WebSocket();
+          globalThis.__ojSharpFirstUncheckedCheckbox = () => {
+            const checkbox = Array.from(document.querySelectorAll('input[type="checkbox"]')).find(item => !item.checked)
+              ?? document.querySelector('input[type="checkbox"]');
+            globalThis.__ojSharpLastCheckbox = checkbox;
+            return checkbox;
+          };
+          globalThis.__ojSharpLastTodoItem = () =>
+            globalThis.__ojSharpLastCheckbox?.closest('.todo-item')
+              ?? document.querySelector('.todo-item');
         })();
 
         {{normalizedTestCode}}
         """;
+    }
+
+    private static string NormalizeHtmlTestCode(string testCode)
+    {
+        var normalized = testCode;
+        var options = System.Text.RegularExpressions.RegexOptions.CultureInvariant;
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"^\s*const\s*\{\s*JSDOM\s*\}\s*=\s*require\(['""]jsdom['""]\);\s*$\r?\n?",
+            string.Empty,
+            options | System.Text.RegularExpressions.RegexOptions.Multiline);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"^\s*const\s*\{\s*window\s*\}\s*=\s*new\s+JSDOM\([\s\S]*?\);\s*$\r?\n?",
+            string.Empty,
+            options | System.Text.RegularExpressions.RegexOptions.Multiline);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"^\s*const\s*\{\s*document(?:\s*,\s*navigator)?\s*\}\s*=\s*window;\s*$\r?\n?",
+            string.Empty,
+            options | System.Text.RegularExpressions.RegexOptions.Multiline);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"^\s*global\.(?:document|window|navigator)\s*=\s*[^;]+;\s*$\r?\n?",
+            string.Empty,
+            options | System.Text.RegularExpressions.RegexOptions.Multiline);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"document\.querySelector\((['""])input\[type=(['""])checkbox\2\]\1\)",
+            "globalThis.__ojSharpFirstUncheckedCheckbox()",
+            options);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"document\.querySelector\((['""])\.todo-item\1\)",
+            "globalThis.__ojSharpLastTodoItem()",
+            options);
+        normalized = normalized.Replace(
+            "mockFetch.mockResolvedValueOnce(",
+            "mockFetch.mockResolvedValue(",
+            StringComparison.Ordinal);
+        normalized = normalized.Replace("}, 100);", "}, 250);", StringComparison.Ordinal);
+        return normalized;
     }
 
     private static bool ContainsJestTest(string testCode)

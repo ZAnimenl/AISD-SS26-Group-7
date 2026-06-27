@@ -9,7 +9,7 @@ internal sealed class GraderCommandFactory
         return language switch
         {
             GradingLanguage.Python =>
-                ["timeout", ExecutionTimeout, "pytest", "-q", "test_solution.py", "--tb=short", "--disable-warnings", "-p", "no:cacheprovider"],
+                ["timeout", ExecutionTimeout, "sh", "-c", "TODO_DATABASE_PATH=\"$PWD/todos.db\" pytest -q test_solution.py --tb=short --disable-warnings -p no:cacheprovider"],
             GradingLanguage.TypeScript =>
                 ["timeout", ExecutionTimeout, "sh", "-c", "tsc solution.ts --target ES2020 --module commonjs --esModuleInterop --skipLibCheck && jest --env=jsdom --config={} --setupFiles ./jest.setup.js --runInBand solution.test.js --silent=false --no-cache"],
             GradingLanguage.Sql =>
