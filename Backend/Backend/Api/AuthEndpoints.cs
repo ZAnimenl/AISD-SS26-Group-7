@@ -93,6 +93,7 @@ public static class AuthEndpoints
         PasswordHasher passwordHasher,
         EmailService emailService,
         ILogger<EmailService> logger,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -102,12 +103,25 @@ public static class AuthEndpoints
 
         var lookup = request.Email.Trim().ToLowerInvariant();
         var user = await dbContext.Users.FirstOrDefaultAsync(
-            u => u.Email.ToLower() == lookup && u.Status == UserStatuses.Active,
+            u => u.Email.ToLower() == lookup,
             cancellationToken);
 
         // Always reply success to avoid email enumeration. Only act when a valid email user is found.
-        if (user is null || user.AuthProvider != "email")
+        if (user is null || user.Status != UserStatuses.Active || user.AuthProvider != "email")
         {
+            if (environment.IsDevelopment())
+            {
+                return ApiResults.Success(new
+                {
+                    sent = true,
+                    dev_account_status = user is null
+                        ? "not_found"
+                        : user.Status != UserStatuses.Active
+                            ? "inactive"
+                            : "not_email_password"
+                });
+            }
+
             return ApiResults.Success(new { sent = true });
         }
 
@@ -126,8 +140,9 @@ public static class AuthEndpoints
         return ApiResults.Success(new
         {
             sent = emailSent,
-            // dev fallback when SMTP is offline so manual testing still works
-            dev_temporary_password = emailSent ? null : tempPassword
+            // Dev fallback keeps local demos usable when SMTP accepts a message
+            // but delivery is delayed, filtered, or unavailable.
+            dev_temporary_password = environment.IsDevelopment() || !emailSent ? tempPassword : null
         });
     }
 
@@ -259,12 +274,10 @@ public static class AuthEndpoints
             logger.LogWarning("Verification code email failed for {Email}; the registration response contains the fallback code.", pending.Email);
         }
 
-        // The registration window displays the generated code as a reliable fallback
-        // when SMTP delivery is delayed or unavailable.
         return ApiResults.Success(new RegistrationCodeDeliveryResponse(
             emailSent,
             pending.ExpiresAt,
-            code));
+            emailSent ? null : code));
     }
 
     private static IResult RegisterVerifyCodeAsync(
@@ -407,7 +420,7 @@ public static class AuthEndpoints
         return ApiResults.Success(new RegistrationCodeDeliveryResponse(
             emailSent,
             refreshed.ExpiresAt,
-            newCode));
+            emailSent ? null : newCode));
     }
 
     // ===== Google OAuth =====

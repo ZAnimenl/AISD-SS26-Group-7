@@ -109,7 +109,7 @@ export function ConsolePanel({ isRunning, runResult, taskError }: {
             <section className="rounded-lg border border-amber-500/25 bg-[#241d0d]">
               <div className="border-b border-amber-500/15 bg-[#2a220f] px-3 py-2 text-xs font-semibold text-amber-200/90">Execution unavailable</div>
               <p className="p-3 text-xs leading-5 text-amber-100/75">
-                Your code was not run. Please try again later or contact an administrator.
+                Your code was not run because the sandbox grader is not reachable. Start Docker Desktop or fix the Docker host, then run again.
               </p>
             </section>
           ) : null}
