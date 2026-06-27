@@ -543,6 +543,77 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Sql_runner_executes_raw_sql_test_cases_against_solution_schema()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            QuestionId = Guid.NewGuid(),
+            Name = "RawSql",
+            Visibility = TestCaseVisibilities.Public,
+            TestCodeJson = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["sql"] = """
+                INSERT INTO todos (title, description, completed) VALUES ('Test', 'Desc', 0);
+                UPDATE todos SET completed=1 WHERE title='Test';
+                SELECT COUNT(*) FROM audit_log WHERE todo_id = (SELECT id FROM todos WHERE title='Test');
+                """
+            })
+        };
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["schema.sql"] = """
+                CREATE TABLE IF NOT EXISTS todos (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title TEXT NOT NULL,
+                  description TEXT NOT NULL DEFAULT '',
+                  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1))
+                );
+                """,
+                ["seed.sql"] = "",
+                ["solution.sql"] = """
+                CREATE TABLE IF NOT EXISTS audit_log (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  todo_id INTEGER NOT NULL,
+                  operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+                  timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+                  title TEXT,
+                  description TEXT,
+                  completed INTEGER,
+                  FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+                  UNIQUE(todo_id, operation, timestamp)
+                );
+
+                CREATE TRIGGER IF NOT EXISTS audit_insert AFTER INSERT ON todos
+                BEGIN
+                  INSERT INTO audit_log (todo_id, operation, timestamp, title, description, completed)
+                  VALUES (NEW.id, 'INSERT', strftime('%Y-%m-%dT%H:%M:%S','now'), NEW.title, NEW.description, NEW.completed);
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS audit_update AFTER UPDATE ON todos
+                BEGIN
+                  INSERT INTO audit_log (todo_id, operation, timestamp, title, description, completed)
+                  VALUES (NEW.id, 'UPDATE', strftime('%Y-%m-%dT%H:%M:%S','now'), NEW.title, NEW.description, NEW.completed);
+                END;
+                """
+            },
+            "sql",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task Snake_case_python_starter_file_can_satisfy_legacy_pascal_case_import()
     {
         if (!IsDockerAvailable())
