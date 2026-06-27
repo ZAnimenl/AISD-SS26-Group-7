@@ -197,6 +197,157 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Python_runner_uses_run_local_sqlite_database_for_flattened_environment_file()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var canonicalEnvironment = """
+            import os
+            from pathlib import Path
+
+            DATABASE_PATH = os.getenv(
+                "TODO_DATABASE_PATH",
+                str(Path(__file__).resolve().parents[1] / "todos.db"),
+            )
+            """;
+
+        var oldSchemaTest = CreateTestCase(
+            """
+            import models
+
+            def test_old_schema_creates_shared_name():
+                models.db.connect(reuse_if_open=True)
+                models.db.create_tables([models.Todo], safe=True)
+                models.Todo.create(title="old")
+                assert models.Todo.select().count() == 1
+                models.db.close()
+            """,
+            "");
+        var oldSchemaResult = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["environment.py"] = canonicalEnvironment,
+                ["models.py"] = """
+                from peewee import AutoField, CharField, Model, SqliteDatabase
+                from environment import DATABASE_PATH
+
+                db = SqliteDatabase(DATABASE_PATH)
+
+                class Todo(Model):
+                    id = AutoField()
+                    title = CharField()
+
+                    class Meta:
+                        database = db
+                """
+            },
+            "python",
+            oldSchemaTest,
+            CancellationToken.None);
+
+        Assert.True(oldSchemaResult.ExitCode == 0, oldSchemaResult.Stderr ?? oldSchemaResult.Stdout);
+
+        var evolvedSchemaTest = CreateTestCase(
+            """
+            import models
+
+            def test_new_schema_does_not_reuse_stale_todo_table():
+                models.db.connect(reuse_if_open=True)
+                models.db.create_tables([models.Todo], safe=True)
+                todo = models.Todo.create(title="new", version=2)
+                assert todo.version == 2
+                models.db.close()
+            """,
+            "");
+        var evolvedSchemaResult = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["environment.py"] = canonicalEnvironment,
+                ["models.py"] = """
+                from peewee import AutoField, CharField, IntegerField, Model, SqliteDatabase
+                from environment import DATABASE_PATH
+
+                db = SqliteDatabase(DATABASE_PATH)
+
+                class Todo(Model):
+                    id = AutoField()
+                    title = CharField()
+                    version = IntegerField(default=1)
+
+                    class Meta:
+                        database = db
+                """
+            },
+            "python",
+            evolvedSchemaTest,
+            CancellationToken.None);
+
+        Assert.True(evolvedSchemaResult.ExitCode == 0, evolvedSchemaResult.Stderr ?? evolvedSchemaResult.Stdout);
+        Assert.False(evolvedSchemaResult.TimedOut);
+    }
+
+    [Fact]
+    public async Task Python_runner_aligns_generated_audit_log_model_with_raw_sql_tests()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            from models import database
+            from migration import run_migration
+
+            def test_audit_log_table_is_created_with_expected_raw_name():
+                run_migration()
+                cursor = database.execute_sql("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")
+                assert cursor.fetchone() is not None
+            """,
+            "");
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["models.py"] = """
+                from peewee import AutoField, Model, SqliteDatabase
+
+                db = SqliteDatabase(":memory:")
+
+                class Todo(Model):
+                    id = AutoField()
+
+                    class Meta:
+                        database = db
+
+                class AuditLog(Model):
+                    audit_id = AutoField()
+
+                    class Meta:
+                        database = db
+                """,
+                ["migration.py"] = """
+                from models import AuditLog, db
+
+                def run_migration():
+                    db.connect(reuse_if_open=True)
+                    db.create_tables([AuditLog], safe=True)
+                """
+            },
+            "python",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task JavaScript_successful_execution_returns_zero_exit_code()
     {
         if (!IsDockerAvailable())
@@ -342,6 +493,50 @@ public sealed class DockerCodeRunnerIntegrationTests
             testCase,
             CancellationToken.None
         );
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
+    public async Task Html_workspace_harness_uses_loaded_page_when_generated_test_creates_empty_jsdom()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            "",
+            """
+            const { JSDOM } = require('jsdom');
+            const { window } = new JSDOM('<!DOCTYPE html><html><body><div id="app"></div></body></html>', { url: 'http://localhost' });
+            const { document, navigator } = window;
+            global.fetch = jest.fn();
+            global.document = document;
+            global.window = window;
+            global.navigator = navigator;
+            require('./app.js');
+            expect(document.querySelector('input[type="checkbox"]')).not.toBeNull();
+            """
+        );
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["index.html"] = "<!doctype html><html><body><ul id=\"todo-list\"></ul><script src=\"app.js\"></script></body></html>",
+                ["app.js"] = """
+                const list = document.getElementById('todo-list');
+                const item = document.createElement('li');
+                item.className = 'todo-item';
+                item.innerHTML = '<input type="checkbox">';
+                list.append(item);
+                """
+            },
+            "html",
+            testCase,
+            CancellationToken.None);
 
         Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
         Assert.False(result.TimedOut);
