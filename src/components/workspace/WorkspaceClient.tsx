@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { FilePlus2, Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PanelBottomClose, PanelBottomOpen, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { finalizeSubmission, getAiResponse, getAiTaskTranscript, getAiUsage, recordAiInteractionEvent, runCode, saveWorkspace } from "@/lib/api";
 import { MonacoCodeEditor } from "@/components/workspace/MonacoCodeEditor";
 import { TaskVerificationPreview } from "@/components/workspace/previews/TaskVerificationPreview";
@@ -241,6 +241,29 @@ function getFileNames(question: Question | undefined, language: Language, state?
   return names.length > 0 ? names : [getDefaultFileName(language)];
 }
 
+function isSafeWorkspaceFileName(fileName: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(fileName)
+    && !fileName.includes("..")
+    && fileName.includes(".");
+}
+
+function isFileNameCompatibleWithLanguage(fileName: string, language: Language) {
+  const lowerName = fileName.toLowerCase();
+  switch (language) {
+    case "html":
+      return lowerName.endsWith(".html") || lowerName.endsWith(".css") || lowerName.endsWith(".js");
+    case "javascript":
+      return lowerName.endsWith(".js") || lowerName.endsWith(".json");
+    case "typescript":
+      return lowerName.endsWith(".ts") || lowerName.endsWith(".tsx") || lowerName.endsWith(".json");
+    case "sql":
+      return lowerName.endsWith(".sql");
+    case "python":
+    default:
+      return lowerName.endsWith(".py");
+  }
+}
+
 function sanitizeQuestionState(question: Question | undefined, state?: WorkspaceQuestionState, preferredLanguage?: Language): WorkspaceQuestionState {
   const language = resolveAllowedLanguage(question, preferredLanguage ?? state?.selected_language);
   const starterFiles = getStarterFiles(question, language);
@@ -449,6 +472,8 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [activeFile, setActiveFile] = useState(initialState.active_file);
   const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState.selected_language, initialState.active_file));
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [newFileDraft, setNewFileDraft] = useState("");
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<Record<string, RunResult | null>>({});
@@ -499,6 +524,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   useEffect(() => {
     aiMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, aiState]);
+
+  useEffect(() => {
+    setIsCreatingFile(false);
+    setNewFileDraft("");
+  }, [activeQuestionId, language]);
 
   useEffect(() => {
     if (!assessment.ai_enabled || loadedAiTranscriptsRef.current.has(activeQuestionId)) {
@@ -661,6 +691,54 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     });
     setActiveFile(nextFile);
     setCode(nextCode);
+  }
+
+  function createWorkspaceFile(fileName: string) {
+    if (workspaceFrozen) return;
+    const normalizedFileName = fileName.trim();
+    if (!normalizedFileName) {
+      return;
+    }
+    if (!isSafeWorkspaceFileName(normalizedFileName)) {
+      setError("Use a simple file name with letters, numbers, dots, dashes, or underscores.");
+      return;
+    }
+    if (!isFileNameCompatibleWithLanguage(normalizedFileName, language)) {
+      setError("File extension is not allowed for the selected language.");
+      return;
+    }
+
+    const nextQuestionStates = persistCurrentCode();
+    const currentState = sanitizeQuestionState(activeQuestion, nextQuestionStates[activeQuestionId], language);
+    if (currentState.files[normalizedFileName]?.language === language) {
+      setError("A file with that name already exists.");
+      return;
+    }
+
+    const updatedState: WorkspaceQuestionState = {
+      ...currentState,
+      active_file: normalizedFileName,
+      files: {
+        ...currentState.files,
+        [normalizedFileName]: { language, content: "" }
+      }
+    };
+
+    setError(null);
+    setSaveState("unsaved");
+    setQuestionStates({
+      ...nextQuestionStates,
+      [activeQuestionId]: updatedState
+    });
+    setActiveFile(normalizedFileName);
+    setCode("");
+    setIsCreatingFile(false);
+    setNewFileDraft("");
+  }
+
+  function cancelWorkspaceFileCreate() {
+    setIsCreatingFile(false);
+    setNewFileDraft("");
   }
 
   function switchLanguage(nextLanguage: Language) {
@@ -912,7 +990,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
       }
 
       const targetFile = action.target_file ?? currentQuestionState.active_file;
-      if (!visibleFiles.has(targetFile)) {
+      if (
+        !visibleFiles.has(targetFile)
+        && (!isSafeWorkspaceFileName(targetFile) || !isFileNameCompatibleWithLanguage(targetFile, targetLanguage))
+      ) {
         setError("AI action target file is not visible in this task.");
         return null;
       }
@@ -1258,6 +1339,60 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                 </button>
               ))}
             </div>
+            {isCreatingFile ? (
+              <div className="flex min-w-[210px] shrink-0 items-center gap-1 rounded-lg border border-cyanGlow/30 bg-black/25 p-1">
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#07111d] px-2 py-1.5 font-mono text-xs text-white outline-none transition placeholder:text-white/25 focus:border-cyanGlow/60"
+                  value={newFileDraft}
+                  onChange={(event) => setNewFileDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      createWorkspaceFile(newFileDraft);
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      cancelWorkspaceFileCreate();
+                    }
+                  }}
+                  autoFocus
+                  aria-label="New file name"
+                  placeholder="migration.py"
+                />
+                <button
+                  type="button"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow transition hover:border-cyanGlow/70"
+                  onClick={() => createWorkspaceFile(newFileDraft)}
+                  title="Create file"
+                  aria-label="Create file"
+                >
+                  <SemanticIcon name="check" size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-white/5 text-white/55 transition hover:border-white/25 hover:text-white"
+                  onClick={cancelWorkspaceFileCreate}
+                  title="Cancel"
+                  aria-label="Cancel new file"
+                >
+                  <SemanticIcon name="close" size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/55 transition hover:border-cyanGlow/50 hover:text-cyanGlow disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={() => {
+                  setError(null);
+                  setIsCreatingFile(true);
+                }}
+                disabled={workspaceFrozen}
+                title="New file"
+                aria-label="New file"
+              >
+                <FilePlus2 size={15} />
+              </button>
+            )}
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <span className="shrink-0 text-xs text-white/40">Language</span>
