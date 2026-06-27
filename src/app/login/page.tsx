@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Code2, KeyRound, LogIn, UserPlus } from "lucide-react";
+import { BadgeCheck, Bot, CheckCircle2, Clock3, Code2, KeyRound, LogIn, MailCheck, PlayCircle, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import {
   getRememberMePreference,
   getStoredUser,
@@ -17,6 +17,44 @@ const localDemoAdmin = {
   password: "Admin123!"
 };
 const showLocalDemoAccount = process.env.NODE_ENV !== "production";
+const assessmentHighlights = [
+  {
+    icon: ShieldCheck,
+    title: "Secure project space",
+    copy: "Code, files, checks, and previews stay inside one assessment workspace."
+  },
+  {
+    icon: CheckCircle2,
+    title: "Visible progress",
+    copy: "Run checks as you build and keep your saved work connected to the active session."
+  },
+  {
+    icon: Sparkles,
+    title: "Focused by design",
+    copy: "A calm interface keeps attention on the task instead of setup friction."
+  }
+];
+const signInNotes = [
+  {
+    icon: MailCheck,
+    copy: "Email signup requires verification before the first sign-in."
+  },
+  {
+    icon: BadgeCheck,
+    copy: "Google sign-in uses the address already verified by Google."
+  },
+  {
+    icon: Clock3,
+    copy: '"Remember me" keeps this device signed in for 30 days.'
+  }
+];
+const aiWorkflow = [
+  { icon: LogIn, title: "Sign in", detail: "Verify" },
+  { icon: Bot, title: "Workspace", detail: "Enter" },
+  { icon: Code2, title: "Solve tasks", detail: "Code" },
+  { icon: PlayCircle, title: "Run checks", detail: "Test" },
+  { icon: CheckCircle2, title: "Submit", detail: "Score" }
+];
 
 export default function LoginPage() {
   return (
@@ -87,103 +125,169 @@ function LoginContent() {
 
   return (
     <main className="page-shell bg-grid grid min-h-screen place-items-center p-4">
-      <section className="liquid-glass-neon grid w-full max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="relative p-8 lg:p-12">
-          <div className="mb-12 inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow">
-              <Code2 size={19} />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold">AI Coding Assessment</span>
-              <span className="block text-xs text-white/45">Secure assessment workspace</span>
-            </span>
+      <section className="liquid-glass-neon grid w-full max-w-6xl overflow-hidden rounded-3xl lg:grid-cols-[1.12fr_0.88fr]">
+        <div className="relative flex min-h-[680px] flex-col gap-7 p-6 lg:p-8">
+          <div>
+            <div className="mb-6 inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow">
+                <Code2 size={19} />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">AI Coding Assessment</span>
+                <span className="block text-xs text-white/45">Secure assessment workspace</span>
+              </span>
+            </div>
+            <h1 className="font-heading text-4xl italic leading-[0.98] text-white sm:text-5xl lg:text-5xl">Enter the AI assessment workspace.</h1>
+            <div className="mt-5 max-w-xl rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyanGlow/10 text-cyanGlow">
+                  <Bot size={18} />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-white">AI-guided assessment flow</span>
+                  <span className="block text-sm text-white/50">A structured path from authentication to final scoring.</span>
+                </span>
+              </div>
+              <div className="mt-5 flex items-start">
+                  {aiWorkflow.map(({ icon: Icon, title, detail }, index) => (
+                    <div key={title} className="contents">
+                      <div className="grid min-h-[7.25rem] min-w-0 flex-1 justify-items-center rounded-2xl border border-white/10 bg-slate-950/70 px-2 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                        <span className="grid h-11 w-11 place-items-center rounded-2xl border border-cyanGlow/25 bg-cyanGlow/10 text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.16)]">
+                          <Icon size={17} />
+                        </span>
+                        <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">0{index + 1} {detail}</span>
+                        <span className="mt-1 max-w-16 text-xs font-semibold leading-4 text-white/75">{title}</span>
+                      </div>
+                      {index < aiWorkflow.length - 1 ? (
+                        <span className="mt-6 h-px w-3 shrink-0 bg-gradient-to-r from-cyanGlow/70 to-cyanGlow/20 shadow-[0_0_12px_rgba(0,229,255,0.28)]" />
+                      ) : null}
+                    </div>
+                  ))}
+              </div>
+            </div>
+
           </div>
-          <h1 className="font-heading text-5xl italic leading-tight text-white lg:text-7xl">Enter the assessment workspace.</h1>
-          <p className="mt-5 max-w-xl text-lg leading-8 text-white/60">
-            Sign in with your account, continue with Google, or register a new student account. Administrator accounts are created by an administrator.
-          </p>
 
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={submittingAction !== null}
-            className="mt-8 flex w-full max-w-xl items-center justify-center gap-3 rounded-xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <GoogleIcon />
-            {submittingAction === "google" ? "Redirecting to Google..." : "Continue with Google"}
-          </button>
-
-          <div className="mt-6 flex max-w-xl items-center gap-3 text-xs uppercase tracking-wider text-white/35">
-            <span className="h-px flex-1 bg-white/10" />
-            or with username
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
-
-          <form className="mt-6 grid max-w-xl gap-4" onSubmit={handleSignIn}>
-            <label className="grid gap-2 text-sm text-white/60">
-              Username
-              <input className="field" type="text" value={username} onChange={(event) => setUsername(event.target.value)} required autoComplete="username" />
-            </label>
-            <label className="grid gap-2 text-sm text-white/60">
-              Password
-              <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" />
-            </label>
-            <div className="mt-1 flex items-center justify-between">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
-                />
-                Remember me on this device
+          <div className="max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.2)]">
+            <form className="grid gap-2.5" onSubmit={handleSignIn}>
+              <label className="grid gap-2 text-sm text-white/60">
+                Username
+                <input className="field py-2" type="text" value={username} onChange={(event) => setUsername(event.target.value)} required autoComplete="username" />
               </label>
-              <Link
-                href={username.includes("@") ? `/forgot-password?email=${encodeURIComponent(username)}` : "/forgot-password"}
-                className="text-sm text-cyanGlow hover:underline"
+              <label className="grid gap-2 text-sm text-white/60">
+                Password
+                <input className="field py-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" />
+              </label>
+              <div className="mt-1 flex items-center gap-3 text-xs uppercase tracking-wider text-white/35">
+                <span className="h-px flex-1 bg-white/10" />
+                or
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={submittingAction !== null}
+                className="mt-1 flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Forgot password?
-              </Link>
-            </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button className="btn-primary" type="submit" disabled={submittingAction !== null}>
-                <LogIn size={18} />
-                {submittingAction === "login" ? "Connecting..." : "Sign in"}
+                <GoogleIcon />
+                {submittingAction === "google" ? "Redirecting to Google..." : "Continue with Google"}
               </button>
-              {showLocalDemoAccount ? (
-                <button className="btn-secondary" type="button" onClick={fillLocalAdminAccount} disabled={submittingAction !== null}>
-                  <KeyRound size={18} />
-                  Use local admin
+              <div className="mt-1 flex items-center justify-between gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(event) => setRememberMe(event.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
+                  />
+                  Remember me on this device
+                </label>
+                <Link
+                  href={username.includes("@") ? `/forgot-password?email=${encodeURIComponent(username)}` : "/forgot-password"}
+                  className="shrink-0 text-sm text-cyanGlow hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button className="btn-primary py-2" type="submit" disabled={submittingAction !== null}>
+                  <LogIn size={18} />
+                  {submittingAction === "login" ? "Connecting..." : "Sign in"}
                 </button>
-              ) : null}
-              <Link className="btn-secondary" href="/register">
-                <UserPlus size={18} />
-                Register Student
-              </Link>
-            </div>
-          </form>
-          {notice ? <p className="mt-4 text-sm text-cyanGlow">{notice}</p> : null}
-          {error ? <p className="mt-4 text-sm text-pinkGlow">{error}</p> : null}
-        </div>
-        <div className="border-t border-white/10 bg-black/20 p-8 lg:border-l lg:border-t-0 lg:p-12">
-          <div className="rounded-3xl border border-white/10 bg-black/30 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow">Built for focused assessment</p>
-            <h2 className="mt-4 text-2xl font-semibold text-white">Everything you need, without leaving the workspace.</h2>
-            <ul className="mt-5 grid gap-3 text-sm leading-6 text-white/60">
-              <li>Work across realistic project files in one secure editor.</li>
-              <li>Run visible checks and preview interface tasks as you build.</li>
-              <li>Keep progress saved while the assessment is active.</li>
-            </ul>
+                {showLocalDemoAccount ? (
+                  <button className="btn-secondary py-2" type="button" onClick={fillLocalAdminAccount} disabled={submittingAction !== null}>
+                    <KeyRound size={18} />
+                    Use local admin
+                  </button>
+                ) : null}
+                <Link className="btn-secondary py-2" href="/register">
+                  <UserPlus size={18} />
+                  Register Student
+                </Link>
+              </div>
+            </form>
+            {notice ? <p className="mt-3 text-sm text-cyanGlow">{notice}</p> : null}
+            {error ? <p className="mt-3 text-sm text-pinkGlow">{error}</p> : null}
           </div>
-          <div className="mt-6 grid gap-3 text-sm text-white/55">
-            {showLocalDemoAccount ? (
-              <p className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                Local admin: <span className="text-white">admin@example.com</span> / <span className="text-white">Admin123!</span>
-              </p>
-            ) : null}
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Email signup requires verification before the first sign-in.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Google sign-in skips verification because Google has already confirmed the address.</p>
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">&quot;Remember me&quot; keeps you signed in on this device for 30 days. Unchecked, the session ends when you close the browser.</p>
+        </div>
+        <div className="relative overflow-hidden border-t border-white/10 bg-black/20 p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-8">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_15%,rgba(0,229,255,0.14),transparent_34%),radial-gradient(circle_at_88%_82%,rgba(236,72,153,0.12),transparent_36%)]" />
+          <div className="relative flex h-full flex-col justify-start gap-5 pt-8 lg:pt-12">
+            <div className="rounded-3xl border border-white/10 bg-black/35 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow">AI coding assessment platform</p>
+                  <h2 className="mt-3 text-2xl font-semibold leading-tight text-white">From sign-in to AI-aware submission in one flow.</h2>
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cyanGlow/20 bg-cyanGlow/10 px-3 py-1.5 text-xs font-semibold text-cyanGlow">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.9)]" />
+                  Live
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-2.5">
+                {assessmentHighlights.map(({ icon: Icon, title, copy }) => (
+                  <article key={title} className="grid grid-cols-[auto_1fr] gap-3 rounded-2xl border border-white/10 bg-white/[0.055] p-3.5 transition hover:border-cyanGlow/25 hover:bg-white/[0.075]">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-cyanGlow">
+                      <Icon size={18} />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-white">{title}</span>
+                      <span className="mt-1 block text-sm leading-5 text-white/58">{copy}</span>
+                    </span>
+                  </article>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">Sign-in notes</p>
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {signInNotes.map(({ icon: Icon, copy }) => (
+                    <p key={copy} className="grid grid-cols-[auto_1fr] items-start gap-2.5 text-sm leading-5 text-white/58">
+                      <Icon size={15} className="mt-0.5 text-cyanGlow/70" />
+                      <span>{copy}</span>
+                    </p>
+                  ))}
+                </div>
+                {showLocalDemoAccount ? (
+                  <div className="mt-4 rounded-2xl border border-cyanGlow/20 bg-cyanGlow/[0.08] p-3.5">
+                    <div className="flex items-center gap-3 text-sm font-semibold text-white">
+                      <KeyRound size={17} className="text-cyanGlow" />
+                      Local admin
+                    </div>
+                    <p className="mt-2 font-mono text-xs leading-6 text-white/70">
+                      <span className="text-white">admin@example.com</span>
+                      <span className="px-2 text-white/30">/</span>
+                      <span className="text-white">Admin123!</span>
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
