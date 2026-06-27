@@ -159,7 +159,7 @@ function LoginContent() {
                         <span className="mt-1 max-w-16 text-xs font-semibold leading-4 text-white/75">{title}</span>
                       </div>
                       {index < aiWorkflow.length - 1 ? (
-                        <span className="mt-6 h-px w-3 shrink-0 bg-gradient-to-r from-cyanGlow/70 to-cyanGlow/20 shadow-[0_0_12px_rgba(0,229,255,0.28)]" />
+                        <span className="mt-[3.55rem] h-0.5 w-5 shrink-0 rounded-full bg-gradient-to-r from-cyanGlow/75 via-cyanGlow/45 to-cyanGlow/75 shadow-[0_0_14px_rgba(0,229,255,0.38)]" />
                       ) : null}
                     </div>
                   ))}
