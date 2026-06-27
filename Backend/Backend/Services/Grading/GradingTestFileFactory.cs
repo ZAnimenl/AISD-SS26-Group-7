@@ -109,6 +109,27 @@ internal sealed class GradingTestFileFactory
 
             global.TextDecoder ??= TextDecoder;
             global.TextEncoder ??= TextEncoder;
+
+            if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.getContext?.__ojSharpMock) {
+              const context = {
+                beginPath() {},
+                clearRect() {},
+                closePath() {},
+                fill() {},
+                fillRect() {},
+                lineTo() {},
+                moveTo() {},
+                stroke() {},
+                arc() {},
+                fillText() {},
+                measureText(text) {
+                  return { width: String(text ?? '').length * 8 };
+                }
+              };
+              const getContext = () => context;
+              Object.defineProperty(getContext, '__ojSharpMock', { value: true });
+              HTMLCanvasElement.prototype.getContext = getContext;
+            }
             """);
     }
 

@@ -5,7 +5,9 @@ namespace Backend.Services.Grading;
 
 internal sealed class DockerGraderContainer
 {
-    private const string ImageTag = "ojsharp-grader:python-js-ts-v8";
+    private const string ImageRepository = "ojsharp-grader";
+    private const string ImageVersionTag = "python-js-ts-v8";
+    private const string ImageTag = ImageRepository + ":" + ImageVersionTag;
     private const string ContainerName = "ojsharp-grader-python-js-ts-v8";
     private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";
     private const string DefaultWindowsEndpoint = "npipe://./pipe/docker_engine";
@@ -101,6 +103,7 @@ internal sealed class DockerGraderContainer
             return;
         }
 
+        var buildStartedAt = DateTime.UtcNow;
         await using var buildContext = DockerBuildContextFactory.Create();
         var buildErrors = new List<string>();
         var progress = new Progress<JSONMessage>(message =>
@@ -129,6 +132,45 @@ internal sealed class DockerGraderContainer
         {
             throw new InvalidOperationException(string.Join(Environment.NewLine, buildErrors));
         }
+
+        await TagBuiltImageIfNeededAsync(buildStartedAt, cancellationToken);
+    }
+
+    private async Task TagBuiltImageIfNeededAsync(DateTime buildStartedAt, CancellationToken cancellationToken)
+    {
+        var images = await dockerClient.Images.ListImagesAsync(
+            new ImagesListParameters { All = true },
+            cancellationToken);
+        if (images.Any(image => image.RepoTags?.Contains(ImageTag) == true))
+        {
+            return;
+        }
+
+        var newestUntaggedBuildImage = images
+            .Where(image => image.Created >= buildStartedAt.AddMinutes(-1) && IsDangling(image))
+            .OrderByDescending(image => image.Created)
+            .FirstOrDefault();
+        if (newestUntaggedBuildImage is null)
+        {
+            throw new InvalidOperationException($"Docker build completed, but image '{ImageTag}' was not created.");
+        }
+
+        await dockerClient.Images.TagImageAsync(
+            newestUntaggedBuildImage.ID,
+            new ImageTagParameters
+            {
+                RepositoryName = ImageRepository,
+                Tag = ImageVersionTag,
+                Force = true
+            },
+            cancellationToken);
+    }
+
+    private static bool IsDangling(ImagesListResponse image)
+    {
+        return image.RepoTags is null
+               || image.RepoTags.Count == 0
+               || image.RepoTags.All(tag => tag.Equals("<none>:<none>", StringComparison.Ordinal));
     }
 
     private async Task<string> EnsureContainerAsync(CancellationToken cancellationToken)
