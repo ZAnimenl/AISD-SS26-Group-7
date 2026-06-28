@@ -20,8 +20,8 @@ const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 const assessmentHighlights = [
   {
     icon: ShieldCheck,
-    title: "Problem to Proof",
-    copy: "Build, test, and prove solutions in one assessment flow."
+    title: "Modern Dev Tasks",
+    copy: "Turn requirements into code with checks and previews."
   },
   {
     icon: Sparkles,
