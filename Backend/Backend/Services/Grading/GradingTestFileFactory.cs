@@ -33,9 +33,11 @@ internal sealed class GradingTestFileFactory
     private static void WritePythonCompatibilityFiles(string directory, string testCode)
     {
         WritePeeweeDatabaseAlias(directory);
+        WriteLegacyServiceMethodAliases(directory, testCode);
         WriteLegacySqliteHelperCompatibility(directory, testCode);
-        WritePeeweeTodoTableBootstrap(directory, testCode);
         WriteAuditLogTableNameCompatibility(directory, testCode);
+        WriteFastApiTestClientDatabaseBootstrap(directory, testCode);
+        WritePeeweeTodoTableBootstrap(directory, testCode);
         WriteMissingMigrationStub(directory, testCode);
     }
 
@@ -60,6 +62,55 @@ internal sealed class GradingTestFileFactory
 
             # Compatibility alias for generated tests that refer to the canonical Peewee database as `database`.
             database = db
+            """);
+    }
+
+    private static void WriteLegacyServiceMethodAliases(string directory, string testCode)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(testCode, @"\.\s*(?:get_todo|toggle_todo)\s*\("))
+        {
+            return;
+        }
+
+        var servicesPath = Path.Combine(directory, "services.py");
+        if (!File.Exists(servicesPath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(servicesPath);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^class\s+TodoService\s*:"))
+        {
+            return;
+        }
+
+        var aliases = new List<string>();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^\s+def\s+get_todo\s*\(")
+            && System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^\s+def\s+get_todo_by_id\s*\("))
+        {
+            aliases.Add("    TodoService.get_todo = TodoService.get_todo_by_id");
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^\s+def\s+toggle_todo\s*\(")
+            && System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^\s+def\s+toggle_todo_completion\s*\("))
+        {
+            aliases.Add("    TodoService.toggle_todo = TodoService.toggle_todo_completion");
+        }
+
+        if (aliases.Count == 0 || content.Contains("__ojsharp_attach_legacy_service_aliases", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            servicesPath,
+            $$"""
+
+            # Compatibility for generated tests that use earlier TodoService method names.
+            def __ojsharp_attach_legacy_service_aliases():
+            {{string.Join("\n", aliases)}}
+
+            __ojsharp_attach_legacy_service_aliases()
             """);
     }
 
@@ -162,6 +213,51 @@ internal sealed class GradingTestFileFactory
 
             # Compatibility for generated tests that use the raw SQLite audit_log table name.
             AuditLog._meta.table_name = "audit_log"
+            """);
+    }
+
+    private static void WriteFastApiTestClientDatabaseBootstrap(string directory, string testCode)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(testCode, @"\bTestClient\s*\("))
+        {
+            return;
+        }
+
+        var modelsPath = Path.Combine(directory, "models.py");
+        if (!File.Exists(modelsPath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(modelsPath);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^db\s*=")
+            || !System.Text.RegularExpressions.Regex.IsMatch(content, @"(?m)^class\s+\w+\s*\([^)]*\bModel\b[^)]*\)")
+            || content.Contains("__ojsharp_create_all_peewee_tables", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        File.AppendAllText(
+            modelsPath,
+            """
+
+            # Compatibility for generated FastAPI TestClient tests that instantiate the client without lifespan context.
+            def __ojsharp_create_all_peewee_tables():
+                if getattr(db, "database", None) == ":memory:" and db.is_closed():
+                    db.init("file:ojsharp_grader_memory?mode=memory&cache=shared", uri=True)
+                db.connect(reuse_if_open=True)
+                models = [
+                    value
+                    for value in globals().values()
+                    if isinstance(value, type)
+                    and value is not Model
+                    and issubclass(value, Model)
+                    and getattr(getattr(value, "_meta", None), "database", None) is db
+                ]
+                if models:
+                    db.create_tables(models, safe=True)
+
+            __ojsharp_create_all_peewee_tables()
             """);
     }
 

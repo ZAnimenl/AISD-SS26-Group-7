@@ -272,6 +272,83 @@ public sealed class CodeEvaluationServiceTests
     }
 
     [Fact]
+    public void Python_grader_test_files_bootstrap_peewee_tables_for_fastapi_testclient_tests()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-fastapi-bootstrap-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["models.py"] = """
+                    from peewee import AutoField, CharField, ForeignKeyField, Model, SqliteDatabase
+
+                    db = SqliteDatabase(":memory:")
+
+                    class Todo(Model):
+                        id = AutoField()
+                        title = CharField()
+
+                        class Meta:
+                            database = db
+
+                    class AuditLog(Model):
+                        id = AutoField()
+                        todo = ForeignKeyField(Todo, backref="audit_logs")
+
+                        class Meta:
+                            database = db
+                    """
+                },
+                "from fastapi.testclient import TestClient\nfrom main import app\nclient = TestClient(app)\n",
+                GradingLanguage.Python);
+
+            var models = File.ReadAllText(Path.Combine(directory.FullName, "models.py"));
+            Assert.Contains("__ojsharp_create_all_peewee_tables()", models);
+            Assert.Contains("cache=shared", models);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Python_grader_test_files_add_legacy_service_method_aliases_for_generated_tests()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-service-alias-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["services.py"] = """
+                    class TodoService:
+                        def get_todo_by_id(self, todo_id):
+                            return todo_id
+
+                        def toggle_todo_completion(self, todo_id):
+                            return todo_id
+                    """
+                },
+                "from services import TodoService\n\ndef test_service_aliases():\n    service = TodoService()\n    service.get_todo(1)\n    service.toggle_todo(1)\n",
+                GradingLanguage.Python);
+
+            var services = File.ReadAllText(Path.Combine(directory.FullName, "services.py"));
+            Assert.Contains("TodoService.get_todo = TodoService.get_todo_by_id", services);
+            Assert.Contains("TodoService.toggle_todo = TodoService.toggle_todo_completion", services);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Python_grader_test_files_provide_legacy_sqlite_helpers_for_generated_tests()
     {
         var factory = new GradingTestFileFactory();

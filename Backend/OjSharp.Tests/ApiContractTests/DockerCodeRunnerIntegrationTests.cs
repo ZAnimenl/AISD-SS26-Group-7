@@ -126,6 +126,71 @@ public sealed class DockerCodeRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task Python_runner_bootstraps_peewee_tables_for_module_level_fastapi_testclient()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            from fastapi.testclient import TestClient
+            from main import app
+
+            client = TestClient(app)
+
+            def test_post_can_create_todo_without_lifespan_context_manager():
+                response = client.post("/todos")
+                assert response.status_code == 200
+                assert response.json()["id"] == 1
+            """,
+            "");
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["models.py"] = """
+                from peewee import AutoField, CharField, Model, SqliteDatabase
+
+                db = SqliteDatabase(":memory:")
+
+                class Todo(Model):
+                    id = AutoField()
+                    title = CharField()
+
+                    class Meta:
+                        database = db
+                """,
+                ["main.py"] = """
+                from contextlib import asynccontextmanager
+                from fastapi import FastAPI
+                from models import Todo, db
+
+                @asynccontextmanager
+                async def lifespan(app):
+                    db.connect(reuse_if_open=True)
+                    db.create_tables([Todo], safe=True)
+                    yield
+
+                app = FastAPI(lifespan=lifespan)
+
+                @app.post("/todos")
+                def create_todo():
+                    todo = Todo.create(title="created")
+                    return {"id": todo.id}
+                """
+            },
+            "python",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
     public async Task Python_runner_aliases_canonical_db_as_database_for_generated_tests()
     {
         if (!IsDockerAvailable())
@@ -154,6 +219,46 @@ public sealed class DockerCodeRunnerIntegrationTests
                 class Todo:
                     class Meta:
                         database = db
+                """
+            },
+            "python",
+            testCase,
+            CancellationToken.None);
+
+        Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
+    public async Task Python_runner_adds_legacy_service_aliases_for_generated_bugfix_tests()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var runner = new DockerCodeRunner();
+        var testCase = CreateTestCase(
+            """
+            from services import TodoService
+
+            def test_generated_bugfix_test_can_call_legacy_service_names():
+                service = TodoService()
+                assert service.get_todo(7) == {"id": 7}
+                assert service.toggle_todo(7) == {"toggled": 7}
+            """,
+            "");
+
+        var result = await runner.RunAsync(
+            new Dictionary<string, string>
+            {
+                ["services.py"] = """
+                class TodoService:
+                    def get_todo_by_id(self, todo_id):
+                        return {"id": todo_id}
+
+                    def toggle_todo_completion(self, todo_id):
+                        return {"toggled": todo_id}
                 """
             },
             "python",

@@ -214,6 +214,39 @@ public sealed class AssessmentDraftGenerationServiceTests
     }
 
     [Fact]
+    public async Task Generate_question_draft_rejects_raw_sql_audit_test_without_setup_rows()
+    {
+        var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
+            starterFiles: new Dictionary<string, string>
+            {
+                ["schema.sql"] = "CREATE TABLE todos (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL); CREATE TABLE audit_log (todo_id INTEGER NOT NULL, operation TEXT NOT NULL);",
+                ["seed.sql"] = "INSERT INTO todos (id, completed) VALUES (1, 0);",
+                ["solution.sql"] = "-- Implement audit triggers and reporting query."
+            },
+            testCases:
+            [
+                BuildRawSqlTestCase("Public audit statistics", TestCaseVisibilities.Public, "SELECT operation, COUNT(*) FROM audit_log GROUP BY operation;"),
+                BuildRawSqlTestCase("Public audit rows", TestCaseVisibilities.Public, "SELECT todo_id FROM audit_log;"),
+                BuildRawSqlTestCase("Hidden audit statistics", TestCaseVisibilities.Hidden, "SELECT operation, COUNT(*) FROM audit_log GROUP BY operation;"),
+                BuildRawSqlTestCase("Hidden audit rows", TestCaseVisibilities.Hidden, "SELECT todo_id FROM audit_log;")
+            ])));
+        var service = CreateDraftService(handler);
+
+        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
+            service.GenerateQuestionDraftAsync(
+                Guid.NewGuid(),
+                new GenerateQuestionDraftRequest(
+                    TaskTypes.DatabaseQuerySchema,
+                    "hard",
+                    ["sql"]),
+                sharedPrototypeReference: null,
+                sortOrder: 1,
+                CancellationToken.None));
+
+        Assert.Contains("reads audit_log but does not create audit rows", exception.Message);
+    }
+
+    [Fact]
     public void Test_code_coverage_accepts_html_key_for_javascript_dom_tests()
     {
         var testCode = new Dictionary<string, string>
@@ -603,7 +636,8 @@ public sealed class AssessmentDraftGenerationServiceTests
 
     private static string AdvancedSqlTaskContent(
         Dictionary<string, string> starterFiles,
-        string? description = null)
+        string? description = null,
+        object[]? testCases = null)
     {
         description ??= string.Join(" ",
         [
@@ -614,7 +648,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             "Edge cases: duplicate task updates, null due dates, dependency cycles, concurrent completion changes, orphaned audit rows, and ties in timestamps must behave deterministically.",
             "Acceptance criteria: all public and hidden checks pass, constraints reject invalid todo writes, aggregates remain correct after retries, and existing Todo prototype consumers continue to query the original views without changes."
         ]);
-        var testCases = new[]
+        testCases ??= new object[]
         {
             BuildSqlTestCase("Public schema contracts", TestCaseVisibilities.Public, "schema.sql"),
             BuildSqlTestCase("Public reconciliation view", TestCaseVisibilities.Public, "solution.sql"),
@@ -651,6 +685,20 @@ public sealed class AssessmentDraftGenerationServiceTests
                 }
             }
         });
+    }
+
+    private static object BuildRawSqlTestCase(string name, string visibility, string sql)
+    {
+        return new
+        {
+            name,
+            visibility,
+            test_code = new Dictionary<string, string>
+            {
+                ["sql"] = sql
+            },
+            traceability_metadata = new { requirements = "REQ-52,REQ-53" }
+        };
     }
 
     private static object BuildSqlTestCase(string name, string visibility, string fileName)

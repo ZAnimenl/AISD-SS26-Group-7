@@ -232,6 +232,8 @@ public sealed class AssessmentDraftGenerationService
             "Preserve the canonical module contracts: browser-safe frontend/index.html, frontend/styles.css, frontend/app.js; FastAPI backend/main.py and controllers.py; Peewee backend/models.py and repositories.py; backend/services.py and schemas.py; SQLite persistence.",
             "For Python/Peewee tests, use the same database variable exposed by starter models.py. If tests refer to models.database, starter models.py must define database = db.",
             "Python tests and starter code must rely on TODO_DATABASE_PATH/current-run SQLite isolation; do not hard-code shared database files or assume a previous test run's schema.",
+            "FastAPI tests that depend on startup/lifespan database setup must use with TestClient(app) as client or perform explicit safe db.create_tables setup before requests. Do not create a module-level client = TestClient(app) when the test requires lifespan-created tables.",
+            "Python tests must use canonical service names from the starter contract, for example get_todo_by_id and toggle_todo_completion. If a task intentionally requires shorter names such as get_todo or toggle_todo, starter services.py must provide those methods.",
             "If any Python test imports a module or function such as migration.run_migration, that module must be included as an editable starter file with a realistic incomplete implementation.",
             "If Python tests use raw SQL table names with underscores, the corresponding Peewee model must declare the same table_name, for example class AuditLog.Meta.table_name = \"audit_log\".",
             "Starter code must be a task-focused copy or extension of those canonical contracts. Do not output React, Vite, Next.js, ASP.NET, Flask, SQLAlchemy, an in-memory replacement database, or a different Todo base application.",
@@ -253,6 +255,7 @@ public sealed class AssessmentDraftGenerationService
             "Frontend HTML tests run after the platform loads index.html and app.js into jsdom. Do not create a new JSDOM instance, overwrite global document/window/navigator, or replace document.body in generated tests.",
             "For rest_api_development, use Python and extend the canonical FastAPI/Peewee files. Require related routes, Pydantic validation, consistent errors, and concurrency/idempotency or pagination/filtering concerns.",
             "For database_query_schema, use Python/Peewee/SQLite files from the canonical backend. SQL test helpers are allowed, but the base ORM and database may not be replaced.",
+            "For database_query_schema SQL tests, make every raw SQL test_code self-contained: include INSERT/UPDATE/DELETE setup statements before the final SELECT whenever seed.sql alone does not guarantee matching rows. The final SELECT must return at least one row for a correct solution.",
             "For bug_fix, provide at least three interacting Todo application modules and require diagnosing several related defects while preserving public interfaces and preventing regressions.",
             "Every test case must include non-empty test_code for every language in the task's language_constraints.",
             "For database_query_schema tasks, every public and hidden test case must include a non-empty sql test_code entry that verifies the student's solution.sql file.",
@@ -631,6 +634,79 @@ public sealed class AssessmentDraftGenerationService
             throw new AiDraftGenerationException(
                 $"Generated task '{title}' must include at least {MinimumPublicTestCases} public and {MinimumHiddenTestCases} hidden test cases.");
         }
+
+        ValidateDatabaseSqlTestSetup(title, taskType, starterCode, testCases);
+    }
+
+    private static void ValidateDatabaseSqlTestSetup(
+        string title,
+        string taskType,
+        IReadOnlyDictionary<string, Dictionary<string, string>> starterCode,
+        IReadOnlyCollection<TestCase> testCases)
+    {
+        if (!string.Equals(NormalizeTaskType(taskType), TaskTypes.DatabaseQuerySchema, StringComparison.Ordinal)
+            || !starterCode.TryGetValue("sql", out var sqlStarterFiles))
+        {
+            return;
+        }
+
+        sqlStarterFiles.TryGetValue("seed.sql", out var seedSql);
+        var normalizedSeedSql = seedSql ?? string.Empty;
+
+        foreach (var testCase in testCases)
+        {
+            var testCodeByLanguage = JsonDocumentSerializer.Deserialize(testCase.TestCodeJson, new Dictionary<string, string>());
+            if (!testCodeByLanguage.TryGetValue("sql", out var sqlTestCode)
+                || string.IsNullOrWhiteSpace(sqlTestCode)
+                || IsJestStyleTestCode(sqlTestCode)
+                || !System.Text.RegularExpressions.Regex.IsMatch(sqlTestCode, @"\bselect\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            if (System.Text.RegularExpressions.Regex.IsMatch(sqlTestCode, @"\b(?:sqlite_master|pragma_table_info|pragma\s+table_info)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            var mutatesRowsInTest = System.Text.RegularExpressions.Regex.IsMatch(
+                sqlTestCode,
+                @"\b(?:insert\s+into|update|delete\s+from)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var seedCreatesRows = System.Text.RegularExpressions.Regex.IsMatch(
+                normalizedSeedSql,
+                @"\binsert\s+into\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (!mutatesRowsInTest && !seedCreatesRows)
+            {
+                throw new AiDraftGenerationException(
+                    $"Generated database task '{title}' test case '{testCase.Name}' has a raw SELECT test without setup rows. Add INSERT/UPDATE/DELETE setup statements before the final SELECT or provide seed.sql rows that make the correct solution return data.");
+            }
+
+            var readsAuditLog = System.Text.RegularExpressions.Regex.IsMatch(
+                sqlTestCode,
+                @"\baudit_log\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var createsAuditRowsInTest = System.Text.RegularExpressions.Regex.IsMatch(
+                sqlTestCode,
+                @"\b(?:insert\s+into\s+(?:audit_log|todos)|update\s+todos|delete\s+from\s+todos)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (readsAuditLog && !createsAuditRowsInTest)
+            {
+                throw new AiDraftGenerationException(
+                    $"Generated database task '{title}' test case '{testCase.Name}' reads audit_log but does not create audit rows after solution.sql is loaded. Add todo INSERT/UPDATE/DELETE setup statements before the final SELECT.");
+            }
+        }
+    }
+
+    private static bool IsJestStyleTestCode(string testCode)
+    {
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            testCode,
+            @"\b(?:test|it)\s*\(",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     }
 
     internal static int CountAdvancedConcerns(string taskText, string taskType)
