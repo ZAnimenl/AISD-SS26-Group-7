@@ -20,18 +20,18 @@ const showLocalDemoAccount = process.env.NODE_ENV !== "production";
 const assessmentHighlights = [
   {
     icon: ShieldCheck,
-    title: "Secure project space",
-    copy: "Code, files, checks, and previews stay inside one assessment workspace."
-  },
-  {
-    icon: CheckCircle2,
-    title: "Visible progress",
-    copy: "Run checks as you build and keep your saved work connected to the active session."
+    title: "Problem to Proof",
+    copy: "Build, test, and prove solutions in one assessment flow."
   },
   {
     icon: Sparkles,
-    title: "Focused by design",
-    copy: "A calm interface keeps attention on the task instead of setup friction."
+    title: "AI Signals as You Build",
+    copy: "Catch gaps faster with guided AI assessment cues."
+  },
+  {
+    icon: CheckCircle2,
+    title: "Unique AI Scoring",
+    copy: "Submit work for AI-supported coding quality evaluation."
   }
 ];
 const signInNotes = [
@@ -49,10 +49,10 @@ const signInNotes = [
   }
 ];
 const aiWorkflow = [
-  { icon: LogIn, title: "Sign in", detail: "Verify" },
+  { icon: LogIn, title: "Login", detail: "Verify" },
   { icon: Bot, title: "Workspace", detail: "Enter" },
-  { icon: Code2, title: "Solve tasks", detail: "Code" },
-  { icon: PlayCircle, title: "Run checks", detail: "Test" },
+  { icon: Code2, title: "Solve", detail: "Code" },
+  { icon: PlayCircle, title: "Checks", detail: "Test" },
   { icon: CheckCircle2, title: "Submit", detail: "Score" }
 ];
 
@@ -148,27 +148,27 @@ function LoginContent() {
                   <span className="block text-sm text-white/50">A structured path from authentication to final scoring.</span>
                 </span>
               </div>
-              <div className="mt-5 flex items-start">
-                  {aiWorkflow.map(({ icon: Icon, title, detail }, index) => (
-                    <div key={title} className="contents">
-                      <div className="grid min-h-[7.25rem] min-w-0 flex-1 justify-items-center rounded-2xl border border-white/10 bg-slate-950/70 px-2 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                        <span className="grid h-11 w-11 place-items-center rounded-2xl border border-cyanGlow/25 bg-cyanGlow/10 text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.16)]">
-                          <Icon size={17} />
-                        </span>
-                        <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">0{index + 1} {detail}</span>
-                        <span className="mt-1 max-w-16 text-xs font-semibold leading-4 text-white/75">{title}</span>
-                      </div>
-                      {index < aiWorkflow.length - 1 ? (
-                        <span className="mt-[3.55rem] h-0.5 w-5 shrink-0 rounded-full bg-gradient-to-r from-cyanGlow/75 via-cyanGlow/45 to-cyanGlow/75 shadow-[0_0_14px_rgba(0,229,255,0.38)]" />
-                      ) : null}
+              <div className="mt-5 flex items-start justify-center">
+                {aiWorkflow.map(({ icon: Icon, title, detail }, index) => (
+                  <div key={title} className="contents">
+                    <div className="grid h-32 w-24 shrink-0 grid-rows-[auto_auto_1fr] justify-items-center rounded-2xl border border-white/10 bg-slate-950/70 px-2 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                      <span className="grid h-11 w-11 place-items-center rounded-2xl border border-cyanGlow/25 bg-cyanGlow/10 text-cyanGlow shadow-[0_0_24px_rgba(0,229,255,0.16)]">
+                        <Icon size={17} />
+                      </span>
+                      <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">0{index + 1} {detail}</span>
+                      <span className="mt-1 flex items-center text-xs font-semibold leading-4 text-white/75">{title}</span>
                     </div>
-                  ))}
+                    {index < aiWorkflow.length - 1 ? (
+                      <span className="mt-16 h-0.5 w-3 shrink-0 rounded-full bg-gradient-to-r from-cyanGlow/75 via-cyanGlow/45 to-cyanGlow/75 shadow-[0_0_14px_rgba(0,229,255,0.38)]" />
+                    ) : null}
+                  </div>
+                ))}
               </div>
             </div>
 
           </div>
 
-          <div className="max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.2)]">
+          <div className="mt-2 max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.2)] lg:mt-2">
             <form className="grid gap-2.5" onSubmit={handleSignIn}>
               <label className="grid gap-2 text-sm text-white/60">
                 Username
@@ -237,7 +237,6 @@ function LoginContent() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow">AI coding assessment platform</p>
-                  <h2 className="mt-3 text-2xl font-semibold leading-tight text-white">From sign-in to AI-aware submission in one flow.</h2>
                 </div>
                 <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cyanGlow/20 bg-cyanGlow/10 px-3 py-1.5 text-xs font-semibold text-cyanGlow">
                   <span className="h-1.5 w-1.5 rounded-full bg-cyanGlow shadow-[0_0_12px_rgba(0,229,255,0.9)]" />
