@@ -64,12 +64,13 @@ export function createCommandRunner() {
 
     return spawn(spec.file, [...spec.argsPrefix, ...args], {
       ...options,
+      env: options.env ?? buildChildEnv({}, ""),
       shell: options.shell ?? spec.shell
     });
   }
 
   function buildChildEnv(config = {}, dotnetCommand = resolveCommand("dotnet")) {
-    const env = { ...process.env, ...config };
+    const env = { ...sanitizeChildEnv(process.env), ...config };
     const dotnetRoot = resolveDotnetRoot(dotnetCommand);
     if (dotnetRoot && !env.DOTNET_ROOT) {
       env.DOTNET_ROOT = dotnetRoot;
@@ -108,6 +109,14 @@ export function createCommandRunner() {
     runCommand,
     spawnCommand
   };
+}
+
+export function sanitizeChildEnv(env) {
+  const sanitized = { ...env };
+  delete sanitized.MallocStackLogging;
+  delete sanitized.MallocStackLoggingNoCompact;
+  delete sanitized.MallocScribble;
+  return sanitized;
 }
 
 export function resolvePathCommand(command) {
@@ -164,11 +173,34 @@ function resolveNpmCommandSpec() {
   }
 
   const npmPath = resolvePathCommand("npm");
+  const npmCliPath = resolveNpmCliPath(npmPath);
+  if (npmCliPath) {
+    return {
+      file: process.execPath,
+      argsPrefix: [npmCliPath],
+      shell: false
+    };
+  }
+
   return {
     file: npmPath,
     argsPrefix: [],
     shell: needsCommandShell(npmPath)
   };
+}
+
+export function resolveNpmCliPath(npmPath, exists = fs.existsSync, platform = process.platform) {
+  const baseName = getPathBaseName(npmPath).toLowerCase();
+  if (baseName === "npm-cli.js" && exists(npmPath)) {
+    return npmPath;
+  }
+
+  if (platform !== "win32" || !/npm(?:\.cmd)?$/i.test(baseName)) {
+    return "";
+  }
+
+  const candidate = path.join(path.dirname(npmPath), "node_modules", "npm", "bin", "npm-cli.js");
+  return exists(candidate) ? candidate : "";
 }
 
 function needsCommandShell(commandPath, platform = process.platform) {

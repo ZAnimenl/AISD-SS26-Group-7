@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:setup": "node scripts/dev.mjs --setup-only",
-    "dev:frontend": "next dev",
+    "dev:frontend": "next dev --webpack",
     "dev:backend": "node scripts/dev.mjs --backend-only",
     "dev:doctor": "node scripts/dev.mjs --doctor",
     "build": "next build",

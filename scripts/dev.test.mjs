@@ -27,6 +27,8 @@ import {
   parseDotnetUserSecrets,
   resolveBackendHealthUrl,
   resolveUrlPort,
+  resolveNpmCliPath,
+  sanitizeChildEnv,
   selectPathCommandCandidate,
   serializeEnvFile,
   shouldRunNpmCi
@@ -129,6 +131,20 @@ test("normalizeDockerHost accepts Docker Desktop npipe variants", () => {
     normalizeDockerHost("unix:///var/run/docker.sock"),
     "unix:///var/run/docker.sock"
   );
+});
+
+test("sanitizeChildEnv removes macOS malloc debug flags before spawning child processes", () => {
+  const sanitized = sanitizeChildEnv({
+    PATH: "/usr/local/bin",
+    MallocStackLogging: "0",
+    MallocStackLoggingNoCompact: "1",
+    MallocScribble: "1"
+  });
+
+  assert.equal(sanitized.PATH, "/usr/local/bin");
+  assert.equal(sanitized.MallocStackLogging, undefined);
+  assert.equal(sanitized.MallocStackLoggingNoCompact, undefined);
+  assert.equal(sanitized.MallocScribble, undefined);
 });
 
 test("resolveDockerSocketHost detects Docker Desktop socket under home", () => {
@@ -276,6 +292,16 @@ test("selectPathCommandCandidate prefers executable Windows npm shim", () => {
       "C:\\Program Files\\nodejs\\npm"
     ], "win32", (candidate) => candidate === "C:\\Program Files\\nodejs\\npm.cmd"),
     "C:\\Program Files\\nodejs\\npm.cmd"
+  );
+});
+
+test("resolveNpmCliPath avoids shell quoting issues for Windows npm.cmd", () => {
+  const npmPath = "C:\\Program Files\\nodejs\\npm.cmd";
+  const npmCliPath = "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js";
+
+  assert.equal(
+    resolveNpmCliPath(npmPath, (candidate) => candidate === npmCliPath, "win32"),
+    npmCliPath
   );
 });
 
