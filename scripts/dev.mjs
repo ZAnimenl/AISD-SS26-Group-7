@@ -35,7 +35,8 @@ import {
   localSeedAdminDefaults
 } from "./dev-local-database.mjs";
 import {
-  createCommandRunner
+  createCommandRunner,
+  sanitizeChildEnv
 } from "./dev-command-runner.mjs";
 import {
   findListeningProcessIds,
@@ -69,6 +70,8 @@ export {
   isSqliteConnectionString
 } from "./dev-local-database.mjs";
 export {
+  resolveNpmCliPath,
+  sanitizeChildEnv,
   selectPathCommandCandidate
 } from "./dev-command-runner.mjs";
 export {
@@ -88,8 +91,9 @@ const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const localEnvPath = path.join(repoRoot, ".env.local");
 const backendProjectPath = path.join("Backend", "Backend", "Backend.csproj");
 const backendSolutionPath = path.join("Backend", "Backend.sln");
-const backendOutPath = path.join(repoRoot, "backend-dev.log");
-const backendErrPath = path.join(repoRoot, "backend-dev.err.log");
+const runtimeLogDirectory = path.join(os.tmpdir(), `aisd-ss26-group-7-${shortHash(repoRoot)}`);
+const backendOutPath = path.join(runtimeLogDirectory, "backend-dev.log");
+const backendErrPath = path.join(runtimeLogDirectory, "backend-dev.err.log");
 const npmInstallMarkerFileName = ".ojsharp-package-lock.sha256";
 const connectionStringKey = "ConnectionStrings__DefaultConnection";
 const frontendUrl = "http://localhost:3000";
@@ -786,6 +790,10 @@ function hashFile(filePath) {
   return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
+function shortHash(value) {
+  return createHash("sha256").update(String(value)).digest("hex").slice(0, 12);
+}
+
 function readTextFile(filePath) {
   try {
     return fs.readFileSync(filePath, "utf8");
@@ -850,6 +858,7 @@ async function ensureBackend(config) {
   console.log(`Starting backend on ${config.BackendUrls} ...`);
   console.log(`Backend logs: ${backendOutPath}`);
 
+  fs.mkdirSync(runtimeLogDirectory, { recursive: true });
   const out = fs.openSync(backendOutPath, "a");
   const err = fs.openSync(backendErrPath, "a");
   const backend = spawnCommand("dotnet", buildBackendRunArgs(), {
@@ -995,9 +1004,10 @@ async function startFrontend(backend) {
   console.log(`Open the app: ${frontendUrl}`);
   const frontend = spawnCommand("npm", ["run", "dev:frontend"], {
     cwd: repoRoot,
-    env: process.env,
-    stdio: "inherit"
+    env: sanitizeChildEnv(process.env),
+    stdio: ["inherit", "inherit", "pipe"]
   });
+  pipeFilteredFrontendStderr(frontend.stderr);
 
   const stopChildren = () => {
     if (frontend.exitCode === null) {
@@ -1069,6 +1079,35 @@ function waitForChildExit(child) {
     });
     child.on("exit", (code) => resolve(code));
   });
+}
+
+function pipeFilteredFrontendStderr(stream) {
+  if (!stream) {
+    return;
+  }
+
+  let pending = "";
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk) => {
+    pending += chunk;
+    const lines = pending.split(/\r?\n/);
+    pending = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!isMacMallocStackLoggingNoise(line)) {
+        process.stderr.write(`${line}\n`);
+      }
+    }
+  });
+  stream.on("end", () => {
+    if (pending && !isMacMallocStackLoggingNoise(pending)) {
+      process.stderr.write(pending);
+    }
+  });
+}
+
+function isMacMallocStackLoggingNoise(line) {
+  return /^node\(\d+\) MallocStackLogging: can't turn off malloc stack logging because it was not enabled\.\s*$/.test(line);
 }
 
 async function readTail(filePath, lineCount) {
