@@ -17,6 +17,36 @@ export default function WorkspacePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | null = null;
+
+    const scheduleSandboxRefresh = (remainingAttempts: number) => {
+      if (cancelled || remainingAttempts <= 0) {
+        return;
+      }
+
+      retryTimer = window.setTimeout(() => {
+        void refreshSandboxAvailability(remainingAttempts - 1);
+      }, 3000);
+    };
+
+    const refreshSandboxAvailability = async (remainingAttempts = 20) => {
+      try {
+        const systemConfig = await getSystemConfig();
+        if (cancelled) {
+          return;
+        }
+
+        const isAvailable = systemConfig.features.real_sandbox_enabled;
+        setSandboxAvailable(isAvailable);
+        if (!isAvailable) {
+          scheduleSandboxRefresh(remainingAttempts);
+        }
+      } catch {
+        scheduleSandboxRefresh(remainingAttempts);
+      }
+    };
+
     async function load() {
       setError(null);
       try {
@@ -26,10 +56,22 @@ export default function WorkspacePage() {
           getWorkspace(assessmentId),
           getSystemConfig()
         ]);
+        if (cancelled) {
+          return;
+        }
+
         setAssessment(nextAssessment);
         setWorkspace(nextWorkspace);
-        setSandboxAvailable(systemConfig.features.real_sandbox_enabled);
+        const isSandboxAvailable = systemConfig.features.real_sandbox_enabled;
+        setSandboxAvailable(isSandboxAvailable);
+        if (!isSandboxAvailable) {
+          scheduleSandboxRefresh(20);
+        }
       } catch (exception) {
+        if (cancelled) {
+          return;
+        }
+
         if (isAuthenticationError(exception)) {
           router.replace("/login");
           return;
@@ -39,7 +81,29 @@ export default function WorkspacePage() {
       }
     }
 
+    const recheckWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshSandboxAvailability(3);
+      }
+    };
+
+    const recheckOnFocus = () => {
+      void refreshSandboxAvailability(3);
+    };
+
+    document.addEventListener("visibilitychange", recheckWhenVisible);
+    window.addEventListener("focus", recheckOnFocus);
     load();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
+
+      document.removeEventListener("visibilitychange", recheckWhenVisible);
+      window.removeEventListener("focus", recheckOnFocus);
+    };
   }, [assessmentId, router]);
 
   if (error) {

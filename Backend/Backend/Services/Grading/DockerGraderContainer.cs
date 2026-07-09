@@ -1,5 +1,6 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using System.Net;
 
 namespace Backend.Services.Grading;
 
@@ -11,9 +12,11 @@ internal sealed class DockerGraderContainer
     private const string ContainerName = "ojsharp-grader-python-js-ts-v8";
     private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";
     private const string DefaultWindowsEndpoint = "npipe://./pipe/docker_engine";
+    private const int ContainerLifecycleRetryCount = 8;
+    private static readonly TimeSpan ContainerLifecycleRetryDelay = TimeSpan.FromMilliseconds(750);
+    private static readonly SemaphoreSlim ContainerLifecycleGate = new(1, 1);
     private readonly DockerClient dockerClient;
     private readonly string workspaceHostRoot;
-    private readonly SemaphoreSlim gate = new(1, 1);
     private string? containerId;
 
     public DockerGraderContainer()
@@ -29,16 +32,29 @@ internal sealed class DockerGraderContainer
 
     public async Task EnsureReadyAsync(CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        await ContainerLifecycleGate.WaitAsync(cancellationToken);
         try
         {
             Directory.CreateDirectory(workspaceHostRoot);
             await EnsureImageAsync(cancellationToken);
-            containerId = await EnsureContainerAsync(cancellationToken);
+            for (var attempt = 0; attempt <= ContainerLifecycleRetryCount; attempt++)
+            {
+                try
+                {
+                    containerId = await EnsureContainerAsync(cancellationToken);
+                    return;
+                }
+                catch (DockerApiException exception) when (IsContainerLifecycleConflict(exception)
+                                                          && attempt < ContainerLifecycleRetryCount)
+                {
+                    containerId = null;
+                    await Task.Delay(ContainerLifecycleRetryDelay, cancellationToken);
+                }
+            }
         }
         finally
         {
-            gate.Release();
+            ContainerLifecycleGate.Release();
         }
     }
 
@@ -195,6 +211,7 @@ internal sealed class DockerGraderContainer
                 container.ID,
                 new ContainerRemoveParameters { Force = true },
                 cancellationToken);
+            await WaitForContainerRemovalAsync(cancellationToken);
             return await CreateContainerAsync(cancellationToken);
         }
 
@@ -252,11 +269,39 @@ internal sealed class DockerGraderContainer
             container.Names.Any(name => name.TrimStart('/').Equals(ContainerName, StringComparison.Ordinal)));
     }
 
+    private async Task WaitForContainerRemovalAsync(CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < ContainerLifecycleRetryCount; attempt++)
+        {
+            if (await FindContainerAsync(cancellationToken) is null)
+            {
+                return;
+            }
+
+            await Task.Delay(ContainerLifecycleRetryDelay, cancellationToken);
+        }
+    }
+
     private bool HasExpectedWorkspaceBind(ContainerListResponse container)
     {
         return container.Mounts.Any(mount =>
             string.Equals(mount.Source, workspaceHostRoot, StringComparison.Ordinal)
             && string.Equals(mount.Destination, "/workspace", StringComparison.Ordinal));
+    }
+
+    private static bool IsContainerLifecycleConflict(DockerApiException exception)
+    {
+        if (exception.StatusCode != HttpStatusCode.Conflict
+            && exception.StatusCode != HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        var message = exception.ResponseBody ?? exception.Message;
+        return message.Contains(ContainerName, StringComparison.OrdinalIgnoreCase)
+               || message.Contains("removal of container", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("already in progress", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("is not running", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static DockerClient CreateDockerClient()
