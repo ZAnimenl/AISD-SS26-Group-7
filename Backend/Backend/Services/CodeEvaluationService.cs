@@ -21,35 +21,9 @@ public sealed class CodeEvaluationService
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        var results = new List<TestCaseEvaluationResult>();
-
-        foreach (var testCase in testCases)
-        {
-            var execution = await codeRunner.RunAsync(files, language, testCase, cancellationToken);
-            if (IsGraderUnavailable(execution))
-            {
-                results.Add(new TestCaseEvaluationResult(
-                    testCase.Name,
-                    testCase.Visibility,
-                    false,
-                    string.Empty,
-                    "Run environment unavailable. The sandbox grader is not reachable. Start the grader container and retry.",
-                    ExecutionStatuses.InternalError));
-                continue;
-            }
-
-            var output = NormalizeOutput(execution.Stdout);
-            var passed = execution.ExitCode == 0;
-            var status = BuildTestStatus(execution, passed);
-
-            results.Add(new TestCaseEvaluationResult(
-                testCase.Name,
-                testCase.Visibility,
-                passed,
-                output,
-                execution.TimedOut ? "Execution timed out." : execution.Stderr,
-                status));
-        }
+        var testCaseList = testCases.ToList();
+        var results = await Task.WhenAll(testCaseList.Select(testCase =>
+            EvaluateTestCaseAsync(testCase, files, language, cancellationToken)));
 
         stopwatch.Stop();
         return new CodeEvaluationResult(
@@ -59,6 +33,37 @@ public sealed class CodeEvaluationService
             BuildStderr(results),
             results,
             new ExecutionMetrics(Math.Round(stopwatch.Elapsed.TotalSeconds, 3), 12000));
+    }
+
+    private async Task<TestCaseEvaluationResult> EvaluateTestCaseAsync(
+        TestCase testCase,
+        Dictionary<string, string> files,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        var execution = await codeRunner.RunAsync(files, language, testCase, cancellationToken);
+        if (IsGraderUnavailable(execution))
+        {
+            return new TestCaseEvaluationResult(
+                testCase.Name,
+                testCase.Visibility,
+                false,
+                string.Empty,
+                "Run environment unavailable. The sandbox grader is not reachable. Start the grader container and retry.",
+                ExecutionStatuses.InternalError);
+        }
+
+        var output = NormalizeOutput(execution.Stdout);
+        var passed = execution.ExitCode == 0;
+        var status = BuildTestStatus(execution, passed);
+
+        return new TestCaseEvaluationResult(
+            testCase.Name,
+            testCase.Visibility,
+            passed,
+            output,
+            execution.TimedOut ? "Execution timed out." : execution.Stderr,
+            status);
     }
 
     public int CalculateScore(int maxScore, IReadOnlyCollection<TestCaseEvaluationResult> testResults)

@@ -788,10 +788,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   }
 
   async function runPublicChecksForState(state: WorkspaceQuestionState) {
-    setOutputTab("console");
+    setOutputTab(activeQuestion?.verification_mode === "browser_ui_preview" ? "preview" : "console");
     setRunState("running");
     setRunningQuestionId(activeQuestionId);
-    setRunResults((current) => ({ ...current, [activeQuestionId]: null }));
     setTaskErrors((current) => ({ ...current, [activeQuestionId]: null }));
     setError(null);
     try {
