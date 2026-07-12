@@ -214,6 +214,37 @@ public sealed class AssessmentDraftGenerationServiceTests
     }
 
     [Fact]
+    public async Task Generate_question_draft_repairs_missing_typescript_test_code()
+    {
+        var missingTestCode = AdvancedTypeScriptTaskContent()
+            .Replace("\"typescript\":\"const fs", "\"javascript\":\"const fs", StringComparison.Ordinal);
+        var handler = new SequencedHandler(
+            OpenAiResponse(missingTestCode),
+            OpenAiResponse(AdvancedTypeScriptTaskContent()),
+            BaselineOpenAiResponse(),
+            BaselineOpenAiResponse());
+        var service = CreateDraftService(handler);
+
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.RestApiDevelopment,
+                "hard",
+                ["typescript"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
+
+        Assert.Equal("Idempotent TypeScript Todo Conflict API", question.Title);
+        Assert.Equal(4, handler.CallCount);
+        var correctionPrompt = ReadLastUserPrompt(handler.CapturedBodies[1]);
+        Assert.Contains("missing test code for language 'typescript'", correctionPrompt);
+        Assert.Contains("Every public and hidden test_cases item", correctionPrompt);
+        Assert.Contains("typescript", correctionPrompt);
+        Assert.Contains("non-empty executable entries", correctionPrompt);
+    }
+
+    [Fact]
     public async Task Generate_question_draft_rejects_raw_sql_audit_test_without_setup_rows()
     {
         var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
@@ -634,6 +665,43 @@ public sealed class AssessmentDraftGenerationServiceTests
         });
     }
 
+    private static string BaselineOpenAiResponse()
+    {
+        return OpenAiResponse(JsonSerializer.Serialize(new
+        {
+            goal = "Implement the requested Todo behavior.",
+            code_context = "The Todo starter files define shared contracts.",
+            observed_behavior = "The current implementation is incomplete.",
+            constraint = "Preserve existing Todo APIs and validation behavior.",
+            standard_steps = new[]
+            {
+                new
+                {
+                    purpose = "Inspect the Todo contract",
+                    minimal_input = "Summarize the public Todo API contract.",
+                    public_verification = "Confirm public tests still pass."
+                },
+                new
+                {
+                    purpose = "Implement the missing behavior",
+                    minimal_input = "Suggest the smallest Todo API change.",
+                    public_verification = "Run the public test cases."
+                }
+            }
+        }));
+    }
+
+    private static string ReadLastUserPrompt(string requestBody)
+    {
+        using var document = JsonDocument.Parse(requestBody);
+        return document.RootElement
+            .GetProperty("messages")
+            .EnumerateArray()
+            .Where(message => message.GetProperty("role").GetString() == "user")
+            .Select(message => message.GetProperty("content").GetString() ?? "")
+            .Last();
+    }
+
     private static string AdvancedSqlTaskContent(
         Dictionary<string, string> starterFiles,
         string? description = null,
@@ -687,6 +755,61 @@ public sealed class AssessmentDraftGenerationServiceTests
         });
     }
 
+    private static string AdvancedTypeScriptTaskContent()
+    {
+        var description = string.Join(" ",
+        [
+            "Context: The default Todo List API needs a TypeScript service layer that handles idempotency, optimistic locking, concurrency, validation, rollback, and conflict resolution for offline-created tasks.",
+            "Complete the supplied Todo contracts while preserving existing create, update, and toggle semantics.",
+            "Functional requirements: assign stable client request IDs, reject stale version tokens, keep pending offline additions visible until sync settles, roll back failed updates without losing descriptions, and return deterministic conflict errors.",
+            "Edge cases include duplicate create retries, concurrent completion toggles, missing titles, stale versions, and transport failures.",
+            "Acceptance criteria require all public and hidden tests to pass while existing Todo consumers keep their current imports."
+        ]);
+
+        var starterFiles = new Dictionary<string, string>
+        {
+            ["solution.ts"] = "import { TodoService } from './services';\nexport function solve(command: unknown): unknown { return new TodoService().execute(command); }\n",
+            ["types.ts"] = "export interface Todo { id: string; title: string; description: string; completed: boolean; version: number; pending?: boolean; }\nexport interface TodoCommand { type: string; payload?: unknown; requestId?: string; version?: number; }\n",
+            ["services.ts"] = "import type { Todo, TodoCommand } from './types';\nexport class TodoService { private todos: Todo[] = []; execute(_command: TodoCommand): unknown { throw new Error('Implement idempotent Todo conflict handling'); } }\n"
+        };
+
+        return JsonSerializer.Serialize(new
+        {
+            tasks = new[]
+            {
+                new
+                {
+                    title = "Idempotent TypeScript Todo Conflict API",
+                    task_type = TaskTypes.RestApiDevelopment,
+                    difficulty = "hard",
+                    verification_mode = VerificationModes.AutomatedTest,
+                    starter_prototype_reference = (string?)null,
+                    problem_description_markdown = description,
+                    language_constraints = new[] { "typescript" },
+                    starter_code = new Dictionary<string, Dictionary<string, string>>
+                    {
+                        ["typescript"] = starterFiles
+                    },
+                    starter_files_metadata = new Dictionary<string, Dictionary<string, string>>
+                    {
+                        ["typescript"] = starterFiles.Keys.ToDictionary(fileName => fileName, _ => "editable")
+                    },
+                    verification_metadata = new { primary_view = VerificationModes.AutomatedTest },
+                    grading_configuration = new { runner = "automated_tests", requires_student_install = "false" },
+                    traceability_metadata = new { requirements = "REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j" },
+                    max_score = 25,
+                    test_cases = new object[]
+                    {
+                        BuildTypeScriptTestCase("Public: Optimistic add updates UI immediately", TestCaseVisibilities.Public, "solution.ts"),
+                        BuildTypeScriptTestCase("Public: Duplicate request is idempotent", TestCaseVisibilities.Public, "services.ts"),
+                        BuildTypeScriptTestCase("Hidden: Stale version reports conflict", TestCaseVisibilities.Hidden, "types.ts"),
+                        BuildTypeScriptTestCase("Hidden: Failed sync rolls back pending state", TestCaseVisibilities.Hidden, "services.ts")
+                    }
+                }
+            }
+        });
+    }
+
     private static object BuildRawSqlTestCase(string name, string visibility, string sql)
     {
         return new
@@ -710,6 +833,20 @@ public sealed class AssessmentDraftGenerationServiceTests
             test_code = new Dictionary<string, string>
             {
                 ["sql"] = $"const fs = require('fs'); test('{name}', () => expect(fs.readFileSync('{fileName}', 'utf8').trim().length).toBeGreaterThan(10));"
+            },
+            traceability_metadata = new { requirements = "REQ-52,REQ-53" }
+        };
+    }
+
+    private static object BuildTypeScriptTestCase(string name, string visibility, string fileName)
+    {
+        return new
+        {
+            name,
+            visibility,
+            test_code = new Dictionary<string, string>
+            {
+                ["typescript"] = $"const fs = require('fs'); test('{name}', () => expect(fs.readFileSync('{fileName}', 'utf8').toLowerCase()).toContain('todo'));"
             },
             traceability_metadata = new { requirements = "REQ-52,REQ-53" }
         };

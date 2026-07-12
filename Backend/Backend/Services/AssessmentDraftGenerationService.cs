@@ -6,10 +6,13 @@ namespace Backend.Services;
 
 public sealed class AiDraftGenerationException : Exception
 {
-    public AiDraftGenerationException(string message)
+    public AiDraftGenerationException(string message, IReadOnlyCollection<string>? requiredLanguages = null)
         : base(message)
     {
+        RequiredLanguages = requiredLanguages?.ToArray() ?? [];
     }
+
+    public IReadOnlyCollection<string> RequiredLanguages { get; }
 }
 
 public sealed class AssessmentDraftGenerationService
@@ -153,12 +156,18 @@ public sealed class AssessmentDraftGenerationService
         CancellationToken cancellationToken)
     {
         string? previousFailure = null;
+        IReadOnlyCollection<string>? previousFailureRequiredLanguages = null;
 
         for (var attempt = 1; attempt <= MaximumDraftAttempts; attempt += 1)
         {
             var prompt = previousFailure is null
                 ? basePrompt
-                : BuildCorrectionPrompt(basePrompt, previousFailure, expectedTaskTypes, attempt);
+                : BuildCorrectionPrompt(
+                    basePrompt,
+                    previousFailure,
+                    previousFailureRequiredLanguages,
+                    expectedTaskTypes,
+                    attempt);
             var result = await completionService.GenerateAsync(
                 BuildDraftSystemPrompt(),
                 prompt,
@@ -174,6 +183,7 @@ public sealed class AssessmentDraftGenerationService
             catch (AiDraftGenerationException exception) when (attempt < MaximumDraftAttempts)
             {
                 previousFailure = exception.Message;
+                previousFailureRequiredLanguages = exception.RequiredLanguages;
             }
         }
 
@@ -183,6 +193,7 @@ public sealed class AssessmentDraftGenerationService
     private static string BuildCorrectionPrompt(
         string basePrompt,
         string previousFailure,
+        IReadOnlyCollection<string>? previousFailureRequiredLanguages,
         IReadOnlyCollection<string> expectedTaskTypes,
         int attempt)
     {
@@ -206,7 +217,9 @@ public sealed class AssessmentDraftGenerationService
         if (previousFailure.Contains("missing test code for language", StringComparison.OrdinalIgnoreCase))
         {
             var taskType = expectedTaskTypes.Single();
-            var requiredLanguages = NormalizeStudentLanguages(null, taskType);
+            var requiredLanguages = previousFailureRequiredLanguages is { Count: > 0 }
+                ? previousFailureRequiredLanguages
+                : NormalizeStudentLanguages(null, taskType);
             correctionLines.Add(
                 $"Every public and hidden test_cases item must contain a test_code object with non-empty executable entries for every required language: {string.Join(", ", requiredLanguages)}.");
             correctionLines.Add(
@@ -536,7 +549,8 @@ public sealed class AssessmentDraftGenerationService
                 }
 
                 throw new AiDraftGenerationException(
-                    $"Generated task '{title}' test case '{testCase.Name}' is missing test code for language '{language}'. Regenerate the draft so the LLM provides complete tests.");
+                    $"Generated task '{title}' test case '{testCase.Name}' is missing test code for language '{language}'. Regenerate the draft so the LLM provides complete tests.",
+                    languageConstraints);
             }
         }
     }
