@@ -76,6 +76,7 @@ builder.Services.AddSingleton<AiCompletionService>();
 builder.Services.AddSingleton<AiAssistantService>();
 builder.Services.AddScoped<AiUsageGradingService>();
 builder.Services.AddHostedService<ReflectionDeadlineWorker>();
+builder.Services.AddHostedService<AssessmentExpirationWorker>();
 builder.Services.AddSingleton<CanonicalPrototypeSource>();
 builder.Services.AddSingleton<AssessmentDraftGenerationService>();
 builder.Services.AddSingleton<TokenEfficiencyReferenceBaselineService>();

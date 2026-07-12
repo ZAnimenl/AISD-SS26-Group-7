@@ -181,7 +181,7 @@ export default function EditAssessmentPage() {
                 <input className="field [color-scheme:dark]" name="expires_at" type="datetime-local" value={expiresAt} required onChange={(event) => setExpiresAt(event.target.value)} />
                 <span className="text-xs text-white/35">After this deadline students can review results, but cannot start or continue an attempt.</span>
               </label>
-              <label className="grid gap-2 text-sm text-white/60">Status<CustomDropdown name="status" ariaLabel="Status" value={statusValue} onChange={setStatusValue} options={["draft", "active", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} /></label>
+              <label className="grid gap-2 text-sm text-white/60">Status<CustomDropdown name="status" ariaLabel="Status" value={statusValue} onChange={setStatusValue} options={["draft", "active", "expired", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} /></label>
               <label className="grid gap-2 text-sm text-white/60">AI assistance<CustomDropdown name="ai_enabled" ariaLabel="AI assistance" value={aiAccess} onChange={setAiAccess} options={[{ value: "enabled", label: "enabled" }, { value: "disabled", label: "disabled" }]} /></label>
             </div>
             <div className="flex flex-wrap gap-3">
