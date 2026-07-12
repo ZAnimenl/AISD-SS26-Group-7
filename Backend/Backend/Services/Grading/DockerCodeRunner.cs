@@ -59,7 +59,7 @@ internal sealed class DockerCodeRunner : ICodeRunner
                 isHtmlWorkspace: language.Equals("html", StringComparison.OrdinalIgnoreCase));
 
             var execution = await graderContainer.ExecuteAsync(
-                run.ContainerPath,
+                run.HostPath,
                 commandFactory.Create(gradingLanguage),
                 HostTimeout,
                 cancellationToken);

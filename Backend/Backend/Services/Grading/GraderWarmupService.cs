@@ -2,6 +2,7 @@ namespace Backend.Services.Grading;
 
 internal sealed class GraderWarmupService : BackgroundService
 {
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(3);
     private readonly DockerRuntimeProbe dockerRuntimeProbe;
     private readonly DockerGraderContainer graderContainer;
     private readonly ILogger<GraderWarmupService> logger;
@@ -18,24 +19,42 @@ internal sealed class GraderWarmupService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
+        var attempt = 0;
+        while (!stoppingToken.IsCancellationRequested)
         {
-            var status = await dockerRuntimeProbe.CheckAsync(stoppingToken);
-            if (!status.IsAvailable)
+            try
             {
-                logger.LogInformation("Skipping grader warmup because Docker is not reachable.");
+                var status = await dockerRuntimeProbe.CheckAsync(stoppingToken);
+                if (status.IsAvailable)
+                {
+                    await graderContainer.EnsureReadyAsync(stoppingToken);
+                    logger.LogInformation("Sandbox grader image is warmed up and ready.");
+                    return;
+                }
+
+                if (attempt == 0)
+                {
+                    logger.LogInformation("Sandbox grader warmup is waiting for Docker to become reachable.");
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
                 return;
             }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Sandbox grader warmup failed; retrying in {RetrySeconds} seconds.", RetryDelay.TotalSeconds);
+            }
 
-            await graderContainer.EnsureReadyAsync(stoppingToken);
-            logger.LogInformation("Sandbox grader is warmed up and ready.");
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Sandbox grader warmup failed; the first run will retry on demand.");
+            attempt += 1;
+            try
+            {
+                await Task.Delay(RetryDelay, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
         }
     }
 }

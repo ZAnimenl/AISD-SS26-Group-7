@@ -2,7 +2,7 @@
 
 ## Publish configuration
 
-Do not put database credentials or the seed administrator credentials in tracked `appsettings*.json` files. The backend must receive these values from environment variables, user secrets, or the hosting secret manager before it starts.
+Do not put database credentials or the seed administrator credentials in tracked `appsettings*.json` files. The backend must receive these values from environment variables, user secrets, or the hosting secret manager before it starts. The current private course checkout contains dev-only Google OAuth and SMTP values in `Backend/Backend/appsettings.Development.json`; rotate/remove those values before public release or production deployment.
 
 ## Seed administrator
 
@@ -20,7 +20,9 @@ These values are read through ASP.NET Core configuration from the `SeedAdmin` se
 If either value is missing, the seed step fails validation and backend startup fails. Set these variables before starting the backend for the first time against an empty database.
 
 ## Database
-The backend uses PostgreSQL as the database. Every environment must set:
+Local one-command startup uses SQLite through EF Core. Production and explicit
+external deployments should use PostgreSQL through EF Core. Deployment
+environments must set:
 
 ```bash
 ConnectionStrings__DefaultConnection=Host=...;Database=...;Username=...;Password=...

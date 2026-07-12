@@ -32,7 +32,6 @@ export default function RegisterPage() {
   // Step 3: password
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
 
   // Shared UI state
   const [error, setError] = useState<string | null>(null);
@@ -150,8 +149,7 @@ export default function RegisterPage() {
       const user = await registerComplete({
         email: email.trim(),
         code: code.trim(),
-        password,
-        rememberMe
+        password
       });
       router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
     } catch (exception) {
@@ -368,15 +366,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
               />
             </label>
-            <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
-              />
-              Remember me on this device
-            </label>
+            <p className="text-sm text-white/50">This account will stay signed in only in this browser window.</p>
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="btn-primary" type="submit" disabled={submitting}>
                 <KeyRound size={18} />

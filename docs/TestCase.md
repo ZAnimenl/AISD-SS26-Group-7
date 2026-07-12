@@ -130,6 +130,12 @@ the active requirements. It does not replace automated test files.
   unavailable instead of looking actionable.
 - If the sandbox grader is unavailable, run and submit report `internal_error`
   rather than static task-specific pass/fail results.
+- Warm canonical browser-preview runs complete in under ten seconds on
+  supported local development hardware, while an unfinished cold image warmup
+  returns a retryable unavailable result within the readiness wait bound.
+- Concurrent sandbox checks use separate ephemeral containers, cannot list or
+  read sibling check workspaces, and leave no run container after completion or
+  timeout.
 - Submit evaluates final work and returns visible and hidden test summary counts
   without hidden inputs or expected outputs.
 - Expired or closed attempts reject new runs and submissions.
@@ -281,6 +287,13 @@ the active requirements. It does not replace automated test files.
 - Backend 401 responses clear stored auth before navigation to `/login`.
 - Logout from dashboards and the workspace clears local auth immediately and
   navigates to `/login` without waiting indefinitely for the backend.
+- Separate browser windows can hold different administrator and student
+  accounts at the same time; logout or an authentication failure in one window
+  leaves the other window authenticated.
+- Reloading an authenticated window preserves its account, while closing the
+  window ends that window-scoped login.
+- Legacy shared auth is removed from shared browser storage and requires one
+  fresh window-specific login.
 - The compact workspace Logout control remains visible and clickable above
   local development overlays.
 - Non-auth backend data errors remain on the current page and show the real
@@ -315,7 +328,10 @@ the active requirements. It does not replace automated test files.
   APIs directly.
 - Student code is not executed by frontend JavaScript or normal backend request
   handlers.
-- Secrets and provider keys are not committed.
+- Production secrets and provider keys are not committed. The current private
+  course checkout contains dev-only Google OAuth and SMTP values in
+  `Backend/Backend/appsettings.Development.json`; those values must be
+  rotated/removed before public release.
 # Added verification cases (2026-06-19)
 
 - Canonical prototype contains only source/config/test assets and excludes dependencies, caches, logs, databases, and build output.
@@ -338,6 +354,10 @@ the active requirements. It does not replace automated test files.
 - Starting an attempt after assessment expiration returns `ASSESSMENT_EXPIRED`.
 - A late-started attempt expires at the assessment deadline when that deadline occurs before the configured duration.
 - Expired assessments expose review navigation for submitted work and no start, continue, or repeat-attempt action.
+- Student dashboard and assessment-list pages place active assessments whose
+  schedule is currently open in the Active assessments section; not-yet-open,
+  expired, closed, archived, and otherwise unavailable assessments appear in
+  Other assessments.
 - Shared dropdown option lists render at viewport level and open upward when the lower viewport space would clip options.
 - Draft generation retries advanced-concern validation with exact task-type vocabulary and supports up to five attempts before failing.
 - Assessment create/edit rejects zero, negative, and non-integer duration values before persistence.

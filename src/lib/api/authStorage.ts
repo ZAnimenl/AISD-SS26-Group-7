@@ -8,10 +8,8 @@ function readStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
   }
-  // Prefer the storage that currently holds the token.
-  if (window.localStorage.getItem(TOKEN_KEY)) {
-    return window.localStorage;
-  }
+
+  clearLegacySharedAuth();
   if (window.sessionStorage.getItem(TOKEN_KEY)) {
     return window.sessionStorage;
   }
@@ -49,23 +47,33 @@ export function getStoredUser() {
   }
 }
 
-export function storeAuth(token: string, user: AuthUser, options?: { rememberMe?: boolean }) {
+export function storeAuth(token: string, user: AuthUser) {
   if (typeof window === "undefined") {
     return;
   }
-  const rememberMe = options?.rememberMe ?? true;
-  // Always clean both before writing to avoid stale entries.
+
   clearStoredAuthSilent();
-  const store = rememberMe ? window.localStorage : window.sessionStorage;
+  const store = window.sessionStorage;
   store.setItem(TOKEN_KEY, token);
   store.setItem(USER_KEY, JSON.stringify(user));
-  // The remember flag itself goes to localStorage so we can prefill the checkbox later.
-  if (rememberMe) {
-    window.localStorage.setItem(REMEMBER_KEY, "1");
-  } else {
-    window.localStorage.removeItem(REMEMBER_KEY);
-  }
   notifyAuthSubscribers();
+}
+
+export function stageAuthToken(token: string) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  clearLegacySharedAuth();
+  const previousToken = window.sessionStorage.getItem(TOKEN_KEY);
+  const previousUser = window.sessionStorage.getItem(USER_KEY);
+  window.sessionStorage.setItem(TOKEN_KEY, token);
+  window.sessionStorage.removeItem(USER_KEY);
+
+  return () => {
+    restoreStorageValue(window.sessionStorage, TOKEN_KEY, previousToken);
+    restoreStorageValue(window.sessionStorage, USER_KEY, previousUser);
+  };
 }
 
 export function clearStoredAuth() {
@@ -77,18 +85,24 @@ function clearStoredAuthSilent() {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(USER_KEY);
+
   window.sessionStorage.removeItem(TOKEN_KEY);
   window.sessionStorage.removeItem(USER_KEY);
+  clearLegacySharedAuth();
 }
 
-export function getRememberMePreference() {
-  if (typeof window === "undefined") {
-    return true;
+function clearLegacySharedAuth() {
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+  window.localStorage.removeItem(REMEMBER_KEY);
+}
+
+function restoreStorageValue(store: Storage, key: string, value: string | null) {
+  if (value === null) {
+    store.removeItem(key);
+  } else {
+    store.setItem(key, value);
   }
-  // Default to true so users get the friendlier behavior on first visit.
-  return window.localStorage.getItem(REMEMBER_KEY) !== "0";
 }
 
 export function hasStoredAuth(expectedRole?: Role) {

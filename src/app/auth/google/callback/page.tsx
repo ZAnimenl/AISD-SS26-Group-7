@@ -32,17 +32,8 @@ function GoogleCallbackContent() {
       return;
     }
 
-    const rememberFromUrl = params.get("remember_me") === "1";
-    const rememberFromSession =
-      typeof window !== "undefined"
-        && window.sessionStorage.getItem("ojsharp.auth.googleRememberMe") === "1";
-    const rememberMe = rememberFromUrl || rememberFromSession;
-
-    consumeGoogleCallback(token, rememberMe)
+    consumeGoogleCallback(token)
       .then((user) => {
-        if (typeof window !== "undefined") {
-          window.sessionStorage.removeItem("ojsharp.auth.googleRememberMe");
-        }
         router.replace(user.role === "administrator" ? "/admin/dashboard" : "/student/dashboard");
       })
       .catch((exception: unknown) => {

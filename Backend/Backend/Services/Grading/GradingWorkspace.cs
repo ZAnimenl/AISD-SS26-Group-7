@@ -2,7 +2,6 @@ namespace Backend.Services.Grading;
 
 internal sealed class GradingWorkspace
 {
-    private const string ContainerRoot = "/workspace";
     private readonly string hostRoot;
 
     public GradingWorkspace()
@@ -24,7 +23,7 @@ internal sealed class GradingWorkspace
         var hostPath = Path.Combine(hostRoot, runName);
         Directory.CreateDirectory(hostPath);
 
-        return new GradingRunWorkspace(hostPath, $"{ContainerRoot}/{runName}");
+        return new GradingRunWorkspace(hostPath);
     }
 
     public string? ReadActualOutput(GradingRunWorkspace run)
@@ -51,15 +50,12 @@ internal sealed class GradingWorkspace
 
 internal sealed class GradingRunWorkspace : IDisposable
 {
-    public GradingRunWorkspace(string hostPath, string containerPath)
+    public GradingRunWorkspace(string hostPath)
     {
         HostPath = hostPath;
-        ContainerPath = containerPath;
     }
 
     public string HostPath { get; }
-
-    public string ContainerPath { get; }
 
     public void Dispose()
     {

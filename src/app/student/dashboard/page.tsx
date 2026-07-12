@@ -9,6 +9,7 @@ import { ScoreDonut } from "@/components/reports/ScoreDonut";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getStudentAssessments, getStudentDashboard, getStudentResults, isAuthenticationError } from "@/lib/api";
+import { partitionAssessments } from "@/lib/assessmentSchedule";
 import type { Assessment, StudentDashboard } from "@/lib/types";
 
 export default function StudentDashboardPage() {
@@ -50,6 +51,8 @@ export default function StudentDashboardPage() {
     return <SectionHeader eyebrow="Student" title="Loading dashboard..." />;
   }
 
+  const { available: availableAssessments, other: otherAssessments } = partitionAssessments(assessments);
+
   return (
     <div>
       <SectionHeader
@@ -73,9 +76,19 @@ export default function StudentDashboardPage() {
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <div>
-          <h2 className="mb-4 text-lg font-semibold">Available and active assessments</h2>
+          <h2 className="mb-4 text-lg font-semibold">Active assessments</h2>
           <div className="grid gap-4 lg:grid-cols-2">
-            {assessments.slice(0, 2).map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}
+            {availableAssessments.slice(0, 2).map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}
+            {availableAssessments.length === 0 ? (
+              <section className="panel text-sm text-white/55 lg:col-span-2">No assessments are available to start or continue right now.</section>
+            ) : null}
+          </div>
+          <h2 className="mb-4 mt-6 text-lg font-semibold">Other assessments</h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {otherAssessments.slice(0, 2).map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}
+            {otherAssessments.length === 0 ? (
+              <section className="panel text-sm text-white/55 lg:col-span-2">No scheduled or expired assessments.</section>
+            ) : null}
           </div>
         </div>
         <aside className="space-y-6">

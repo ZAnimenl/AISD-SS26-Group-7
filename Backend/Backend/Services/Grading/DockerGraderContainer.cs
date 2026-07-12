@@ -1,5 +1,6 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 
 namespace Backend.Services.Grading;
@@ -9,85 +10,132 @@ internal sealed class DockerGraderContainer
     private const string ImageRepository = "ojsharp-grader";
     private const string ImageVersionTag = "python-js-ts-v8";
     private const string ImageTag = ImageRepository + ":" + ImageVersionTag;
-    private const string ContainerName = "ojsharp-grader-python-js-ts-v8";
+    private const string ContainerWorkspace = "/workspace";
     private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";
     private const string DefaultWindowsEndpoint = "npipe://./pipe/docker_engine";
-    private const int ContainerLifecycleRetryCount = 8;
-    private static readonly TimeSpan ContainerLifecycleRetryDelay = TimeSpan.FromMilliseconds(750);
-    private static readonly SemaphoreSlim ContainerLifecycleGate = new(1, 1);
+    private const int MaximumConcurrentExecutions = 4;
+    private const long ExecutionMemoryBytes = 384L * 1024 * 1024;
+    private const long ExecutionNanoCpus = 1_500_000_000;
+    private static readonly TimeSpan ImageReadyWaitTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(2);
+    private static readonly SemaphoreSlim ExecutionGate = new(MaximumConcurrentExecutions, MaximumConcurrentExecutions);
     private readonly DockerClient dockerClient;
-    private readonly string workspaceHostRoot;
-    private string? containerId;
+    private readonly ILogger<DockerGraderContainer> logger;
+    private readonly object readinessLock = new();
+    private Task? readinessTask;
 
     public DockerGraderContainer()
-        : this(CreateDockerClient(), new GradingWorkspace().HostRoot)
+        : this(CreateDockerClient(), NullLogger<DockerGraderContainer>.Instance)
     {
     }
 
-    public DockerGraderContainer(DockerClient dockerClient, string workspaceHostRoot)
+    public DockerGraderContainer(ILogger<DockerGraderContainer> logger)
+        : this(CreateDockerClient(), logger)
+    {
+    }
+
+    internal DockerGraderContainer(
+        DockerClient dockerClient,
+        ILogger<DockerGraderContainer> logger)
     {
         this.dockerClient = dockerClient;
-        this.workspaceHostRoot = workspaceHostRoot;
+        this.logger = logger;
+    }
+
+    public bool IsReady
+    {
+        get
+        {
+            lock (readinessLock)
+            {
+                return readinessTask?.IsCompletedSuccessfully == true;
+            }
+        }
     }
 
     public async Task EnsureReadyAsync(CancellationToken cancellationToken)
     {
-        await ContainerLifecycleGate.WaitAsync(cancellationToken);
+        var task = GetOrStartReadinessTask();
         try
         {
-            Directory.CreateDirectory(workspaceHostRoot);
-            await EnsureImageAsync(cancellationToken);
-            for (var attempt = 0; attempt <= ContainerLifecycleRetryCount; attempt++)
+            await task.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (task.IsFaulted || task.IsCanceled)
             {
-                try
+                lock (readinessLock)
                 {
-                    containerId = await EnsureContainerAsync(cancellationToken);
-                    return;
-                }
-                catch (DockerApiException exception) when (IsContainerLifecycleConflict(exception)
-                                                          && attempt < ContainerLifecycleRetryCount)
-                {
-                    containerId = null;
-                    await Task.Delay(ContainerLifecycleRetryDelay, cancellationToken);
+                    if (ReferenceEquals(readinessTask, task))
+                    {
+                        readinessTask = null;
+                    }
                 }
             }
-        }
-        finally
-        {
-            ContainerLifecycleGate.Release();
+            throw;
         }
     }
 
     public async Task<DockerExecResult> ExecuteAsync(
-        string workingDirectory,
+        string hostWorkspacePath,
         IReadOnlyList<string> command,
         TimeSpan hostTimeout,
         CancellationToken cancellationToken)
     {
-        await EnsureReadyAsync(cancellationToken);
+        using (var readinessSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            readinessSource.CancelAfter(ImageReadyWaitTimeout);
+            try
+            {
+                await EnsureReadyAsync(readinessSource.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return new DockerExecResult(
+                    string.Empty,
+                    "Grader container unavailable: Sandbox grader is still warming up. Retry shortly.",
+                    1,
+                    false);
+            }
+        }
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(hostTimeout);
+        var executionSlotAcquired = false;
+        string? containerReference = null;
 
         try
         {
+            await ExecutionGate.WaitAsync(timeoutSource.Token);
+            executionSlotAcquired = true;
+            containerReference = $"ojsharp-run-{Guid.NewGuid():N}";
+            var containerId = await CreateExecutionContainerAsync(
+                hostWorkspacePath,
+                containerReference,
+                timeoutSource.Token);
+            containerReference = containerId;
+            await dockerClient.Containers.StartContainerAsync(
+                containerId,
+                new ContainerStartParameters(),
+                timeoutSource.Token);
+
             var createResponse = await dockerClient.Exec.ExecCreateContainerAsync(
-                containerId!,
+                containerId,
                 new ContainerExecCreateParameters
                 {
                     AttachStderr = true,
                     AttachStdout = true,
-                    Cmd = command.ToList(),
-                    WorkingDir = workingDirectory
+                    Cmd = BuildStagedCommand(command).ToList(),
+                    WorkingDir = ContainerWorkspace
                 },
-                cancellationToken);
+                timeoutSource.Token);
 
             using var stream = await dockerClient.Exec.StartAndAttachContainerExecAsync(
                 createResponse.ID,
                 false,
                 timeoutSource.Token);
             var output = await stream.ReadOutputToEndAsync(timeoutSource.Token);
-            var inspect = await dockerClient.Exec.InspectContainerExecAsync(createResponse.ID, cancellationToken);
+            var inspect = await dockerClient.Exec.InspectContainerExecAsync(createResponse.ID, timeoutSource.Token);
             var exitCode = inspect.ExitCode;
 
             return new DockerExecResult(
@@ -99,6 +147,31 @@ internal sealed class DockerGraderContainer
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new DockerExecResult(string.Empty, "Execution timed out.", 1, true);
+        }
+        finally
+        {
+            try
+            {
+                if (containerReference is not null)
+                {
+                    await RemoveExecutionContainerAsync(containerReference);
+                }
+            }
+            finally
+            {
+                if (executionSlotAcquired)
+                {
+                    ExecutionGate.Release();
+                }
+            }
+        }
+    }
+
+    private Task GetOrStartReadinessTask()
+    {
+        lock (readinessLock)
+        {
+            return readinessTask ??= EnsureImageAsync(CancellationToken.None);
         }
     }
 
@@ -152,6 +225,97 @@ internal sealed class DockerGraderContainer
         await TagBuiltImageIfNeededAsync(buildStartedAt, cancellationToken);
     }
 
+    private async Task<string> CreateExecutionContainerAsync(
+        string hostWorkspacePath,
+        string containerName,
+        CancellationToken cancellationToken)
+    {
+        var response = await dockerClient.Containers.CreateContainerAsync(
+            new CreateContainerParameters
+            {
+                Image = ImageTag,
+                Name = containerName,
+                Cmd = ["sleep", "infinity"],
+                NetworkDisabled = true,
+                WorkingDir = ContainerWorkspace,
+                Labels = new Dictionary<string, string>
+                {
+                    ["ojsharp.execution"] = "true",
+                    ["ojsharp.workspace"] = Path.GetFileName(hostWorkspacePath)
+                },
+                HostConfig = new HostConfig
+                {
+                    AutoRemove = false,
+                    Binds = [$"{hostWorkspacePath}:{ContainerWorkspace}"],
+                    Memory = ExecutionMemoryBytes,
+                    NanoCPUs = ExecutionNanoCpus,
+                    PidsLimit = 128,
+                    CapDrop = ["ALL"],
+                    SecurityOpt = ["no-new-privileges"]
+                }
+            },
+            cancellationToken);
+        return response.ID;
+    }
+
+    private async Task RemoveExecutionContainerAsync(string containerId)
+    {
+        for (var attempt = 1; attempt <= 2; attempt += 1)
+        {
+            using var cleanupSource = new CancellationTokenSource(CleanupTimeout);
+            try
+            {
+                await dockerClient.Containers.RemoveContainerAsync(
+                    containerId,
+                    new ContainerRemoveParameters { Force = true, RemoveVolumes = true },
+                    cleanupSource.Token);
+                return;
+            }
+            catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+            {
+                return;
+            }
+            catch (Exception exception) when (attempt < 2)
+            {
+                logger.LogDebug(exception, "Retrying cleanup for sandbox container {ContainerId}.", containerId);
+                await Task.Delay(100);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Could not remove sandbox container {ContainerId} after execution.", containerId);
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> BuildStagedCommand(IReadOnlyList<string> command)
+    {
+        var trustedCommand = string.Join(" ", command.Select(ShellQuote));
+        return
+        [
+            "sh",
+            "-c",
+            $$"""
+            source={{ShellQuote(ContainerWorkspace)}}
+            staged=$(mktemp -d /tmp/ojsharp-run-XXXXXX) || exit 1
+            cleanup() { rm -rf "$staged"; }
+            trap cleanup EXIT HUP INT TERM
+            cp -a "$source/." "$staged/" || exit 1
+            cd "$staged" || exit 1
+            {{trustedCommand}}
+            status=$?
+            if [ -f actual.txt ]; then
+              cp actual.txt "$source/actual.txt"
+            fi
+            exit "$status"
+            """
+        ];
+    }
+
+    private static string ShellQuote(string value)
+    {
+        return $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
+    }
+
     private async Task TagBuiltImageIfNeededAsync(DateTime buildStartedAt, CancellationToken cancellationToken)
     {
         var images = await dockerClient.Images.ListImagesAsync(
@@ -187,121 +351,6 @@ internal sealed class DockerGraderContainer
         return image.RepoTags is null
                || image.RepoTags.Count == 0
                || image.RepoTags.All(tag => tag.Equals("<none>:<none>", StringComparison.Ordinal));
-    }
-
-    private async Task<string> EnsureContainerAsync(CancellationToken cancellationToken)
-    {
-        var container = await FindContainerAsync(cancellationToken);
-        if (container is null)
-        {
-            return await CreateContainerAsync(cancellationToken);
-        }
-
-        if (!HasExpectedWorkspaceBind(container))
-        {
-            if (container.State.Equals("running", StringComparison.OrdinalIgnoreCase))
-            {
-                await dockerClient.Containers.StopContainerAsync(
-                    container.ID,
-                    new ContainerStopParameters(),
-                    cancellationToken);
-            }
-
-            await dockerClient.Containers.RemoveContainerAsync(
-                container.ID,
-                new ContainerRemoveParameters { Force = true },
-                cancellationToken);
-            await WaitForContainerRemovalAsync(cancellationToken);
-            return await CreateContainerAsync(cancellationToken);
-        }
-
-        if (!container.State.Equals("running", StringComparison.OrdinalIgnoreCase))
-        {
-            await dockerClient.Containers.StartContainerAsync(
-                container.ID,
-                new ContainerStartParameters(),
-                cancellationToken);
-        }
-
-        return container.ID;
-    }
-
-    private async Task<string> CreateContainerAsync(CancellationToken cancellationToken)
-    {
-        var createResponse = await dockerClient.Containers.CreateContainerAsync(
-            new CreateContainerParameters
-            {
-                Image = ImageTag,
-                Name = ContainerName,
-                Cmd = ["sleep", "infinity"],
-                NetworkDisabled = true,
-                HostConfig = new HostConfig
-                {
-                    AutoRemove = false,
-                    Binds = [$"{workspaceHostRoot}:/workspace"],
-                    Memory = 256 * 1024 * 1024,
-                    NanoCPUs = 1000000000,
-                    CapDrop = new[] { "ALL" }
-                }
-            },
-            cancellationToken);
-        await dockerClient.Containers.StartContainerAsync(
-            createResponse.ID,
-            new ContainerStartParameters(),
-            cancellationToken);
-        return createResponse.ID;
-    }
-
-    private async Task<ContainerListResponse?> FindContainerAsync(CancellationToken cancellationToken)
-    {
-        var containers = await dockerClient.Containers.ListContainersAsync(
-            new ContainersListParameters
-            {
-                All = true,
-                Filters = new Dictionary<string, IDictionary<string, bool>>
-                {
-                    ["name"] = new Dictionary<string, bool> { [ContainerName] = true }
-                }
-            },
-            cancellationToken);
-
-        return containers.FirstOrDefault(container =>
-            container.Names.Any(name => name.TrimStart('/').Equals(ContainerName, StringComparison.Ordinal)));
-    }
-
-    private async Task WaitForContainerRemovalAsync(CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; attempt < ContainerLifecycleRetryCount; attempt++)
-        {
-            if (await FindContainerAsync(cancellationToken) is null)
-            {
-                return;
-            }
-
-            await Task.Delay(ContainerLifecycleRetryDelay, cancellationToken);
-        }
-    }
-
-    private bool HasExpectedWorkspaceBind(ContainerListResponse container)
-    {
-        return container.Mounts.Any(mount =>
-            string.Equals(mount.Source, workspaceHostRoot, StringComparison.Ordinal)
-            && string.Equals(mount.Destination, "/workspace", StringComparison.Ordinal));
-    }
-
-    private static bool IsContainerLifecycleConflict(DockerApiException exception)
-    {
-        if (exception.StatusCode != HttpStatusCode.Conflict
-            && exception.StatusCode != HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-
-        var message = exception.ResponseBody ?? exception.Message;
-        return message.Contains(ContainerName, StringComparison.OrdinalIgnoreCase)
-               || message.Contains("removal of container", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("already in progress", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("is not running", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static DockerClient CreateDockerClient()

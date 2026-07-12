@@ -2,9 +2,11 @@
 
 ## Status
 
-Approved target design for implementation. The repository does not yet
-implement the reflection workflow, suggestion decision telemetry, or automatic
-AI Usage Score described here.
+Implemented target design. The current backend includes reflection endpoints,
+AI interaction event recording, automatic AI usage grading, retryable failed
+grading states, and report serialization for the stored AI grading summary and
+criterion details. Calibration and future policy choices remain documented in
+the open decisions below.
 
 ## Problem Definition
 
@@ -250,7 +252,7 @@ The grader uses a fixed, versioned rubric and returns structured output:
 
 ```json
 {
-  "rubric_version": "ai-usage-v1",
+  "rubric_version": "ai-usage-v2",
   "model": "configured-grading-model",
   "ai_usage_score": 78,
   "criteria": {

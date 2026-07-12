@@ -38,6 +38,11 @@
   and route an active attempt back to its workspace.
 - Logout clears local authentication and leaves protected pages immediately,
   even when backend token revocation is slow or unavailable.
+- Authentication is scoped to a browser window: administrator and student
+  accounts can remain open concurrently in separate same-origin windows, and
+  logout or HTTP 401 in one window does not clear authentication in another.
+- Window authentication survives navigation and reload within that window but
+  is not persisted after the window is closed.
 - Completed AI scoring displays all four rubric subsections with their score
   and a concise evidence-based summary.
 
@@ -202,6 +207,9 @@
   Average Final as a distinct featured score card.
 - Student dashboards group assessment-status counts separately and display
   Average Score as a distinct featured score card.
+- Student dashboard and assessment-list pages separate assessments that are
+  currently available to start or continue from scheduled, expired, and other
+  unavailable assessments.
 - Administrator report list, aggregate, and per-student views use supporting
   bars for Functional and AI Usage while reserving the prominent donut
   treatment for Final Score.
@@ -226,6 +234,12 @@
 - Workspace task, AI, and output panels can be collapsed/expanded and resized without changing backend state.
 - Sandbox output surfaces use opaque readable backgrounds and do not visually merge with editor or sidebar text.
 - Browser-preview runs for the platform Todo summary task resolve the visible starter file even when legacy tests import `TodoSummaryPanel`.
+- Warm, non-timeout public runs for normal-sized tasks, including the canonical
+  browser preview and public checks, complete within ten seconds on supported
+  local development hardware; cold grader warmup returns a quick retryable
+  unavailable result instead of holding the student request for minutes.
+- Each sandbox check runs in an ephemeral container that can access only its
+  own generated workspace and is removed after success, failure, or timeout.
 - AI workspace assistance is documented in `docs/design/ai-agent-workspace-context.md`.
 - AI assist requests include active file name, visible selected-language files, and latest public run feedback when available.
 - AI assist requests use the active question's allowed language after workspace state normalization, not stale or disallowed frontend state.

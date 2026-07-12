@@ -37,14 +37,14 @@ import {
 import {
   clearStoredAuth,
   getStoredToken,
+  stageAuthToken,
   storeAuth
 } from "@/lib/api/authStorage";
 
 export {
   clearStoredAuth,
   getStoredUser,
-  hasStoredAuth,
-  getRememberMePreference
+  hasStoredAuth
 } from "@/lib/api/authStorage";
 
 const DEFAULT_API_BASE_URL = "http://localhost:5140/api/v1";
@@ -62,6 +62,8 @@ const API_BASE_URLS = CONFIGURED_API_BASE_URL
     : [DEFAULT_API_BASE_URL, ...LOCAL_FALLBACK_API_BASE_URLS];
 const API_BASE_KEY = "ojsharp.api.base_url";
 const startAssessmentRequests = new Map<string, Promise<void>>();
+const recentlyStartedAssessments = new Map<string, number>();
+const startAssessmentReuseWindowMs = 10_000;
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -233,13 +235,13 @@ function getPlainTextError(bodyText: string) {
   return message.length > 240 ? `${message.slice(0, 240)}...` : message;
 }
 
-export async function login(username: string, password: string, rememberMe: boolean = true) {
+export async function login(username: string, password: string) {
   const result = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, email: username, password, remember_me: rememberMe })
+    body: JSON.stringify({ username, email: username, password, remember_me: false })
   });
   const user = normalizeUser(result.user);
-  storeAuth(result.token, user, { rememberMe });
+  storeAuth(result.token, user);
   return { user, mustChangePassword: Boolean(result.must_change_password) };
 }
 
@@ -269,37 +271,24 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-export async function startGoogleLogin(rememberMe: boolean = true) {
+export async function startGoogleLogin() {
   const result = await apiRequest<GoogleStartResponse>(
-    `/auth/google/start?remember=${rememberMe ? "true" : "false"}`
+    "/auth/google/start?remember=false"
   );
-  // Remember the preference locally so the callback page can persist it correctly.
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem("ojsharp.auth.googleRememberMe", rememberMe ? "1" : "0");
-  }
   window.location.assign(result.authorization_url);
 }
 
 /** Finish the Google OAuth flow on the frontend.
  *  The backend redirects the browser back with ?token=... after a successful exchange. */
-export async function consumeGoogleCallback(token: string, rememberMe: boolean) {
+export async function consumeGoogleCallback(token: string) {
   // The token is already valid server-side; just fetch /me and persist locally.
-  const previousToken = getStoredToken();
-  if (typeof window !== "undefined") {
-    // Temporarily store the token so apiRequest can use it.
-    const store = rememberMe ? window.localStorage : window.sessionStorage;
-    store.setItem("ojsharp.auth.token", token);
-  }
+  const rollbackToken = stageAuthToken(token);
   try {
     const me = await getCurrentUser();
-    storeAuth(token, me, { rememberMe });
+    storeAuth(token, me);
     return me;
   } catch (error) {
-    // Rollback the partial write so we don't leave a stale token behind.
-    if (typeof window !== "undefined" && previousToken === null) {
-      window.localStorage.removeItem("ojsharp.auth.token");
-      window.sessionStorage.removeItem("ojsharp.auth.token");
-    }
+    rollbackToken();
     throw error;
   }
 }
@@ -349,7 +338,6 @@ export async function registerComplete(input: {
   email: string;
   code: string;
   password: string;
-  rememberMe?: boolean;
 }) {
   const result = await apiRequest<LoginResponse>("/auth/register/complete", {
     method: "POST",
@@ -357,11 +345,11 @@ export async function registerComplete(input: {
       email: input.email,
       code: input.code,
       password: input.password,
-      remember_me: input.rememberMe ?? true
+      remember_me: false
     })
   });
   const user = normalizeUser(result.user);
-  storeAuth(result.token, user, { rememberMe: input.rememberMe ?? true });
+  storeAuth(result.token, user);
   return user;
 }
 
@@ -705,19 +693,28 @@ export async function getAssessment(assessmentId: string) {
 }
 
 export async function startAssessment(assessmentId: string) {
-  const existingRequest = startAssessmentRequests.get(assessmentId);
+  const requestKey = `${getStoredToken() ?? "anonymous"}:${assessmentId}`;
+  const recentlyStartedAt = recentlyStartedAssessments.get(requestKey);
+  if (recentlyStartedAt && Date.now() - recentlyStartedAt < startAssessmentReuseWindowMs) {
+    return;
+  }
+  recentlyStartedAssessments.delete(requestKey);
+
+  const existingRequest = startAssessmentRequests.get(requestKey);
   if (existingRequest) {
     return existingRequest;
   }
 
   const request = apiRequest<unknown>(`/assessments/${assessmentId}/attempts/start`, {
     method: "POST"
-  }).then(() => undefined)
+  }).then(() => {
+    recentlyStartedAssessments.set(requestKey, Date.now());
+  })
     .finally(() => {
-      startAssessmentRequests.delete(assessmentId);
+      startAssessmentRequests.delete(requestKey);
     });
 
-  startAssessmentRequests.set(assessmentId, request);
+  startAssessmentRequests.set(requestKey, request);
   return request;
 }
 

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BadgeCheck, Bot, CheckCircle2, Clock3, Code2, KeyRound, LogIn, MailCheck, PlayCircle, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import {
-  getRememberMePreference,
   getStoredUser,
   login,
   startGoogleLogin
@@ -45,7 +44,7 @@ const signInNotes = [
   },
   {
     icon: Clock3,
-    copy: '"Remember me" keeps this device signed in for 30 days.'
+    copy: "Each browser window keeps its own account, so administrator and student sessions can stay open together."
   }
 ];
 const aiWorkflow = [
@@ -70,7 +69,6 @@ function LoginContent() {
   const prefillEmail = searchParams.get("email") ?? "";
   const [username, setUsername] = useState(prefillEmail);
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(() => getRememberMePreference());
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(
     prefillEmail ? `You already have an account with ${prefillEmail}. Sign in to continue.` : null
@@ -90,7 +88,7 @@ function LoginContent() {
     setNotice(null);
     setSubmittingAction("login");
     try {
-      const { user, mustChangePassword } = await login(username, password, rememberMe);
+      const { user, mustChangePassword } = await login(username, password);
       if (mustChangePassword) {
         router.push("/change-password");
         return;
@@ -108,7 +106,7 @@ function LoginContent() {
     setNotice(null);
     setSubmittingAction("google");
     try {
-      await startGoogleLogin(rememberMe);
+      await startGoogleLogin();
       // Browser will navigate away; nothing else to do.
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Google sign-in is unavailable.");
@@ -192,16 +190,7 @@ function LoginContent() {
                 <GoogleIcon />
                 {submittingAction === "google" ? "Redirecting to Google..." : "Continue with Google"}
               </button>
-              <div className="mt-1 flex items-center justify-between gap-4">
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-white/70 select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(event) => setRememberMe(event.target.checked)}
-                    className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyanGlow accent-cyanGlow"
-                  />
-                  Remember me on this device
-                </label>
+              <div className="mt-1 flex items-center justify-end gap-4">
                 <Link
                   href={username.includes("@") ? `/forgot-password?email=${encodeURIComponent(username)}` : "/forgot-password"}
                   className="shrink-0 text-sm text-cyanGlow hover:underline"

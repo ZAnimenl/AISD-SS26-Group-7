@@ -278,7 +278,8 @@ the conflict before editing implementation files.
 
 Module 1, Identity and Assessment Management, owns authentication, RBAC, users,
 assessments, tasks, test cases, attempts, workspace persistence, submissions,
-results, reports, EF Core, and PostgreSQL persistence.
+results, reports, EF Core persistence, local SQLite startup, and PostgreSQL
+deployment persistence.
 
 Module 2, Interactive Browser-Based Workspace and Frontend IDE, owns Next.js UI,
 student and admin pages, Monaco/editor behavior, workspace UI, preview and

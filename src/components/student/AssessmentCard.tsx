@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { CalendarClock, Clock, Eye, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted } from "@/lib/assessmentSchedule";
+import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted, isAssessmentAvailableNow } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
-  const attemptExpired = assessment.attempt_status === "expired";
   const hasStarted = hasAssessmentStarted(assessment.starts_at);
   const assessmentExpired = hasAssessmentExpired(assessment.expires_at);
-  const canStartAttempt = assessment.status === "active" && hasStarted && !assessmentExpired && assessment.attempt_status !== "active" && !attemptExpired;
+  const isAvailable = isAssessmentAvailableNow(assessment);
+  const canStartAttempt = isAvailable && assessment.attempt_status !== "active";
   const hasSubmittedResult = assessment.attempt_status === "submitted";
   const actionHref =
-    assessment.attempt_status === "active" && !assessmentExpired
+    assessment.attempt_status === "active" && isAvailable
       ? `/student/assessments/${assessment.assessment_id}/workspace`
       : canStartAttempt
       ? `/student/assessments/${assessment.assessment_id}/start`
@@ -19,7 +19,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
       ? `/student/assessments/${assessment.assessment_id}/review`
       : null;
   const actionLabel =
-    assessment.attempt_status === "active" && !assessmentExpired
+    assessment.attempt_status === "active" && isAvailable
       ? "Continue"
       : hasSubmittedResult && canStartAttempt
       ? "Start again"

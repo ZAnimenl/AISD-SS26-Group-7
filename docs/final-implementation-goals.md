@@ -81,7 +81,10 @@ Each task must be small enough to complete in the browser workspace with platfor
 
 Students must be able to open an assessment, view all available tasks, switch between tasks, read task descriptions, inspect the shared prototype file tree, edit multiple files, see the task type and verification mode, run public checks, and submit final solutions.
 
-The workspace must support at least Python and JavaScript as student submission languages. TypeScript may appear as starter or prototype material only when the implementation supports the corresponding task flow without expanding student submission language requirements beyond the specification.
+The workspace must support Python and JavaScript as default general-purpose
+student submission languages. The current implementation also supports
+TypeScript, HTML, and SQL for task-specific flows when the frontend constraints,
+backend configuration, and grading path allow those languages.
 
 The frontend must not create, store, trust, or send a real `session_id` or `attempt_id`. Backend-connected assessment flows must be assessment-scoped, and the backend must resolve the active attempt from the authenticated user and assessment ID.
 
@@ -106,7 +109,10 @@ Run feedback should use public/sample checks. Submit feedback should use hidden 
 
 All untrusted student code must execute through the sandboxed execution and evaluation architecture. It must not run in frontend JavaScript, `eval`, `child_process`, normal backend request handlers, or unrestricted local runtimes.
 
-The sandboxed execution layer must support Python and JavaScript for the first student-facing implementation, enforce time and resource limits, capture stdout/stderr and runtime errors, clean up execution environments, and return safe execution-result data.
+The sandboxed execution layer must support Python and JavaScript for general
+code tasks and TypeScript, HTML/browser-preview, and SQL flows where configured.
+It must enforce time and resource limits, capture stdout/stderr and runtime
+errors, clean up execution environments, and return safe execution-result data.
 
 Final submissions must be evaluated against administrator-defined or administrator-approved test cases. Public tests may be used for run feedback; hidden tests must be reserved for submit/grading paths and must remain protected from student-facing APIs and UI.
 
@@ -165,7 +171,7 @@ Automatic AI grading must use a fixed versioned rubric and structured
 criterion-level evidence. Provider or schema failure must preserve the
 Functional Score and result in pending or failed AI grading, not zero.
 
-`anomalyco/opencode` is the reference direction for the embedded coding-agent experience and architecture where feasible. It is an open-source AI coding agent reference, but it must not override project requirements, module boundaries, security rules, or the existing Next.js/.NET/PostgreSQL stack. Use it as inspiration for context-aware coding assistance, agent modes, and controlled tool/context design, not as permission to expose hidden assessment material or collapse frontend/backend/provider boundaries.
+`anomalyco/opencode` is the reference direction for the embedded coding-agent experience and architecture where feasible. It is an open-source AI coding agent reference, but it must not override project requirements, module boundaries, security rules, or the existing Next.js/.NET/EF Core stack with local SQLite and PostgreSQL deployment support. Use it as inspiration for context-aware coding assistance, agent modes, and controlled tool/context design, not as permission to expose hidden assessment material or collapse frontend/backend/provider boundaries.
 
 Reference: <https://github.com/anomalyco/opencode>
 
@@ -184,7 +190,7 @@ The final AI boundary must enforce these rules:
 
 ## Module Boundary Goals
 
-Module 1, Identity and Assessment Management, owns authentication, RBAC, users, assessments, tasks, test cases, prototype metadata, starter files, attempts, workspace persistence, submissions, results, reports, EF Core, and PostgreSQL-backed state.
+Module 1, Identity and Assessment Management, owns authentication, RBAC, users, assessments, tasks, test cases, prototype metadata, starter files, attempts, workspace persistence, submissions, results, reports, EF Core-backed state, local SQLite startup, and PostgreSQL deployment persistence.
 
 Module 2, Interactive Browser-Based Workspace and Frontend IDE, owns the Next.js UI, student and admin pages, workspace shell, file browser, editor, task navigation, run/submit controls, task preview/verification UI, embedded AI UI, frontend API clients, loading states, and error states.
 
@@ -227,7 +233,8 @@ The implementation is complete only when the platform satisfies the updated `SPE
 - frontend UI extension tasks provide direct browser previews
 - REST API, database, and bug-fix tasks provide appropriate output or test-result views
 - run uses public checks and submit uses hidden tests without hidden-test leakage
-- Python and JavaScript execution are supported through the sandbox architecture
+- Python, JavaScript, TypeScript, HTML/browser-preview, and SQL execution paths
+  are supported where configured through the sandbox architecture
 - administrator reports show per-task results and AI usage metrics
 - embedded AI assistance is available inside the workspace when enabled
 - AI interactions are logged with token counts and assessment/task context

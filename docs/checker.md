@@ -28,6 +28,8 @@ The checker currently supports:
 - Python
 - JavaScript
 - TypeScript for backend grading support where configured
+- HTML/browser-preview tasks through the JavaScript/jsdom grading path
+- SQL tasks through the SQL grading path
 
 ## Inputs
 

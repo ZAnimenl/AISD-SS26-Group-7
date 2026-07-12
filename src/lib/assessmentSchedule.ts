@@ -20,6 +20,32 @@ export function hasAssessmentExpired(expiresAt?: string | null) {
   return Boolean(expiresAt) && new Date(expiresAt!).getTime() <= Date.now();
 }
 
+type ScheduledAssessment = {
+  status: string;
+  attempt_status?: string;
+  starts_at?: string | null;
+  expires_at?: string | null;
+};
+
+export function isAssessmentAvailableNow(assessment: ScheduledAssessment) {
+  return (
+    assessment.status === "active" &&
+    assessment.attempt_status !== "expired" &&
+    hasAssessmentStarted(assessment.starts_at) &&
+    !hasAssessmentExpired(assessment.expires_at)
+  );
+}
+
+export function partitionAssessments<T extends ScheduledAssessment>(assessments: T[]) {
+  return assessments.reduce<{ available: T[]; other: T[] }>(
+    (groups, assessment) => {
+      groups[isAssessmentAvailableNow(assessment) ? "available" : "other"].push(assessment);
+      return groups;
+    },
+    { available: [], other: [] }
+  );
+}
+
 export function formatAssessmentExpiry(expiresAt?: string | null) {
   if (!expiresAt) {
     return "No deadline";

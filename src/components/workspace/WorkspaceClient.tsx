@@ -92,7 +92,7 @@ const AI_ACTION_ICONS: Record<AiInteractionType, SemanticIconName> = {
   debugging: "debugging"
 };
 
-const SANDBOX_UNAVAILABLE_MESSAGE = "Final submit is unavailable because the sandbox grader is not reachable. You can still run public checks to see the runner error in Console.";
+const SANDBOX_UNAVAILABLE_MESSAGE = "Run and final submit are temporarily unavailable while the sandbox grader warms up or is unreachable. Please retry shortly.";
 const MAX_PROBLEM_STATEMENT_WORDS = 150;
 
 function createInitialAiMessages(): AiChatMessage[] {
@@ -472,8 +472,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   const [activeFile, setActiveFile] = useState(initialState.active_file);
   const [code, setCode] = useState(getCodeFromState(initialState, activeQuestion, initialState.selected_language, initialState.active_file));
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [isCreatingFile, setIsCreatingFile] = useState(false);
-  const [newFileDraft, setNewFileDraft] = useState("");
+  const fileCreateScope = `${activeQuestionId}:${language}`;
+  const [fileCreateDraft, setFileCreateDraft] = useState({ scope: "", isCreating: false, fileName: "" });
+  const isCreatingFile = fileCreateDraft.scope === fileCreateScope && fileCreateDraft.isCreating;
+  const newFileDraft = fileCreateDraft.scope === fileCreateScope ? fileCreateDraft.fileName : "";
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<Record<string, RunResult | null>>({});
@@ -524,11 +526,6 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
   useEffect(() => {
     aiMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, aiState]);
-
-  useEffect(() => {
-    setIsCreatingFile(false);
-    setNewFileDraft("");
-  }, [activeQuestionId, language]);
 
   useEffect(() => {
     if (!assessment.ai_enabled || loadedAiTranscriptsRef.current.has(activeQuestionId)) {
@@ -732,13 +729,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
     });
     setActiveFile(normalizedFileName);
     setCode("");
-    setIsCreatingFile(false);
-    setNewFileDraft("");
+    setFileCreateDraft({ scope: fileCreateScope, isCreating: false, fileName: "" });
   }
 
   function cancelWorkspaceFileCreate() {
-    setIsCreatingFile(false);
-    setNewFileDraft("");
+    setFileCreateDraft({ scope: fileCreateScope, isCreating: false, fileName: "" });
   }
 
   function switchLanguage(nextLanguage: Language) {
@@ -815,6 +810,10 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
 
   async function handleRun() {
     if (workspaceFrozen) return;
+    if (!sandboxAvailable) {
+      setError(SANDBOX_UNAVAILABLE_MESSAGE);
+      return;
+    }
     const selectedLanguage = resolveAllowedLanguage(activeQuestion, language);
     const currentState = sanitizeQuestionState(activeQuestion, persistCurrentCode()[activeQuestionId], selectedLanguage);
     await runPublicChecksForState(currentState);
@@ -1343,7 +1342,11 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                 <input
                   className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#07111d] px-2 py-1.5 font-mono text-xs text-white outline-none transition placeholder:text-white/25 focus:border-cyanGlow/60"
                   value={newFileDraft}
-                  onChange={(event) => setNewFileDraft(event.target.value)}
+                  onChange={(event) => setFileCreateDraft({
+                    scope: fileCreateScope,
+                    isCreating: true,
+                    fileName: event.target.value
+                  })}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -1383,7 +1386,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/55 transition hover:border-cyanGlow/50 hover:text-cyanGlow disabled:cursor-not-allowed disabled:opacity-45"
                 onClick={() => {
                   setError(null);
-                  setIsCreatingFile(true);
+                  setFileCreateDraft({ scope: fileCreateScope, isCreating: true, fileName: "" });
                 }}
                 disabled={workspaceFrozen}
                 title="New file"
@@ -1403,9 +1406,9 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
               options={STUDENT_LANGUAGE_OPTIONS.filter((option) => visibleLanguages.includes(option.value))}
               onChange={switchLanguage}
             />
-            <button className="btn-secondary shrink-0 px-4 py-2" onClick={handleRun} disabled={workspaceFrozen || runState === "running"}>
+            <button className="btn-secondary shrink-0 px-4 py-2" onClick={handleRun} disabled={workspaceFrozen || runState === "running" || !sandboxAvailable}>
               <SemanticIcon name="play" size={16} />
-              {isRunningActiveTask ? "Running..." : "Run"}
+              {isRunningActiveTask ? "Running..." : sandboxAvailable ? "Run" : "Run unavailable"}
             </button>
           </div>
         </div>
@@ -1603,7 +1606,7 @@ function WorkspaceWithTasks({ assessment, workspace, firstQuestion, sandboxAvail
                   language={language}
                   isApplying={workspaceFrozen || agentActionState === "applying"}
                   isRunning={runState === "running"}
-                  canRun
+                  canRun={sandboxAvailable}
                   onExecute={(runAfterApply, eventTimestamp) => void executeAiWorkspaceActions(message, runAfterApply, eventTimestamp)}
                   onReject={(eventTimestamp) => rejectAiSuggestion(message, eventTimestamp)}
                 />

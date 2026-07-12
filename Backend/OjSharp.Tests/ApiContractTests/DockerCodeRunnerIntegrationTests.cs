@@ -1,9 +1,11 @@
+using Backend.Api;
 using Backend.Domain;
 using Backend.Services;
 using Backend.Services.Grading;
 using Docker.DotNet;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 
 namespace OjSharp.Tests.ApiContractTests;
 
@@ -65,6 +67,15 @@ public sealed class DockerCodeRunnerIntegrationTests
         };
     }
 
+    private static TestCase InvokeBrowserPreviewTest(Question question, string selectedLanguage)
+    {
+        var method = typeof(ExecutionEndpoints).GetMethod(
+            "CreateBrowserPreviewTest",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<TestCase>(method!.Invoke(null, [question, selectedLanguage]));
+    }
+
     [Fact]
     public async Task Python_successful_execution_returns_zero_exit_code()
     {
@@ -123,6 +134,91 @@ public sealed class DockerCodeRunnerIntegrationTests
 
         Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
         Assert.False(result.TimedOut);
+    }
+
+    [Fact]
+    public async Task Warm_canonical_browser_preview_with_public_checks_completes_within_ten_seconds()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var files = new CanonicalPrototypeSource()
+            .ApplyCanonicalFiles(new Dictionary<string, Dictionary<string, string>>(), ["html"])["html"];
+        var question = new Question
+        {
+            Id = Guid.NewGuid(),
+            TaskType = TaskTypes.FrontendUiExtension,
+            VerificationMode = VerificationModes.BrowserUiPreview,
+            StarterCodeJson = JsonDocumentSerializer.Serialize(new Dictionary<string, Dictionary<string, string>>
+            {
+                ["html"] = files
+            }),
+            VerificationMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["preview_entry"] = "index.html"
+            })
+        };
+        var previewCheck = InvokeBrowserPreviewTest(question, "html");
+        var publicChecks = new[]
+        {
+            CreateTestCase(string.Empty, "test('todo heading is visible', () => expect(document.querySelector('h1')?.textContent).toContain('Todo'));\n"),
+            CreateTestCase(string.Empty, "test('todo form is visible', () => expect(document.querySelector('#todo-form')).not.toBeNull());\n")
+        };
+        var runner = new DockerCodeRunner();
+        await runner.RunAsync(files, "html", previewCheck, CancellationToken.None);
+
+        var service = new CodeEvaluationService(runner);
+        var checks = new[] { previewCheck }.Concat(publicChecks).ToArray();
+        var stopwatch = Stopwatch.StartNew();
+
+        var result = await service.EvaluateAsync(
+            Guid.NewGuid(),
+            checks,
+            files,
+            "html",
+            CancellationToken.None);
+
+        stopwatch.Stop();
+        Assert.Equal(ExecutionStatuses.Passed, result.Status);
+        Assert.All(result.TestResults, item => Assert.True(item.Passed));
+        Assert.Contains("<!doctype html", result.TestResults[0].Output, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+            $"Warm canonical preview evaluation took {stopwatch.Elapsed.TotalSeconds:F3} seconds.");
+    }
+
+    [Fact]
+    public async Task Sandbox_check_cannot_read_a_sibling_workspace_directory()
+    {
+        if (!IsDockerAvailable())
+        {
+            return;
+        }
+
+        var workspace = new GradingWorkspace();
+        var sentinelName = $"sibling-secret-{Guid.NewGuid():N}";
+        var sentinelDirectory = Path.Combine(workspace.HostRoot, sentinelName);
+        Directory.CreateDirectory(sentinelDirectory);
+        await File.WriteAllTextAsync(Path.Combine(sentinelDirectory, "hidden.txt"), "must remain isolated");
+        try
+        {
+            var runner = new DockerCodeRunner();
+            var result = await runner.RunAsync(
+                new Dictionary<string, string> { ["solution.js"] = "module.exports = {};\n" },
+                "javascript",
+                CreateTestCase(
+                    string.Empty,
+                    $"const fs = require('fs'); test('sibling workspace is hidden', () => expect(fs.existsSync('/workspace/../{sentinelName}/hidden.txt')).toBe(false));\n"),
+                CancellationToken.None);
+
+            Assert.True(result.ExitCode == 0, result.Stderr ?? result.Stdout);
+        }
+        finally
+        {
+            Directory.Delete(sentinelDirectory, true);
+        }
     }
 
     [Fact]

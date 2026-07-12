@@ -28,7 +28,9 @@
 
 ## Constraints
 
-- The first student-facing language scope is Python and JavaScript.
+- Python and JavaScript are the default general-purpose student languages.
+  The current platform also exposes TypeScript, HTML, and SQL for task-specific
+  flows when the assessment and grading path constrain those languages.
 - Hidden tests and grading details must remain protected.
 - Frontend, backend, sandbox, and AI provider responsibilities must remain
   separated.

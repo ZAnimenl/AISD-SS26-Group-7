@@ -11,7 +11,10 @@ and reporting.
 - Students and administrators authenticate before protected access.
 - Administrators create, edit, archive, and review assessments.
 - Assessments contain practical tasks with task type, difficulty, supported
-  languages, starter files, verification mode, and grading configuration.
+  languages, starter files, verification mode, and grading configuration. The
+  current supported language values are `python`, `javascript`, `typescript`,
+  `html`, and `sql`, with task-specific constraints controlling what a student
+  can select.
 - Students open an assessment, edit files, run public checks, use embedded AI
   assistance when enabled, and submit final work.
 - Submissions receive a `0-100` Functional Score through sandboxed execution.
@@ -44,6 +47,8 @@ and reporting.
 - Other task types use appropriate verification output such as API responses,
   database result tables, automated tests, or regression tests.
 - The frontend must not send a real `session_id` or `attempt_id`.
+- Authentication must support concurrent administrator and student accounts in
+  separate browser windows without one window's logout clearing the other.
 - Student-facing surfaces must not expose hidden tests, hidden expected outputs,
   grading implementation, or administrator-only notes.
 - AI-generated drafts must be administrator-reviewed before publication.

@@ -2,7 +2,9 @@
 
 ## Status Note
 
-This document is the active frontend/backend API contract and alignment reference.
+This document is the active frontend/backend API contract and alignment
+reference. It was reconciled with the current Next.js API client and ASP.NET
+minimal API routes on 2026-07-09.
 
 It includes first frontend-only MVP decisions because the project started with mock UI work. For current backend-connected tasks, do not apply the first-MVP "mock only" rules blindly. Instead:
 
@@ -37,14 +39,28 @@ These decisions remove ambiguity for the first frontend-only MVP. For backend-co
 - Routing: use Next.js file-based routes when using Next.js. Do not add `react-router-dom` to a Next.js app.
 - Data source for frontend-only work: mock data may be used, and mock objects should match the API response shapes in this document.
 - API behavior for backend-connected work: call the real backend through the existing frontend API client. Do not invent endpoints; report mismatches.
-- Authentication: mock role selection only for the first visual MVP. Future backend auth should identify the current user from JWT or another secure token; frontend should not manually manage user identity.
-- Student languages: Python and JavaScript only. Do not show TypeScript as a student submission language in the first MVP.
-- Workspace scope: single-file UI for the first MVP, shaped so it can later evolve into the `files` object contract. Workspace data is scoped by authenticated user + assessment_id + question_id; the backend owns and resolves the active attempt internally.
-- Run behavior: mock public/sample test output only. Run does not affect score.
-- Submit behavior: mock final result modal. Do not execute hidden tests. Student UI may show hidden test summary counts only, never hidden inputs or expected outputs.
+- Authentication: the current implementation uses backend-issued Bearer tokens
+  stored by the frontend API client. The legacy mock role selector is historical
+  only.
+- Student languages: current config advertises `python`, `javascript`,
+  `typescript`, `html`, and `sql`. General code tasks default to Python and
+  JavaScript; frontend tasks constrain to HTML, and database tasks constrain to
+  SQL.
+- Workspace scope: the current UI and API use a multi-file `files` object per
+  question. Workspace data is scoped by authenticated user + assessment_id +
+  question_id; the backend owns and resolves the active attempt internally.
+- Run behavior: current run calls the real backend execution endpoint with the
+  selected language and visible file map. Public checks do not affect score.
+- Submit behavior: current submit calls the real backend, freezes submitted
+  code, evaluates final work, and may route AI-enabled submissions into the
+  timed reflection workflow. Student UI may show hidden test summary counts
+  only, never hidden inputs or expected outputs.
 - AI behavior: the workspace includes an embedded AI agent. Do not call external AI APIs from the frontend. The backend proxies all AI requests and tracks token usage.
 - Admin scope: include visual pages for dashboard, assessments, assessment create/edit, question/test-case editing, report list, and report detail. Keep all changes in local mock state only.
-- Out of scope for first Module 2 MVP: `/register`, `/admin/users`, backend routes, database logic, sandbox execution, grading engine, real AI provider calls, and report aggregation logic.
+- Historical first-MVP out-of-scope items such as `/register`, `/admin/users`,
+  backend routes, sandbox execution, grading, AI provider calls, and report
+  aggregation are now implemented or partially implemented. Inspect current
+  code before treating any MVP-era exclusion as still true.
 
 ---
 
@@ -98,7 +114,14 @@ INTERNAL_ERROR
 | P0 | POST | `/api/v1/auth/login` | Login page |
 | P0 | GET | `/api/v1/auth/me` | Protected route guard, current user display |
 | P0 | POST | `/api/v1/auth/logout` | Logout button |
-| P1 | POST | `/api/v1/auth/register` | Student self-registration, if enabled |
+| P0 | POST | `/api/v1/auth/register/start` | Begin code-based student registration |
+| P0 | POST | `/api/v1/auth/register/verify-code` | Validate the six-digit registration code |
+| P0 | POST | `/api/v1/auth/register/complete` | Create the student account and sign in |
+| P0 | POST | `/api/v1/auth/register/resend-code` | Resend a registration verification code |
+| P0 | POST | `/api/v1/auth/forgot-password` | Issue a temporary password for email-password accounts |
+| P0 | POST | `/api/v1/auth/change-password` | Change a temporary or current password |
+| P1 | GET | `/api/v1/auth/google/start` | Start Google OAuth |
+| P1 | GET | `/api/v1/auth/google/callback` | Backend OAuth callback that redirects to frontend callback |
 | P2 | POST | `/api/v1/admin/users` | Admin creates/invites users |
 | P2 | GET | `/api/v1/admin/users` | Admin user management page |
 | P2 | PUT | `/api/v1/admin/users/{user_id}` | Admin updates user role/status |
@@ -106,14 +129,22 @@ INTERNAL_ERROR
 
 ### Auth decisions to confirm
 
-- Future backend decision: Auth method, HttpOnly cookie or Bearer token? For Module 2 MVP, use mock role selection only.
+- Current backend decision: Bearer token auth. The frontend stores the token and
+  sends `Authorization: Bearer ...` through `src/lib/api/index.ts`.
 - MVP role values for UI: `student`, `administrator`.
-- Student self-registration is out of scope for the first Module 2 visual MVP.
+- Student self-registration uses the three-step code flow:
+  `register/start`, `register/verify-code`, `register/complete`, with
+  `register/resend-code` for retry.
 - Admin self-registration is out of scope for the MVP. Future backend behavior should not allow public admin self-registration.
 - Future backend decision: first admin should be created by seed/setup, not by public registration.
-- MVP decision: mock role guard redirects students away from admin pages and administrators away from student pages; real authorization remains backend work.
+- Current decision: route guards use stored Bearer-token user state and refresh
+  `/auth/me` where needed; backend authorization remains authoritative for
+  every protected API.
 
-### Frontend TODO example
+### Historical frontend TODO example
+
+Use this style only when a surface is deliberately frontend-only or explicitly
+not yet connected. Current connected pages should call `src/lib/api/index.ts`.
 
 ```ts
 // TODO(API): POST /api/v1/auth/login
@@ -267,8 +298,10 @@ Student-facing assessment context must never return:
 
 - Are problem statements Markdown?
 - Are starter codes stored per language?
-- MVP supported student languages: `python`, `javascript`.
-- TypeScript is not a first-MVP student submission language. It may be considered later.
+- Current supported language values: `python`, `javascript`, `typescript`,
+  `html`, and `sql`. The frontend normalizes aliases such as `py`, `js`, and
+  `ts`; task type defaults constrain frontend UI tasks to HTML and database
+  tasks to SQL.
 - Are public test cases visible to students?
 - Are hidden test cases visible only to admins?
 - What exact input/output format should test cases use?
@@ -352,7 +385,9 @@ Workspace APIs are assessment-scoped. The backend uses JWT/auth context to ident
 
 ### Workspace decisions
 
-- MVP decision: single-file UI, with data shaped around the `files` object for future extension.
+- Current decision: multi-file workspace state is active. Each question stores
+  selected language, active file, file metadata/content, last saved timestamp,
+  and version.
 - Autosave unit: authenticated user + assessment + question.
 - MVP decision: autosave indicator simulates a 1000-1500ms debounce after typing stops.
 - How to handle version conflicts?
@@ -373,7 +408,9 @@ Request body:
 ```json
 {
   "selected_language": "python",
-  "active_file_content": "def solve(arr):\n    return sum(arr)\n"
+  "files": {
+    "solution.py": "def solve(arr):\n    return sum(arr)\n"
+  }
 }
 ```
 
@@ -426,9 +463,8 @@ internal_error
 
 ## 10. Submission APIs
 
-The automatic AI Usage Score and timed reflection entries below are the target
-contract approved for future implementation. They are not claims about the
-current runtime.
+The automatic AI Usage Score and timed reflection entries below describe the
+current implemented contract for AI-enabled submissions.
 
 | Priority | Method | Endpoint | Frontend Use |
 |---|---|---|---|
@@ -509,7 +545,12 @@ saved draft, including an empty draft.
   "interaction_type": "code_suggestion",
   "message": "How should I structure this endpoint?",
   "selected_language": "python",
-  "active_file_content": "from flask import Flask\napp = Flask(__name__)\n"
+  "active_file_name": "solution.py",
+  "active_file_content": "from flask import Flask\napp = Flask(__name__)\n",
+  "visible_files": {
+    "solution.py": "from flask import Flask\napp = Flask(__name__)\n"
+  },
+  "last_run_result": null
 }
 ```
 
@@ -630,7 +671,7 @@ debugging
         "average_tokens_per_interaction": 430,
         "main_semantic_tags": ["code_suggestion", "debugging"],
         "grading_status": "completed",
-        "rubric_version": "ai-usage-v1",
+        "rubric_version": "ai-usage-v2",
         "criteria": {
           "prompt_quality_and_context": 24,
           "behavioral_efficiency": 22,
@@ -676,11 +717,15 @@ reflection, and AI grading details.
   "features": {
     "registration_enabled": true,
     "embedded_ai_agent_enabled": true,
+    "ai_chat_enabled": true,
+    "ai_inline_completion_enabled": false,
     "token_tracking_enabled": true,
-    "multi_file_workspace_enabled": false,
+    "multi_file_workspace_enabled": true,
     "real_sandbox_enabled": false
   },
-  "supported_languages": ["python", "javascript"]
+  "supported_languages": ["python", "javascript", "typescript", "html", "sql"],
+  "auth_method": "bearer_token",
+  "roles": ["student", "administrator"]
 }
 ```
 
@@ -693,7 +738,10 @@ reflection, and AI grading details.
 | Page | APIs |
 |---|---|
 | `/login` | `POST /api/v1/auth/login` |
-| `/register` | `POST /api/v1/auth/register` |
+| `/register` | `POST /api/v1/auth/register/start`, `POST /api/v1/auth/register/verify-code`, `POST /api/v1/auth/register/complete`, `POST /api/v1/auth/register/resend-code` |
+| `/forgot-password` | `POST /api/v1/auth/forgot-password` |
+| `/change-password` | `POST /api/v1/auth/change-password` |
+| `/auth/google/callback` | frontend consumes token redirected from `GET /api/v1/auth/google/callback` |
 | Protected layout | `GET /api/v1/auth/me` |
 | Logout button | `POST /api/v1/auth/logout` |
 
@@ -757,7 +805,13 @@ GET  /api/v1/reports/aggregate/{assessment_id}
 ### P1: Needed for complete MVP
 
 ```text
-POST /api/v1/auth/register
+POST /api/v1/auth/register/start
+POST /api/v1/auth/register/verify-code
+POST /api/v1/auth/register/complete
+POST /api/v1/auth/register/resend-code
+POST /api/v1/auth/forgot-password
+POST /api/v1/auth/change-password
+GET  /api/v1/auth/google/start
 GET  /api/v1/student/results
 
 POST /api/v1/admin/assessments
@@ -819,7 +873,11 @@ GET    /api/v1/executions/{execution_id}
 
 ---
 
-## 17. Recommended Mock Data Files
+## 17. Historical Mock Data Files
+
+These paths were useful during the first frontend-only MVP. Current
+backend-connected surfaces should call the real API client instead of adding
+runtime mock imports.
 
 ```text
 src/mocks/auth.mock.ts
@@ -835,7 +893,11 @@ Mock data should match the planned real API response shapes.
 
 ---
 
-## 18. Message to Backend Engineer
+## 18. Historical Message to Backend Engineer
+
+This was the first-MVP alignment message. It remains here as project history;
+for current integration work, inspect the implemented routes and API client
+instead of assuming the backend is still absent.
 
 ```text
 I am preparing the frontend UI first. I will build visual pages with mock data and leave TODO(API) comments where backend calls will be inserted later.

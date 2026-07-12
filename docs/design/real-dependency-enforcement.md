@@ -76,5 +76,7 @@ Runtime paths must not use hardcoded demo data, mock AI responses, static execut
 - LLM draft generation never labels template content as LLM-generated.
 - Sandbox-unavailable workspace state disables Run and Submit, and any sandbox-unavailable execution request returns a dependency error instead of static pass/fail results.
 - Browser preview renders only sandbox-produced HTML and otherwise shows that no real preview output is available.
-- Login UI does not prefill demo credentials or display seed/demo credential values.
+- Production login UI does not prefill demo credentials or display seed/demo
+  credential values. Local development may expose the implemented
+  development-only quick-fill action for the seeded administrator.
 - Production frontend requests require `NEXT_PUBLIC_API_BASE_URL` instead of falling back to localhost.

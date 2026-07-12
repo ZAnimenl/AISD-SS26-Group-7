@@ -79,11 +79,19 @@
 - Local development login exposes the seeded administrator credentials through a
   development-only quick fill action; auth storage is cleared on backend 401 or
   logout, not on login page mount or non-auth data errors.
+- Frontend bearer tokens and normalized users are stored in window-scoped
+  `sessionStorage`, allowing separate administrator and student windows. Login,
+  registration, Google callback, logout, and HTTP 401 handling affect only the
+  current window. See `docs/design/window-scoped-authentication.md`.
 - Backend startup requires an explicit database connection string and configured
   seed administrator credentials in every environment.
 - Student code is never executed in frontend JavaScript or normal backend
   request handlers.
-- Secrets remain out of tracked files.
+- Operational secrets should remain out of tracked files. The current private
+  course checkout still contains dev-only Google OAuth and SMTP values in
+  `Backend/Backend/appsettings.Development.json`; rotate/remove them before
+  public release and prefer environment variables, `.env.local`, user-secrets,
+  or hosting secret managers.
 
 ## AI-Enabled Submission Requirements
 
@@ -117,6 +125,11 @@
   AI Usage Score.
 
 ## Verification Requirements
+
+Sandbox execution follows `docs/design/sandbox-run-latency.md`: grader image
+readiness is coalesced, student requests use a bounded readiness wait, and each
+check runs in a resource-limited ephemeral container that mounts only its own
+workspace and stages execution onto container-local storage.
 
 - Frontend changes run typecheck and build at minimum.
 - Frontend dependency or tooling changes also run lint and root `npm audit`.

@@ -15,6 +15,7 @@ public static class SystemEndpoints
 
         api.MapGet("/config", async (
             DockerRuntimeProbe dockerRuntimeProbe,
+            DockerGraderContainer graderContainer,
             CancellationToken cancellationToken) =>
         {
             var sandboxStatus = await dockerRuntimeProbe.CheckAsync(cancellationToken);
@@ -28,7 +29,7 @@ public static class SystemEndpoints
                     ai_inline_completion_enabled = false,
                     token_tracking_enabled = true,
                     multi_file_workspace_enabled = true,
-                    real_sandbox_enabled = sandboxStatus.IsAvailable
+                    real_sandbox_enabled = sandboxStatus.IsAvailable && graderContainer.IsReady
                 },
                 supported_languages = new[] { "python", "javascript", "typescript", "html", "sql" },
                 auth_method = "bearer_token",

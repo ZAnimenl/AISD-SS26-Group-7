@@ -13,7 +13,7 @@ export default function WorkspacePage() {
   const assessmentId = params.assessmentId;
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
-  const [sandboxAvailable, setSandboxAvailable] = useState(true);
+  const [sandboxAvailable, setSandboxAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,10 +51,9 @@ export default function WorkspacePage() {
       setError(null);
       try {
         await startAssessment(assessmentId);
-        const [nextAssessment, nextWorkspace, systemConfig] = await Promise.all([
+        const [nextAssessment, nextWorkspace] = await Promise.all([
           getWorkspaceContext(assessmentId),
-          getWorkspace(assessmentId),
-          getSystemConfig()
+          getWorkspace(assessmentId)
         ]);
         if (cancelled) {
           return;
@@ -62,11 +61,7 @@ export default function WorkspacePage() {
 
         setAssessment(nextAssessment);
         setWorkspace(nextWorkspace);
-        const isSandboxAvailable = systemConfig.features.real_sandbox_enabled;
-        setSandboxAvailable(isSandboxAvailable);
-        if (!isSandboxAvailable) {
-          scheduleSandboxRefresh(20);
-        }
+        void refreshSandboxAvailability(20);
       } catch (exception) {
         if (cancelled) {
           return;

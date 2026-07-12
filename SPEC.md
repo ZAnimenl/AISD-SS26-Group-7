@@ -62,7 +62,9 @@ This document defines the requirements for the system in a structured, testable 
 ## 3. Goals
 
 - Provide a realistic AI-assisted coding assessment environment using practical development tasks.
-- Support browser-based coding for at least Python and JavaScript/TypeScript.
+- Support browser-based coding for Python, JavaScript/TypeScript, and
+  task-specific HTML and SQL work where the assessment constrains those
+  languages.
 - Allow administrators to create and manage assessments with practical tasks (not algorithmic puzzles), preferably based on a shared runnable prototype.
 - Provide an embedded AI agent in the workspace instead of separate chat or hint-level interactions.
 - Track and evaluate AI token usage and efficiency during assessments.
@@ -112,7 +114,9 @@ As a platform operator, I want student code to run in an isolated sandbox so tha
 
 ### US-04 Multi-Language Support
 
-As a student, I want to solve tasks in supported languages that support at least Python and JavaScript/TypeScript so that the platform matches common assessment needs.
+As a student, I want to solve tasks in supported languages including Python,
+JavaScript/TypeScript, HTML, and SQL where configured, so that the platform
+matches practical assessment needs across code, UI, and database tasks.
 
 ### US-05 Embedded AI Agent
 
@@ -250,7 +254,10 @@ As an administrator, I want to select a task type and optionally use an LLM to g
 - **REQ-48** The system shall support Python for code editing and execution.
 - **REQ-49** The system shall support JavaScript and/or TypeScript for code editing and execution.
 - **REQ-50** Where a task restricts allowed languages, the system shall enforce those restrictions during submission.
-- **REQ-51** The first student-facing implementation shall support Python and JavaScript as student submission languages.
+- **REQ-51** The first student-facing implementation shall support Python and
+  JavaScript as general-purpose defaults and shall expose task-constrained
+  TypeScript, HTML, and SQL flows where the backend/frontend configuration and
+  grading path support them.
 
 ### 7.10 Automated Evaluation
 
@@ -348,7 +355,9 @@ Terminology clarification: older architecture material may use `session_id` for 
 ## 9. Constraints
 
 - The system must support at least student and administrator roles.
-- The system must support Python and JavaScript as student coding languages in the first implementation.
+- The system must support Python and JavaScript as general-purpose student
+  coding languages in the first implementation, with TypeScript, HTML, and SQL
+  available for task-specific flows when configured by the assessment.
 - The full system must provide sandboxed code execution.
 - The system must provide performance reporting for administrators.
 - Tasks must be practical development tasks, not algorithmic puzzles.
