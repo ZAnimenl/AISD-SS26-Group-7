@@ -328,7 +328,19 @@ internal sealed class GradingTestFileFactory
                 if (globalThis.window) {
                   globalThis.window.setTimeout = ojSharpSafeSetTimeout;
                 }
-                {{safeTestCode}}
+                // The generated snippet frequently uses top-level `await` — e.g.
+                //     await new Promise(r => setTimeout(r, 0));
+                // Wrap it in an async IIFE so the whole file parses even when the
+                // enclosing test callback is not async. Errors surface through
+                // done(); the safety timeout still fires as a hang backstop.
+                (async () => {
+                  try {
+                    {{safeTestCode}}
+                    done();
+                  } catch (error) {
+                    done(error);
+                  }
+                })();
                 ojSharpSetTimeout(() => done(), 750);
               });
               """;
@@ -399,6 +411,23 @@ internal sealed class GradingTestFileFactory
             '#new-todo-description': '#todo-description',
             '#add-todo-btn': '#todo-form button[type="submit"], button[type="submit"]'
           };
+          // Stub cache: keeps auto-created placeholder elements around so
+          // repeated lookups for the same missing #id return the same node
+          // (mutations survive across app.js re-renders inside a test).
+          const ojSharpIdStubs = new Map();
+          const ojSharpEnsureIdStub = (id) => {
+            if (ojSharpIdStubs.has(id)) {
+              return ojSharpIdStubs.get(id);
+            }
+            const stub = document.createElement('span');
+            stub.id = id;
+            stub.hidden = true;
+            stub.setAttribute('data-ojsharp-stub', 'true');
+            (document.body || document.documentElement).appendChild(stub);
+            ojSharpIdStubs.set(id, stub);
+            return stub;
+          };
+
           document.getElementById = (id) => {
             const direct = ojSharpGetElementById(id);
             if (direct) {
@@ -410,11 +439,31 @@ internal sealed class GradingTestFileFactory
               'add-todo-btn': '#todo-form button[type="submit"], button[type="submit"]'
             };
             const selector = aliases[id];
-            return selector ? document.querySelector(selector) : null;
+            if (selector) {
+              const aliased = ojSharpQuerySelector(selector);
+              if (aliased) return aliased;
+            }
+            // Starter code sometimes calls render() at module-load time and
+            // touches ids that only appear after user interaction. Return a
+            // hidden placeholder so `.textContent = ...` / `.hidden = ...`
+            // do not crash the require call — real tests that assert on the
+            // element still fail meaningfully because the stub is empty.
+            return typeof id === 'string' && id ? ojSharpEnsureIdStub(id) : null;
           };
-          document.querySelector = (selector) =>
-            ojSharpQuerySelector(selector)
-              ?? (ojSharpSelectorAliases[selector] ? ojSharpQuerySelector(ojSharpSelectorAliases[selector]) : null);
+          document.querySelector = (selector) => {
+            const direct = ojSharpQuerySelector(selector);
+            if (direct) return direct;
+            if (ojSharpSelectorAliases[selector]) {
+              const aliased = ojSharpQuerySelector(ojSharpSelectorAliases[selector]);
+              if (aliased) return aliased;
+            }
+            // Same rationale as document.getElementById: keep module-load
+            // renders alive by handing out a stub for missing #id selectors.
+            if (typeof selector === 'string' && /^#[A-Za-z][\w-]*$/.test(selector)) {
+              return ojSharpEnsureIdStub(selector.slice(1));
+            }
+            return null;
+          };
         })();
 
         {{normalizedTestCode}}

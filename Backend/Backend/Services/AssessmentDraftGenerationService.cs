@@ -18,7 +18,12 @@ public sealed class AiDraftGenerationException : Exception
 public sealed class AssessmentDraftGenerationService
 {
     private const int DraftMaxTokens = 16384;
-    private const int MinimumStarterFilesPerLanguage = 3;
+    // 2 is the natural floor: a Frontend UI task is index.html + app.js,
+    // a REST API task is server.js + a data helper, a Bug-fix task is the
+    // buggy module + a reference file. Requiring 3 forced the LLM to invent
+    // a filler file (usually an unused stylesheet) or fail generation
+    // outright, which is what admins were hitting.
+    private const int MinimumStarterFilesPerLanguage = 2;
     private const int MinimumTaskDescriptionLength = 300;
     private const int MaximumTaskDescriptionWords = 150;
     private const int MinimumPublicTestCases = 2;
