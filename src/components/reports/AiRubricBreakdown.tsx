@@ -43,6 +43,16 @@ function criterionEvidence(details: Record<string, unknown>, aliases: string[], 
     : details.evidence == null
       ? []
       : [details.evidence];
+  const keyedMatches = evidence.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    return Object.entries(item as Record<string, unknown>).flatMap(([key, value]) =>
+      aliases.some((alias) => normalizeKey(key).includes(alias))
+        && typeof value === "string"
+        && value.trim()
+        ? [value.trim()]
+        : []
+    );
+  });
   const matches = evidence.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const record = item as Record<string, unknown>;
@@ -58,7 +68,7 @@ function criterionEvidence(details: Record<string, unknown>, aliases: string[], 
     return text ? [text] : [];
   });
 
-  const explicitSummary = Array.from(new Set(matches)).slice(0, 2).join(" ");
+  const explicitSummary = Array.from(new Set([...keyedMatches, ...matches])).slice(0, 2).join(" ");
   if (explicitSummary) return explicitSummary;
 
   const sharedSegments = evidence
@@ -70,8 +80,12 @@ function criterionEvidence(details: Record<string, unknown>, aliases: string[], 
 }
 
 function concise(value: string) {
-  if (value.length <= 260) return value;
-  return `${value.slice(0, 257).trimEnd()}...`;
+  const maximumLength = 150;
+  if (value.length <= maximumLength) return value;
+
+  const shortened = value.slice(0, maximumLength - 3);
+  const lastSpace = shortened.lastIndexOf(" ");
+  return `${shortened.slice(0, lastSpace > 0 ? lastSpace : undefined).trimEnd()}...`;
 }
 
 function readableSegment(value: string) {
@@ -104,7 +118,7 @@ const criteria: RubricCriterion[] = [
     key: "critical_evaluation_and_adaptation",
     label: "Critical evaluation and adaptation",
     maximum: 20,
-    aliases: ["critical_evaluation_and_adaptation", "critical_evaluation", "adaptation"],
+    aliases: ["critical_evaluation_and_adaptation", "critical_evaluation_before_deduction", "critical_evaluation", "adaptation"],
     keywords: ["execution", "code_change", "apply", "verif", "test", "critical", "adapt"],
     score: (details) => numericCriterion(details, "critical_evaluation_and_adaptation")
   },
