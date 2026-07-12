@@ -1,6 +1,12 @@
+"use client";
+
+import { useState } from "react";
+
 interface AiRubricBreakdownProps {
   details?: Record<string, unknown>;
 }
+
+const summaryPreviewLength = 150;
 
 interface RubricCriterion {
   key: string;
@@ -80,10 +86,9 @@ function criterionEvidence(details: Record<string, unknown>, aliases: string[], 
 }
 
 function concise(value: string) {
-  const maximumLength = 150;
-  if (value.length <= maximumLength) return value;
+  if (value.length <= summaryPreviewLength) return value;
 
-  const shortened = value.slice(0, maximumLength - 3);
+  const shortened = value.slice(0, summaryPreviewLength - 3);
   const lastSpace = shortened.lastIndexOf(" ");
   return `${shortened.slice(0, lastSpace > 0 ? lastSpace : undefined).trimEnd()}...`;
 }
@@ -133,6 +138,20 @@ const criteria: RubricCriterion[] = [
 ];
 
 export function AiRubricBreakdown({ details = {} }: AiRubricBreakdownProps) {
+  const [expandedCriteria, setExpandedCriteria] = useState<Set<string>>(() => new Set());
+
+  function toggleCriterion(key: string) {
+    setExpandedCriteria((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
   return (
     <section className="relative mt-5 rounded-2xl border border-white/10 bg-black/20 p-5">
       <p className="text-xs uppercase tracking-[0.14em] text-purpleGlow/80">AI scoring</p>
@@ -141,6 +160,8 @@ export function AiRubricBreakdown({ details = {} }: AiRubricBreakdownProps) {
         {criteria.map((criterion) => {
           const score = criterion.score(details);
           const summary = criterionEvidence(details, criterion.aliases, criterion.keywords);
+          const isExpanded = expandedCriteria.has(criterion.key);
+          const canExpand = summary.length > summaryPreviewLength;
           return (
             <article key={criterion.key} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
               <div className="flex items-start justify-between gap-4">
@@ -151,11 +172,21 @@ export function AiRubricBreakdown({ details = {} }: AiRubricBreakdownProps) {
               </div>
               <p className="mt-2 max-w-4xl text-sm leading-6 text-white/55">
                 {summary
-                  ? concise(summary)
+                  ? isExpanded ? summary : concise(summary)
                   : score == null
                     ? "This criterion has not been scored yet."
                     : "No criterion-specific narrative was returned; this score is based on the recorded assessment evidence."}
               </p>
+              {canExpand ? (
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-medium text-cyanGlow transition hover:text-cyanGlow/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyanGlow/60"
+                  aria-expanded={isExpanded}
+                  onClick={() => toggleCriterion(criterion.key)}
+                >
+                  {isExpanded ? "Show less" : "Read more"}
+                </button>
+              ) : null}
             </article>
           );
         })}
