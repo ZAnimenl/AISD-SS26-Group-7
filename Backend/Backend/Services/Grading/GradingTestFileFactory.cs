@@ -337,8 +337,15 @@ internal sealed class GradingTestFileFactory
         (() => {
           const fs = require('fs');
           if (fs.existsSync('index.html')) {
+            // Strip EVERY <script> tag — inline and external — before jsdom
+            // parses the file. Inline scripts otherwise execute synchronously
+            // during document.write() and can call render() before app.js has
+            // a chance to load, or issue fetches that never resolve inside the
+            // sandbox. External <link> stylesheets are stripped for the same
+            // reason (jsdom cannot fetch them and logs a warning per request).
             const html = fs.readFileSync('index.html', 'utf8')
-              .replace(/<script\s+[^>]*src=["'][^"']+["'][^>]*>\s*<\/script>/gi, '');
+              .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<link\b[^>]*>/gi, '');
             document.open();
             document.write(html);
             document.close();

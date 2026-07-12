@@ -2,7 +2,9 @@ namespace Backend.Services.Grading;
 
 internal sealed class GraderCommandFactory
 {
-    private const string ExecutionTimeout = "8s";
+    // 15s gives HTML tests room to load index.html, wire jsdom, spin up mock
+    // WebSockets, and run assertions without racing the killer. Previously 8s.
+    private const string ExecutionTimeout = "15s";
 
     public string[] Create(GradingLanguage language)
     {
