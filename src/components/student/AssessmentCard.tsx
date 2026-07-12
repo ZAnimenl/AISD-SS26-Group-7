@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarClock, Clock, Eye, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted, isAssessmentAvailableNow } from "@/lib/assessmentSchedule";
+import { effectiveAssessmentStatus, formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted, isAssessmentAvailableNow } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 export function AssessmentCard({ assessment }: { assessment: Assessment }) {
@@ -35,7 +35,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
             <h2 className="text-xl font-semibold text-white">{assessment.title}</h2>
             <p className="mt-2 text-sm leading-6 text-white/55">{assessment.description}</p>
           </div>
-          <StatusBadge status={assessment.attempt_status ?? assessment.status} />
+          <StatusBadge status={assessment.attempt_status ?? effectiveAssessmentStatus(assessment)} />
         </div>
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/50">
           <span className="badge"><Clock size={13} /> {assessment.duration_minutes} min</span>

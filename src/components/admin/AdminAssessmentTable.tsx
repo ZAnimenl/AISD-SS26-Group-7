@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Edit3, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatAssessmentExpiry, formatAssessmentStart } from "@/lib/assessmentSchedule";
+import { effectiveAssessmentStatus, formatAssessmentExpiry, formatAssessmentStart } from "@/lib/assessmentSchedule";
 import type { Assessment } from "@/lib/types";
 
 interface AdminAssessmentTableProps {
@@ -40,7 +40,7 @@ export function AdminAssessmentTable({
               <p className="truncate font-semibold text-white">{assessment.title}</p>
               <p className="truncate text-xs text-white/40">{assessment.description}</p>
             </td>
-            <td className={compact ? "py-4 pr-3" : "py-4"}><StatusBadge status={assessment.status} /></td>
+            <td className={compact ? "py-4 pr-3" : "py-4"}><StatusBadge status={effectiveAssessmentStatus(assessment)} /></td>
             <td className={compact ? "py-4 pr-3 text-white/60" : "py-4 text-white/60"}>{assessment.duration_minutes} min</td>
             <td className={compact ? "py-4 pr-3 text-xs leading-5 text-white/60" : "py-4 text-white/60"}>{formatAssessmentStart(assessment.starts_at)}</td>
             <td className={compact ? "py-4 text-xs leading-5 text-white/60" : "py-4 text-white/60"}>{formatAssessmentExpiry(assessment.expires_at)}</td>

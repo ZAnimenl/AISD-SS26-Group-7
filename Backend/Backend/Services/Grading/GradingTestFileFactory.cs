@@ -576,6 +576,8 @@ internal sealed class GradingTestFileFactory
             Path.Combine(directory, "jest.setup.js"),
             """
             const { TextDecoder, TextEncoder } = require('util');
+            const fs = require('fs');
+            const path = require('path');
 
             global.TextDecoder ??= TextDecoder;
             global.TextEncoder ??= TextEncoder;
@@ -599,6 +601,28 @@ internal sealed class GradingTestFileFactory
               const getContext = () => context;
               Object.defineProperty(getContext, '__ojSharpMock', { value: true });
               HTMLCanvasElement.prototype.getContext = getContext;
+            }
+
+            // Preload index.html into jsdom so browser-preview tests can require app.js
+            // without crashing on document.querySelector(...) at module-load time.
+            // Adds one file read + one innerHTML parse — well under the render budget
+            // and keeps the fast per-check startup unchanged.
+            if (typeof document !== 'undefined' && typeof document.documentElement !== 'undefined') {
+              try {
+                const htmlPath = path.resolve(__dirname, 'index.html');
+                if (fs.existsSync(htmlPath)) {
+                  const raw = fs.readFileSync(htmlPath, 'utf8');
+                  const htmlMatch = raw.match(/<html[^>]*>([\s\S]*?)<\/html>/i);
+                  const inner = htmlMatch ? htmlMatch[1] : raw;
+                  document.documentElement.innerHTML = inner
+                    // Strip external script/link tags jsdom cannot resolve in the sandbox.
+                    .replace(/<script[^>]*\bsrc=[^>]*><\/script>/gi, '')
+                    .replace(/<link[^>]*\brel=["']?stylesheet["']?[^>]*>/gi, '');
+                }
+              } catch (_error) {
+                // A missing or malformed index.html should not block the whole test run;
+                // downstream assertions will surface the real issue with a clearer message.
+              }
             }
             """);
     }
