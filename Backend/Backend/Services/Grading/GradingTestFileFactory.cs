@@ -603,25 +603,29 @@ internal sealed class GradingTestFileFactory
               HTMLCanvasElement.prototype.getContext = getContext;
             }
 
-            // Preload index.html into jsdom so browser-preview tests can require app.js
-            // without crashing on document.querySelector(...) at module-load time.
-            // Adds one file read + one innerHTML parse — well under the render budget
-            // and keeps the fast per-check startup unchanged.
-            if (typeof document !== 'undefined' && typeof document.documentElement !== 'undefined') {
+            // Preload index.html's body markup into jsdom so browser-preview tests
+            // can require app.js without crashing on document.querySelector(...) at
+            // module-load time. We inject only the <body> contents and strip every
+            // <script> and <link> tag — inline scripts included — because otherwise
+            // jsdom executes them synchronously when assigning innerHTML, which can
+            // hang the test with a fetch that never resolves.
+            // Adds one file read plus one innerHTML assignment (~10 ms), safely
+            // under the per-check render budget.
+            if (typeof document !== 'undefined' && document.body) {
               try {
                 const htmlPath = path.resolve(__dirname, 'index.html');
                 if (fs.existsSync(htmlPath)) {
                   const raw = fs.readFileSync(htmlPath, 'utf8');
-                  const htmlMatch = raw.match(/<html[^>]*>([\s\S]*?)<\/html>/i);
-                  const inner = htmlMatch ? htmlMatch[1] : raw;
-                  document.documentElement.innerHTML = inner
-                    // Strip external script/link tags jsdom cannot resolve in the sandbox.
-                    .replace(/<script[^>]*\bsrc=[^>]*><\/script>/gi, '')
-                    .replace(/<link[^>]*\brel=["']?stylesheet["']?[^>]*>/gi, '');
+                  const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+                  const inner = bodyMatch ? bodyMatch[1] : raw;
+                  document.body.innerHTML = inner
+                    .replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<link[^>]*>/gi, '');
                 }
               } catch (_error) {
-                // A missing or malformed index.html should not block the whole test run;
-                // downstream assertions will surface the real issue with a clearer message.
+                // A missing or malformed index.html should not block the whole test
+                // run; downstream assertions will surface the real issue with a
+                // clearer message.
               }
             }
             """);
