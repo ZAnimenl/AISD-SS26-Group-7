@@ -58,6 +58,9 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSingleton<AuthTokenService>();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<PendingRegistrationStore>();
+builder.Services.AddSingleton<RegistrationCompletionCoordinator>();
 builder.Services.AddSingleton<SessionClock>();
 builder.Services.AddSingleton<AssessmentProjectionService>();
 builder.Services.AddSingleton<WorkspaceProjectionService>();

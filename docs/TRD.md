@@ -29,6 +29,11 @@
   identifiers.
 - The backend resolves active attempts from authenticated user context and
   `assessment_id`.
+- Pending registration challenges are short-lived backend state keyed by email.
+  They do not reserve usernames; registration completion rechecks persisted
+  email and username ownership before inserting the user. Pending operations
+  are atomic per email, and completion claims are serialized within the process
+  that owns those pending challenges.
 
 ## Security Requirements
 

@@ -202,7 +202,8 @@
 - After local default administrator sign-in, the administrator dashboard API succeeds under the repository-owned SQLite database.
 - Local SQLite-backed active-attempt checks for start, workspace, run, submit, and AI request flows do not fail on `DateTimeOffset` ordering or expiry comparisons.
 - Authentication state is cleared on backend 401 responses or explicit logout, not merely because the login page mounted or a non-auth data request failed.
-- Registration always shows the six-digit verification code beside the submitted email, including when SMTP delivery is delayed or unavailable; the code can complete the existing verification flow.
+- Registration sends a six-digit verification code by email and exposes it beside the submitted email only as a fallback when SMTP delivery is unavailable; the code can complete the existing verification flow.
+- Abandoning an uncompleted verification challenge does not reserve its requested username. Persisted users still own their usernames, and when pending registrations share a username only the first successful completion creates an account, including under concurrent completion requests and case-insensitive matches.
 - Backend config reports `real_sandbox_enabled=false` when no Docker-compatible runtime is reachable, and the student workspace disables Run and Submit in that state.
 - Sandbox-unavailable executions return `internal_error` instead of task-specific static pass/fail results.
 - Real sandbox verification passes against a Docker-compatible runtime when `DOCKER_HOST` points to the configured runtime socket.

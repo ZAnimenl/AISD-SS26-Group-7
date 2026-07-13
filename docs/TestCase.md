@@ -9,9 +9,21 @@ the active requirements. It does not replace automated test files.
   routes.
 - Students cannot access administrator-only features.
 - Administrators can access assessment management and reports.
-- Starting or resending registration returns a six-digit code that the
-  registration page displays beside the submitted email, whether or not SMTP
-  delivery succeeds.
+- Starting or resending registration sends a six-digit code by email. When SMTP
+  delivery is unavailable, the response supplies the fallback code for display
+  beside the submitted email; successful delivery does not expose the code in
+  the response.
+- Restarting an abandoned registration succeeds for the same normalized email
+  and username. A pending registration also does not block another email from
+  requesting the same username, and neither start creates a user.
+- When two pending registrations request the same username, the first
+  successful completion creates the account and the later completion returns
+  `USERNAME_TAKEN`, including for concurrent completion requests and
+  case-insensitive username matches. A username owned by a persisted user is
+  rejected at start.
+- Concurrent invalid-code requests each consume an attempt and cannot remove or
+  overwrite a newer challenge for the same email. Verification and completion
+  requests enforce the same attempt limit.
 - SMTP settings supplied through environment variables override local settings
   during one-command startup, and TLS is enabled by default for STARTTLS
   providers such as Gmail on port 587.

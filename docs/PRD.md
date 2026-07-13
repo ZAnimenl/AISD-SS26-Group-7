@@ -49,6 +49,8 @@ and reporting.
 - The frontend must not send a real `session_id` or `attempt_id`.
 - Authentication must support concurrent administrator and student accounts in
   separate browser windows without one window's logout clearing the other.
+- An abandoned email-verification challenge must not reserve its requested
+  username; only a completed, persisted account owns a username.
 - Student-facing surfaces must not expose hidden tests, hidden expected outputs,
   grading implementation, or administrator-only notes.
 - AI-generated drafts must be administrator-reviewed before publication.

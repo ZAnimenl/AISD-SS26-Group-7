@@ -14,6 +14,17 @@ feedback, and report review.
 - Administrator routes expose dashboard, assessment management, user management,
   reports, and assessment detail workflows.
 
+## Registration Design
+
+- Registration start and resend keep an expiring email-code challenge without
+  creating a user account.
+- A pending challenge carries the requested username but does not own it.
+  Username ownership begins only when registration completion persists the
+  user, after rechecking the email and username against existing accounts.
+- Multiple pending challenges may request the same username. The first
+  successful completion claims it; later completions receive the existing
+  username-conflict response and create no user.
+
 ## Assessment Authoring Design
 
 - Assessment creation has three explicit stages: Assessment basics, Generate

@@ -17,9 +17,6 @@ public static class AuthEndpoints
     private static readonly ConcurrentDictionary<string, (bool RememberMe, DateTimeOffset CreatedAt)> OAuthStates = new();
     private static readonly TimeSpan OAuthStateLifetime = TimeSpan.FromMinutes(10);
 
-    // Pending registrations keyed by lowercased email until the user completes the code flow.
-    private static readonly ConcurrentDictionary<string, PendingRegistration> PendingRegistrations = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(15);
     private const int MaxCodeAttempts = 5;
 
     public static void Map(RouteGroupBuilder api)
@@ -209,11 +206,12 @@ public static class AuthEndpoints
 
     // ===== Code-based registration =====
 
-    private static async Task<IResult> RegisterStartAsync(
+    internal static async Task<IResult> RegisterStartAsync(
         RegisterStartRequest request,
         OjSharpDbContext dbContext,
         EmailService emailService,
         ILogger<EmailService> logger,
+        PendingRegistrationStore pendingRegistrations,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Email))
@@ -232,7 +230,7 @@ public static class AuthEndpoints
             return ApiResults.Error("VALIDATION_ERROR", "Please enter a valid email address.", StatusCodes.Status400BadRequest);
         }
 
-        CleanExpiredPendingRegistrations();
+        await pendingRegistrations.CleanExpiredAsync(cancellationToken);
 
         var normalizedEmail = request.Email.Trim();
         var lowerEmail = normalizedEmail.ToLowerInvariant();
@@ -245,10 +243,7 @@ public static class AuthEndpoints
                 StatusCodes.Status409Conflict);
         }
 
-        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == lowerUsername, cancellationToken)
-            || PendingRegistrations.Any(pending =>
-                !pending.Key.Equals(lowerEmail, StringComparison.OrdinalIgnoreCase)
-                && pending.Value.Username.Equals(normalizedUsername, StringComparison.OrdinalIgnoreCase)))
+        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == lowerUsername, cancellationToken))
         {
             return ApiResults.Error(
                 "USERNAME_TAKEN",
@@ -257,14 +252,13 @@ public static class AuthEndpoints
         }
 
         var code = GenerateNumericCode(6);
-        var pending = new PendingRegistration(
+        await using var pendingLease = await pendingRegistrations.AcquireAsync(normalizedEmail, cancellationToken)
+            ?? throw new InvalidOperationException("A validated registration email could not be normalized.");
+        var pending = pendingLease.Restart(
             request.FullName.Trim(),
             normalizedUsername,
             normalizedEmail,
-            code,
-            DateTimeOffset.UtcNow.Add(CodeLifetime),
-            Attempts: 0);
-        PendingRegistrations[lowerEmail] = pending;
+            code);
 
         var emailSent = await emailService.SendVerificationCodeAsync(
             pending.Email, pending.FullName, code, cancellationToken);
@@ -280,41 +274,46 @@ public static class AuthEndpoints
             emailSent ? null : code));
     }
 
-    private static IResult RegisterVerifyCodeAsync(
-        RegisterVerifyCodeRequest request)
+    internal static async Task<IResult> RegisterVerifyCodeAsync(
+        RegisterVerifyCodeRequest request,
+        PendingRegistrationStore pendingRegistrations,
+        CancellationToken cancellationToken)
     {
-        var pending = LookupPending(request.Email);
+        await using var pendingLease = await pendingRegistrations.AcquireAsync(request.Email, cancellationToken);
+        var pending = pendingLease?.Pending;
         if (pending is null)
         {
             return ApiResults.Error("NO_PENDING_REGISTRATION", "We can't find a pending registration for this email. Start the registration again.", StatusCodes.Status400BadRequest);
         }
 
-        if (pending.ExpiresAt < DateTimeOffset.UtcNow)
+        if (pendingRegistrations.IsExpired(pending))
         {
-            PendingRegistrations.TryRemove(pending.Email.ToLowerInvariant(), out _);
+            pendingLease!.Remove();
             return ApiResults.Error("CODE_EXPIRED", "Your verification code has expired. Please request a new one.", StatusCodes.Status400BadRequest);
         }
 
         if (pending.Attempts >= MaxCodeAttempts)
         {
-            PendingRegistrations.TryRemove(pending.Email.ToLowerInvariant(), out _);
+            pendingLease!.Remove();
             return ApiResults.Error("TOO_MANY_ATTEMPTS", "Too many incorrect attempts. Please request a new code.", StatusCodes.Status400BadRequest);
         }
 
         if (!FixedTimeEquals(pending.Code, request.Code))
         {
-            PendingRegistrations[pending.Email.ToLowerInvariant()] = pending with { Attempts = pending.Attempts + 1 };
+            pendingLease!.RecordFailedAttempt();
             return ApiResults.Error("INVALID_CODE", "That code is not correct. Please try again.", StatusCodes.Status400BadRequest);
         }
 
         return ApiResults.Success(new { verified = true });
     }
 
-    private static async Task<IResult> RegisterCompleteAsync(
+    internal static async Task<IResult> RegisterCompleteAsync(
         RegisterCompleteRequest request,
         OjSharpDbContext dbContext,
         PasswordHasher passwordHasher,
         AuthTokenService tokenService,
+        PendingRegistrationStore pendingRegistrations,
+        RegistrationCompletionCoordinator completionCoordinator,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
@@ -322,92 +321,99 @@ public static class AuthEndpoints
             return ApiResults.Error("VALIDATION_ERROR", "Password must be at least 6 characters.", StatusCodes.Status400BadRequest);
         }
 
-        var pending = LookupPending(request.Email);
+        await using var pendingLease = await pendingRegistrations.AcquireAsync(request.Email, cancellationToken);
+        var pending = pendingLease?.Pending;
         if (pending is null)
         {
             return ApiResults.Error("NO_PENDING_REGISTRATION", "We can't find a pending registration for this email. Start the registration again.", StatusCodes.Status400BadRequest);
         }
 
-        if (pending.ExpiresAt < DateTimeOffset.UtcNow)
+        if (pendingRegistrations.IsExpired(pending))
         {
-            PendingRegistrations.TryRemove(pending.Email.ToLowerInvariant(), out _);
+            pendingLease!.Remove();
             return ApiResults.Error("CODE_EXPIRED", "Your verification code has expired. Please request a new one.", StatusCodes.Status400BadRequest);
+        }
+
+        if (pending.Attempts >= MaxCodeAttempts)
+        {
+            pendingLease!.Remove();
+            return ApiResults.Error("TOO_MANY_ATTEMPTS", "Too many incorrect attempts. Please request a new code.", StatusCodes.Status400BadRequest);
         }
 
         if (!FixedTimeEquals(pending.Code, request.Code))
         {
+            pendingLease!.RecordFailedAttempt();
             return ApiResults.Error("INVALID_CODE", "That code is not correct.", StatusCodes.Status400BadRequest);
         }
 
-        // Re-check email collision in case someone else registered with the same email meanwhile.
-        var pendingLowerEmail = pending.Email.ToLowerInvariant();
-        if (await dbContext.Users.AnyAsync(user => user.Email.ToLower() == pendingLowerEmail, cancellationToken))
+        return await completionCoordinator.RunAsync<IResult>(async () =>
         {
-            PendingRegistrations.TryRemove(pendingLowerEmail, out _);
-            return ApiResults.Error(
-                "EMAIL_TAKEN",
-                "This email is already registered. Please sign in or use a different email.",
-                StatusCodes.Status409Conflict);
-        }
+            // Re-check ownership while all registration completions in this process are serialized.
+            var pendingLowerEmail = pending.Email.ToLowerInvariant();
+            if (await dbContext.Users.AnyAsync(user => user.Email.ToLower() == pendingLowerEmail, cancellationToken))
+            {
+                pendingLease!.Remove();
+                return ApiResults.Error(
+                    "EMAIL_TAKEN",
+                    "This email is already registered. Please sign in or use a different email.",
+                    StatusCodes.Status409Conflict);
+            }
 
-        var pendingLowerUsername = pending.Username.ToLowerInvariant();
-        if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == pendingLowerUsername, cancellationToken))
-        {
-            PendingRegistrations.TryRemove(pendingLowerEmail, out _);
-            return ApiResults.Error(
-                "USERNAME_TAKEN",
-                "This username is already taken. Please choose a different username.",
-                StatusCodes.Status409Conflict);
-        }
+            var pendingLowerUsername = pending.Username.ToLowerInvariant();
+            if (await dbContext.Users.AnyAsync(user => user.Username.ToLower() == pendingLowerUsername, cancellationToken))
+            {
+                pendingLease!.Remove();
+                return ApiResults.Error(
+                    "USERNAME_TAKEN",
+                    "This username is already taken. Please choose a different username.",
+                    StatusCodes.Status409Conflict);
+            }
 
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            FullName = pending.FullName,
-            Username = pending.Username,
-            Email = pending.Email,
-            PasswordHash = passwordHasher.Hash(request.Password),
-            Role = UserRoles.Student,
-            Status = UserStatuses.Active,
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuthProvider = "email",
-            EmailVerified = true
-        };
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync(cancellationToken);
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                FullName = pending.FullName,
+                Username = pending.Username,
+                Email = pending.Email,
+                PasswordHash = passwordHasher.Hash(request.Password),
+                Role = UserRoles.Student,
+                Status = UserStatuses.Active,
+                CreatedAt = DateTimeOffset.UtcNow,
+                AuthProvider = "email",
+                EmailVerified = true
+            };
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
-        PendingRegistrations.TryRemove(pending.Email.ToLowerInvariant(), out _);
+            pendingLease!.Remove();
 
-        var issued = tokenService.CreateToken(user, request.RememberMe);
-        return ApiResults.Success(new
-        {
-            token = issued.Token,
-            expires_at = issued.ExpiresAt,
-            remember_me = request.RememberMe,
-            user = ToUserDto(user)
-        });
+            var issued = tokenService.CreateToken(user, request.RememberMe);
+            return ApiResults.Success(new
+            {
+                token = issued.Token,
+                expires_at = issued.ExpiresAt,
+                remember_me = request.RememberMe,
+                user = ToUserDto(user)
+            });
+        }, cancellationToken);
     }
 
-    private static async Task<IResult> RegisterResendCodeAsync(
+    internal static async Task<IResult> RegisterResendCodeAsync(
         RegisterResendCodeRequest request,
         EmailService emailService,
         ILogger<EmailService> logger,
+        PendingRegistrationStore pendingRegistrations,
         CancellationToken cancellationToken)
     {
-        var pending = LookupPending(request.Email);
+        await using var pendingLease = await pendingRegistrations.AcquireAsync(request.Email, cancellationToken);
+        var pending = pendingLease?.Pending;
         if (pending is null)
         {
             return ApiResults.Error("NO_PENDING_REGISTRATION", "We can't find a pending registration for this email. Start the registration again.", StatusCodes.Status400BadRequest);
         }
 
         var newCode = GenerateNumericCode(6);
-        var refreshed = pending with
-        {
-            Code = newCode,
-            ExpiresAt = DateTimeOffset.UtcNow.Add(CodeLifetime),
-            Attempts = 0
-        };
-        PendingRegistrations[pending.Email.ToLowerInvariant()] = refreshed;
+        var refreshed = pendingLease!.Refresh(newCode);
 
         var emailSent = await emailService.SendVerificationCodeAsync(
             refreshed.Email, refreshed.FullName, newCode, cancellationToken);
@@ -569,29 +575,6 @@ public static class AuthEndpoints
         }
     }
 
-    private static void CleanExpiredPendingRegistrations()
-    {
-        var now = DateTimeOffset.UtcNow;
-        foreach (var (key, value) in PendingRegistrations)
-        {
-            if (value.ExpiresAt < now)
-            {
-                PendingRegistrations.TryRemove(key, out _);
-            }
-        }
-    }
-
-    private static PendingRegistration? LookupPending(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            return null;
-        }
-        return PendingRegistrations.TryGetValue(email.Trim().ToLowerInvariant(), out var pending)
-            ? pending
-            : null;
-    }
-
     private static string GenerateNumericCode(int digits)
     {
         var number = RandomNumberGenerator.GetInt32((int)Math.Pow(10, digits));
@@ -679,11 +662,4 @@ public static class AuthEndpoints
         return candidate;
     }
 
-    private sealed record PendingRegistration(
-        string FullName,
-        string Username,
-        string Email,
-        string Code,
-        DateTimeOffset ExpiresAt,
-        int Attempts);
 }
