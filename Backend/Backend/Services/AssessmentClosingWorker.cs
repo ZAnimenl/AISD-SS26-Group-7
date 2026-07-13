@@ -4,21 +4,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-/// <summary>Periodically flips active assessments whose ExpiresAt is in the past to the
-/// "expired" status. This keeps the DB state honest so every client (admin table, student
-/// list, downstream reports) sees a consistent status without having to recompute it from
-/// timestamps on every read.</summary>
-public sealed class AssessmentExpirationWorker(
+/// <summary>Periodically closes active assessments whose ExpiresAt is in the past.
+/// This keeps persisted assessment status consistent for every client without requiring
+/// each read path to derive the status from timestamps.</summary>
+public sealed class AssessmentClosingWorker(
     IServiceScopeFactory scopeFactory,
-    ILogger<AssessmentExpirationWorker> logger) : BackgroundService
+    ILogger<AssessmentClosingWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // First tick immediately after startup so a freshly-started server catches up
-        // on anything that expired while it was down; subsequent ticks are throttled.
         try
         {
-            await ExpireDueAssessmentsAsync(stoppingToken);
+            await CloseDueAssessmentsAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -26,7 +23,7 @@ public sealed class AssessmentExpirationWorker(
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Initial assessment expiration sweep failed.");
+            logger.LogWarning(exception, "Initial assessment closing sweep failed.");
         }
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
@@ -35,7 +32,7 @@ public sealed class AssessmentExpirationWorker(
         {
             try
             {
-                await ExpireDueAssessmentsAsync(stoppingToken);
+                await CloseDueAssessmentsAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -43,23 +40,27 @@ public sealed class AssessmentExpirationWorker(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "Assessment expiration worker iteration failed.");
+                logger.LogWarning(exception, "Assessment closing worker iteration failed.");
             }
         }
     }
 
-    private async Task ExpireDueAssessmentsAsync(CancellationToken cancellationToken)
+    private async Task CloseDueAssessmentsAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OjSharpDbContext>();
         var now = DateTimeOffset.UtcNow;
-        var due = await dbContext.Assessments
+        // SQLite cannot translate DateTimeOffset ordering. Keep the database-side
+        // status/null filters, then compare the small scheduled set in memory.
+        var scheduled = await dbContext.Assessments
             .Where(assessment =>
                 assessment.Status == AssessmentStatuses.Active
-                && assessment.ExpiresAt != null
-                && assessment.ExpiresAt < now)
-            .Take(50)
+                && assessment.ExpiresAt != null)
             .ToListAsync(cancellationToken);
+        var due = scheduled
+            .Where(assessment => assessment.ExpiresAt < now)
+            .Take(50)
+            .ToList();
 
         if (due.Count == 0)
         {
@@ -68,9 +69,9 @@ public sealed class AssessmentExpirationWorker(
 
         foreach (var assessment in due)
         {
-            assessment.Status = AssessmentStatuses.Expired;
+            assessment.Status = AssessmentStatuses.Closed;
         }
         await dbContext.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Marked {Count} assessment(s) as expired.", due.Count);
+        logger.LogInformation("Closed {Count} assessment(s) after their deadline.", due.Count);
     }
 }

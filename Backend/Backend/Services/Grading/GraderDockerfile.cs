@@ -11,6 +11,7 @@ RUN apt-get update \
         pytest flask flask-cors requests beautifulsoup4 \
         fastapi "uvicorn[standard]" peewee "pydantic>=2.9" "httpx>=0.27" \
     && npm install -g jest jest-environment-jsdom jsdom@22.1.0 typescript supertest express \
+        fake-indexeddb@6.2.5 jest-fetch-mock@4.2.0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash sandbox \

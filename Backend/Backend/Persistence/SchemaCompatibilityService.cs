@@ -168,6 +168,11 @@ public sealed class SchemaCompatibilityService(OjSharpDbContext dbContext)
             UPDATE assessments
             SET "StartsAt" = "CreatedAt"
             WHERE "StartsAt" IS NULL;
+
+            UPDATE assessments
+            SET "Status" = 'closed'
+            WHERE "Status" = 'expired'
+               OR ("Status" = 'active' AND "ExpiresAt" <= now());
             """,
             cancellationToken);
 

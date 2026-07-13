@@ -427,16 +427,49 @@ public sealed class CodeEvaluationServiceTests
                     ["index.html"] = "<!doctype html><html><body><textarea id=\"doc\"></textarea><script src=\"app.js\"></script></body></html>",
                     ["app.js"] = "document.getElementById('doc').addEventListener('input', () => {});"
                 },
-                "require('./app.js');\nws.send({ type: 'insert' });\ndocument.getElementById('doc').value = 'Hello';\nconst saved = JSON.parse(localStorage.getItem('docState'));\n",
+                "const dom = new JSDOM('<main></main>');\nindexedDB.open('todo');\nrequire('./app.js');\nws.send({ type: 'insert' });\ndocument.getElementById('doc').value = 'Hello';\nconst saved = JSON.parse(localStorage.getItem('docState'));\n",
                 GradingLanguage.JavaScript,
                 isHtmlWorkspace: true);
 
             var testFile = File.ReadAllText(Path.Combine(directory.FullName, "solution.test.js"));
+            var setupFile = File.ReadAllText(Path.Combine(directory.FullName, "jest.setup.js"));
             Assert.Contains("document.write(html)", testFile);
             Assert.Contains("globalThis.ws", testFile);
             Assert.Contains("require('./app.js')", testFile);
             Assert.Contains("test('generated public check'", testFile);
             Assert.Contains("localStorage.getItem('docState') ?? '{}'", testFile);
+            Assert.Contains("global.JSDOM ??= JSDOM", setupFile);
+            Assert.Contains("require('fake-indexeddb/auto')", setupFile);
+            Assert.Contains("value?.indexedDB ?? value", setupFile);
+            Assert.Contains("global.structuredClone ??=", setupFile);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Html_grader_skips_generated_browser_dependency_shims_when_check_does_not_use_them()
+    {
+        var factory = new GradingTestFileFactory();
+        var directory = Directory.CreateTempSubdirectory("ojsharp-html-fast-test-");
+        try
+        {
+            factory.Write(
+                directory.FullName,
+                new Dictionary<string, string>
+                {
+                    ["index.html"] = "<!doctype html><main>Todo</main>",
+                    ["app.js"] = string.Empty
+                },
+                "expect(document.querySelector('main')).not.toBeNull();",
+                GradingLanguage.JavaScript,
+                isHtmlWorkspace: true);
+
+            var setupFile = File.ReadAllText(Path.Combine(directory.FullName, "jest.setup.js"));
+            Assert.DoesNotContain("require('fake-indexeddb/auto')", setupFile);
+            Assert.DoesNotContain("global.JSDOM ??= JSDOM", setupFile);
         }
         finally
         {
@@ -552,6 +585,8 @@ public sealed class CodeEvaluationServiceTests
         Assert.Contains("fastapi", bodyText);
         Assert.Contains("jest", bodyText);
         Assert.Contains("jest-environment-jsdom", bodyText);
+        Assert.Contains("fake-indexeddb@6.2.5", bodyText);
+        Assert.Contains("jest-fetch-mock@4.2.0", bodyText);
         Assert.Contains("typescript", bodyText);
         Assert.Contains("PYTHONDONTWRITEBYTECODE", bodyText);
     }

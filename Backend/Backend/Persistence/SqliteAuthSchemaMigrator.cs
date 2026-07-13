@@ -118,7 +118,15 @@ public sealed class SqliteAuthSchemaMigrator(OjSharpDbContext dbContext, ILogger
         if (assessmentColumns.Count > 0)
         {
             await dbContext.Database.ExecuteSqlRawAsync(
-                "UPDATE assessments SET StartsAt = CreatedAt WHERE StartsAt IS NULL OR StartsAt = '';",
+                """
+                UPDATE assessments
+                SET StartsAt = CreatedAt
+                WHERE StartsAt IS NULL OR StartsAt = '';
+
+                UPDATE assessments
+                SET Status = 'closed'
+                WHERE Status = 'expired';
+                """,
                 cancellationToken);
         }
 

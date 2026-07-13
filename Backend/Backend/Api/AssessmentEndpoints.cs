@@ -549,7 +549,7 @@ public static class AssessmentEndpoints
 
     private static string NormalizeAssessmentStatus(string status)
     {
-        return status is AssessmentStatuses.Draft or AssessmentStatuses.Active or AssessmentStatuses.Expired or AssessmentStatuses.Closed or AssessmentStatuses.Archived
+        return status is AssessmentStatuses.Draft or AssessmentStatuses.Active or AssessmentStatuses.Closed or AssessmentStatuses.Archived
             ? status
             : AssessmentStatuses.Draft;
     }

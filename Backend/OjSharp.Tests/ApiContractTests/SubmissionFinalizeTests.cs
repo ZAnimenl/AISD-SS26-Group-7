@@ -128,6 +128,24 @@ public sealed class SubmissionFinalizeTests
     }
 
     [Fact]
+    public void Finalize_evaluates_only_files_for_the_selected_language()
+    {
+        var workspaceFiles = new Dictionary<string, WorkspaceFileDto>
+        {
+            ["services.py"] = new("python", "class TodoService: pass"),
+            ["server.js"] = new("javascript", "module.exports = { createApp };"),
+            ["services.js"] = new("javascript", "class TodoService {}")
+        };
+
+        var runnerFiles = SubmissionEndpoints.GetSelectedLanguageFiles(workspaceFiles, "javascript");
+
+        Assert.Equal(2, runnerFiles.Count);
+        Assert.Contains("server.js", runnerFiles.Keys);
+        Assert.Contains("services.js", runnerFiles.Keys);
+        Assert.DoesNotContain("services.py", runnerFiles.Keys);
+    }
+
+    [Fact]
     public void Reflection_deadline_starts_when_backend_evaluation_completes()
     {
         var completedAt = DateTimeOffset.UtcNow;

@@ -51,12 +51,11 @@ export function getStatusClass(status: RunResult["status"]) {
     case "passed":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
     case "failed":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
     case "time_limit_exceeded":
     case "memory_limit_exceeded":
     case "runtime_error":
     case "internal_error":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+      return "!hidden";
     default:
       return "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow";
   }

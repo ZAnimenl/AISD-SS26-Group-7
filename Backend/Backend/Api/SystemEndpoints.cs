@@ -31,7 +31,7 @@ public static class SystemEndpoints
                     multi_file_workspace_enabled = true,
                     real_sandbox_enabled = sandboxStatus.IsAvailable && graderContainer.IsReady
                 },
-                supported_languages = new[] { "python", "javascript", "typescript", "html", "sql" },
+                supported_languages = new[] { "python", "javascript", "html", "sql" },
                 auth_method = "bearer_token",
                 roles = new[] { "student", "administrator" }
             });

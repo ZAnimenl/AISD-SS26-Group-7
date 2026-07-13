@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Backend.Contracts;
 using Backend.Domain;
@@ -31,6 +32,7 @@ public sealed class AssessmentDraftGenerationService
     private const int MinimumAdvancedConcerns = 3;
     private const int MinimumFrontendAdvancedConcerns = 2;
     private const int MaximumDraftAttempts = 5;
+    private const int MaximumConcurrentDraftPipelines = 2;
     private const int MaximumTasksPerType = 5;
     private const int MaximumAssessmentTasks = 12;
     private static readonly string[] TodoPrototypeTerms =
@@ -81,6 +83,7 @@ public sealed class AssessmentDraftGenerationService
     private readonly AiCompletionService completionService;
     private readonly CanonicalPrototypeSource prototypeSource;
     private readonly TokenEfficiencyReferenceBaselineService tokenEfficiencyBaselineService;
+    private readonly SemaphoreSlim draftPipelineGate = new(MaximumConcurrentDraftPipelines, MaximumConcurrentDraftPipelines);
 
     public AssessmentDraftGenerationService(
         AiCompletionService completionService,
@@ -100,25 +103,38 @@ public sealed class AssessmentDraftGenerationService
         var taskTypeCounts = NormalizeTaskTypeCounts(request.TaskTypeCounts);
         var requestedTaskTypes = BuildRequestedTaskTypes(taskTypeCounts);
         var difficulty = NormalizeDifficulty(request.Difficulty);
-        var tasks = new List<Question>(requestedTaskTypes.Length);
+        var generationJobs = requestedTaskTypes
+            .Select((taskType, index) => new Func<CancellationToken, Task<Question>>(async phaseToken =>
+            {
+                var requiredLanguages = NormalizeStudentLanguages(null, taskType);
+                var generated = await GenerateValidatedTasksAsync(
+                    assessmentId,
+                    AssessmentDraftPromptFactory.BuildAssessmentTaskPrompt(request, taskType, difficulty, requiredLanguages, index + 1, requestedTaskTypes.Length),
+                    [taskType],
+                    requiredLanguages,
+                    phaseToken);
+                return generated.Single();
+            }))
+            .ToArray();
+        var tasks = await RunBoundedPhaseAsync(generationJobs, cancellationToken);
 
-        for (var index = 0; index < requestedTaskTypes.Length; index += 1)
+        for (var index = 0; index < tasks.Length; index += 1)
         {
-            var taskType = requestedTaskTypes[index];
-            var generated = await GenerateValidatedTasksAsync(
-                assessmentId,
-                BuildAssessmentTaskPrompt(request, taskType, difficulty, index + 1, requestedTaskTypes.Length),
-                [taskType],
-                cancellationToken);
-            var task = generated.Single();
+            var task = tasks[index];
             task.SortOrder = index + 1;
             task.Difficulty = difficulty;
             task.MaxScore = 100 / requestedTaskTypes.Length + (index < 100 % requestedTaskTypes.Length ? 1 : 0);
             task.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
-            tasks.Add(task);
         }
 
-        await AttachReferenceBaselinesAsync(tasks, cancellationToken);
+        var baselineJobs = tasks
+            .Select(task => new Func<CancellationToken, Task<Question>>(async phaseToken =>
+            {
+                await AttachReferenceBaselineAsync(task, phaseToken);
+                return task;
+            }))
+            .ToArray();
+        await RunBoundedPhaseAsync(baselineJobs, cancellationToken);
 
         return tasks;
     }
@@ -131,33 +147,42 @@ public sealed class AssessmentDraftGenerationService
         CancellationToken cancellationToken)
     {
         var taskType = NormalizeTaskType(request.TaskType);
-        var tasks = await GenerateValidatedTasksAsync(
-            assessmentId,
-            BuildSingleTaskDraftPrompt(request, taskType, sharedPrototypeReference),
-            [taskType],
+        var requiredLanguages = NormalizeStudentLanguages(request.SupportedLanguages, taskType);
+        var tasks = await RunWithDraftSlotAsync(
+            phaseToken => GenerateValidatedTasksAsync(
+                assessmentId,
+                AssessmentDraftPromptFactory.BuildSingleTaskDraftPrompt(
+                    taskType,
+                    NormalizeDifficulty(request.Difficulty),
+                    requiredLanguages,
+                    NormalizeOptionalText(request.ProblemDescriptionMarkdown)),
+                [taskType],
+                requiredLanguages,
+                phaseToken),
             cancellationToken);
         var draft = tasks.Single();
         draft.SortOrder = sortOrder;
         draft.Difficulty = NormalizeDifficulty(request.Difficulty);
-        draft.LanguageConstraintsJson = JsonDocumentSerializer.Serialize(NormalizeStudentLanguages(request.SupportedLanguages, taskType));
         draft.StarterPrototypeReference = PrototypeDefaults.TodoListReference;
-        await AttachReferenceBaselinesAsync([draft], cancellationToken);
+        await RunWithDraftSlotAsync(async phaseToken =>
+        {
+            await AttachReferenceBaselineAsync(draft, phaseToken);
+            return true;
+        }, cancellationToken);
         return draft;
     }
 
-    private async Task AttachReferenceBaselinesAsync(IEnumerable<Question> questions, CancellationToken cancellationToken)
+    private async Task AttachReferenceBaselineAsync(Question question, CancellationToken cancellationToken)
     {
-        foreach (var question in questions)
-        {
-            var baseline = await tokenEfficiencyBaselineService.RunAsync(question, cancellationToken);
-            TaskAiUsageBenchmarkFactory.AttachReferenceBaseline(question, baseline);
-        }
+        var baseline = await tokenEfficiencyBaselineService.RunAsync(question, cancellationToken);
+        TaskAiUsageBenchmarkFactory.AttachReferenceBaseline(question, baseline);
     }
 
     private async Task<List<Question>> GenerateValidatedTasksAsync(
         Guid assessmentId,
         string basePrompt,
         IReadOnlyCollection<string> expectedTaskTypes,
+        IReadOnlyCollection<string> requiredLanguages,
         CancellationToken cancellationToken)
     {
         string? previousFailure = null;
@@ -174,7 +199,7 @@ public sealed class AssessmentDraftGenerationService
                     expectedTaskTypes,
                     attempt);
             var result = await completionService.GenerateAsync(
-                BuildDraftSystemPrompt(),
+                AssessmentDraftPromptFactory.BuildSystemPrompt(MinimumStarterFilesPerLanguage),
                 prompt,
                 AiResponseFormat.Json,
                 cancellationToken,
@@ -183,7 +208,7 @@ public sealed class AssessmentDraftGenerationService
 
             try
             {
-                return ParseTasks(result.Content, assessmentId, expectedTaskTypes);
+                return ParseTasks(result.Content, assessmentId, expectedTaskTypes, requiredLanguages);
             }
             catch (AiDraftGenerationException exception) when (attempt < MaximumDraftAttempts)
             {
@@ -193,6 +218,56 @@ public sealed class AssessmentDraftGenerationService
         }
 
         throw new AiDraftGenerationException(previousFailure ?? "AI draft generation failed validation.");
+    }
+
+    private async Task<T[]> RunBoundedPhaseAsync<T>(
+        IReadOnlyCollection<Func<CancellationToken, Task<T>>> jobs,
+        CancellationToken cancellationToken)
+    {
+        using var phaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var failureLock = new object();
+        ExceptionDispatchInfo? firstFailure = null;
+        var tasks = jobs.Select(async job =>
+        {
+            try
+            {
+                return await RunWithDraftSlotAsync(job, phaseCancellation.Token);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                lock (failureLock)
+                {
+                    firstFailure ??= ExceptionDispatchInfo.Capture(exception);
+                }
+                await phaseCancellation.CancelAsync();
+                throw;
+            }
+        }).ToArray();
+
+        try
+        {
+            return await Task.WhenAll(tasks);
+        }
+        catch when (firstFailure is not null)
+        {
+            firstFailure.Throw();
+            throw;
+        }
+    }
+
+    private async Task<T> RunWithDraftSlotAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        await draftPipelineGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await operation(cancellationToken);
+        }
+        finally
+        {
+            draftPipelineGate.Release();
+        }
     }
 
     private static string BuildCorrectionPrompt(
@@ -235,82 +310,6 @@ public sealed class AssessmentDraftGenerationService
         return string.Join("\n", correctionLines);
     }
 
-    private static string BuildDraftSystemPrompt()
-    {
-        return string.Join("\n",
-        [
-            "You generate coding assessment draft tasks for administrator review.",
-            "Return only valid JSON. Do not wrap the JSON in Markdown.",
-            "The administrator must review every generated task and test before publication.",
-            "Do not include provider secrets, hidden grading explanations, or any student-specific data.",
-            "Generated tasks must be practical browser-workspace tasks, not algorithm puzzle tasks.",
-            "Every task must be a focused extension, backend capability, schema change, or bug fix for the canonical source in assessmentPrototype/. Never invent or regenerate the base application.",
-            "The canonical Todo entity has exactly id, title, description, and completed fields. Extensions may add focused fields only when the task explicitly requires the schema/API/UI change.",
-            "Preserve the canonical REST routes: GET/POST /api/todos, GET/PUT/DELETE /api/todos/{todo_id}, and POST /api/todos/{todo_id}/toggle.",
-            "Preserve the canonical module contracts: browser-safe frontend/index.html, frontend/styles.css, frontend/app.js; FastAPI backend/main.py and controllers.py; Peewee backend/models.py and repositories.py; backend/services.py and schemas.py; SQLite persistence.",
-            "For Python/Peewee tests, use the same database variable exposed by starter models.py. If tests refer to models.database, starter models.py must define database = db.",
-            "Python tests and starter code must rely on TODO_DATABASE_PATH/current-run SQLite isolation; do not hard-code shared database files or assume a previous test run's schema.",
-            "FastAPI tests that depend on startup/lifespan database setup must use with TestClient(app) as client or perform explicit safe db.create_tables setup before requests. Do not create a module-level client = TestClient(app) when the test requires lifespan-created tables.",
-            "Python tests must use canonical service names from the starter contract, for example get_todo_by_id and toggle_todo_completion. If a task intentionally requires shorter names such as get_todo or toggle_todo, starter services.py must provide those methods.",
-            "If any Python test imports a module or function such as migration.run_migration, that module must be included as an editable starter file with a realistic incomplete implementation.",
-            "If Python tests use raw SQL table names with underscores, the corresponding Peewee model must declare the same table_name, for example class AuditLog.Meta.table_name = \"audit_log\".",
-            "Starter code must be a task-focused copy or extension of those canonical contracts. Do not output React, Vite, Next.js, ASP.NET, Flask, SQLAlchemy, an in-memory replacement database, or a different Todo base application.",
-            "Set the challenge level substantially above a tutorial or basic CRUD exercise. Even easy tasks must require non-trivial reasoning across modules; hard tasks should resemble a compact senior-level take-home exercise.",
-            "Reject trivial themes such as a static card, simple list/filter/sort, one-endpoint CRUD, one-query lookup, or an isolated one-line bug.",
-            "Every task must require coordinated changes across at least three editable starter files for every supported language.",
-            "Do not generate progress bars, profile cards, theme toggles, basic forms, simple filters/sorts, static dashboards, counters, or isolated CRUD handlers.",
-            "Use flat file names without directories so the browser workspace and sandbox can execute them directly.",
-            "Starter files must contain a realistic incomplete codebase with existing contracts, partial implementations, and TODOs. Do not provide the completed solution.",
-            "Keep the problem description concise: 80 to 150 words maximum.",
-            "State the goal, essential behavior, important edge cases, and acceptance criteria without giving students a copy-ready implementation plan.",
-            "Require cross-file behavior, input validation, error handling, state or data-flow consistency, and at least one backward-compatibility or regression constraint.",
-            "Name and require at least four advanced engineering concerns appropriate to the task type, such as asynchronous coordination, persistence, state machines, idempotency, authorization, pagination, concurrency, transactions, migrations, rollback, caching, accessibility, auditability, or conflict resolution.",
-            "Every task must include at least two public and two hidden test cases. Tests must exercise behavior across the provided files, including edge cases and failure paths.",
-            "The platform attaches the administrator-only AI-usage benchmark after generation; do not include student-visible AI grading criteria in the task description.",
-            "Supported student languages are python, javascript, typescript, html, and sql.",
-            "Use html for frontend_ui_extension tasks and sql for database_query_schema tasks unless the administrator explicitly asks for another supported language.",
-            "For frontend_ui_extension, use index.html, styles.css, and app.js adapted from the canonical browser-safe UI and require accessible interactions, derived state, responsive behavior, and robust empty/error states.",
-            "Frontend HTML tests run after the platform loads index.html and app.js into jsdom. Do not create a new JSDOM instance, overwrite global document/window/navigator, or replace document.body in generated tests.",
-            "For rest_api_development, use Python and extend the canonical FastAPI/Peewee files. Require related routes, Pydantic validation, consistent errors, and concurrency/idempotency or pagination/filtering concerns.",
-            "For database_query_schema, use Python/Peewee/SQLite files from the canonical backend. SQL test helpers are allowed, but the base ORM and database may not be replaced.",
-            "For database_query_schema SQL tests, make every raw SQL test_code self-contained: include INSERT/UPDATE/DELETE setup statements before the final SELECT whenever seed.sql alone does not guarantee matching rows. The final SELECT must return at least one row for a correct solution.",
-            "For bug_fix, provide at least three interacting Todo application modules and require diagnosing several related defects while preserving public interfaces and preventing regressions.",
-            "Every test case must include non-empty test_code for every language in the task's language_constraints.",
-            "For database_query_schema tasks, every public and hidden test case must include a non-empty sql test_code entry that verifies the student's solution.sql file.",
-            "",
-            "JSON shape:",
-            "{",
-            "  \"tasks\": [",
-            "    {",
-            "      \"title\": \"string\",",
-            "      \"task_type\": \"frontend_ui_extension|rest_api_development|database_query_schema|bug_fix\",",
-            "      \"difficulty\": \"easy|medium|hard\",",
-            "      \"verification_mode\": \"browser_ui_preview|api_response_check|database_result_check|automated_test|regression_test\",",
-            "      \"starter_prototype_reference\": \"string or null\",",
-            "      \"problem_description_markdown\": \"string\",",
-            "      \"language_constraints\": [\"python\", \"javascript\", \"typescript\", \"html\", \"sql\"],",
-            "      \"starter_code\": { \"python\": {\"solution.py\":\"code\", \"models.py\":\"code\", \"services.py\":\"code\"}, \"javascript\": {\"solution.js\":\"code\", \"models.js\":\"code\", \"services.js\":\"code\"}, \"typescript\": {\"solution.ts\":\"code\", \"types.ts\":\"code\", \"services.ts\":\"code\"}, \"html\": {\"index.html\":\"code\", \"styles.css\":\"code\", \"app.js\":\"code\"}, \"sql\": {\"schema.sql\":\"code\", \"seed.sql\":\"code\", \"solution.sql\":\"code\"} },",
-            "      \"starter_files_metadata\": { \"language\": {\"file1\":\"editable\", \"file2\":\"editable\", \"file3\":\"editable\"} },",
-            "      \"verification_metadata\": {\"primary_view\":\"string\"},",
-            "      \"grading_configuration\": {\"runner\":\"automated_tests\", \"requires_student_install\":\"false\"},",
-            "      \"traceability_metadata\": {\"requirements\":\"REQ-18f,REQ-18g,REQ-18h,REQ-18i,REQ-18j\"},",
-            "      \"max_score\": 25,",
-            "      \"test_cases\": [",
-            "        {",
-            "          \"name\": \"string\",",
-            "          \"visibility\": \"public|hidden\",",
-            "          \"test_code\": {\"python\":\"pytest code\", \"javascript\":\"jest code\", \"typescript\":\"jest code\", \"html\":\"jest code that checks HTML files\", \"sql\":\"jest code that checks SQL files\"},",
-            "          \"traceability_metadata\": {\"requirements\":\"REQ-52,REQ-53\"}",
-            "        }",
-            "      ]",
-            "    }",
-            "  ]",
-            "}",
-            "",
-            "Every task must include at least two public test cases and two hidden test cases."
-        ]);
-    }
-
     private static void EnsureDraftCompletionWasNotTruncated(AiCompletionResult result)
     {
         if (string.Equals(result.FinishReason, "length", StringComparison.OrdinalIgnoreCase))
@@ -318,49 +317,6 @@ public sealed class AssessmentDraftGenerationService
             throw new AiDraftGenerationException(
                 "AI draft generation was cut off by the provider output limit. Try a shorter assessment description or generate one task draft at a time.");
         }
-    }
-
-    private static string BuildAssessmentTaskPrompt(
-        AssessmentRequest request,
-        string taskType,
-        string difficulty,
-        int taskNumber,
-        int totalTasks)
-    {
-        return string.Join("\n",
-        [
-            "Generate exactly one task for a larger assessment draft.",
-            $"Task position: {taskNumber} of {totalTasks}",
-            $"Required task type: {taskType}",
-            $"Required difficulty: {difficulty}",
-            "Keep this task inside the default Todo List prototype and its shared data model.",
-            "Make it distinct from other likely tasks of the same category by choosing a focused Todo subsystem or engineering concern.",
-            "",
-            $"Assessment title: {request.Title}",
-            $"Assessment description: {request.Description}",
-            $"Duration minutes: {request.DurationMinutes}",
-            $"Shared prototype reference: {PrototypeDefaults.TodoListReference}",
-            $"Shared prototype version: {PrototypeDefaults.TodoListVersion}",
-            $"Shared prototype metadata: {JsonDocumentSerializer.Serialize(request.SharedPrototypeMetadata ?? new Dictionary<string, string>())}"
-        ]);
-    }
-
-    private static string BuildSingleTaskDraftPrompt(
-        GenerateQuestionDraftRequest request,
-        string taskType,
-        string? sharedPrototypeReference)
-    {
-        var languages = NormalizeStudentLanguages(request.SupportedLanguages, taskType);
-        return string.Join("\n",
-        [
-            "Generate exactly one draft task.",
-            $"Task type: {taskType}",
-            $"Difficulty: {NormalizeDifficulty(request.Difficulty)}",
-            $"Supported languages: {string.Join(", ", languages)}",
-            $"Shared prototype reference: {PrototypeDefaults.TodoListReference}",
-            "The generated task must modify the default Todo List application; unrelated product domains are invalid.",
-            $"Administrator guidance: {NormalizeOptionalText(request.ProblemDescriptionMarkdown) ?? "(none supplied)"}"
-        ]);
     }
 
     internal static Dictionary<string, int> NormalizeTaskTypeCounts(Dictionary<string, int>? requestedCounts)
@@ -403,7 +359,11 @@ public sealed class AssessmentDraftGenerationService
             .ToArray();
     }
 
-    private List<Question> ParseTasks(string json, Guid assessmentId, IReadOnlyCollection<string> expectedTaskTypes)
+    private List<Question> ParseTasks(
+        string json,
+        Guid assessmentId,
+        IReadOnlyCollection<string> expectedTaskTypes,
+        IReadOnlyCollection<string> requiredLanguages)
     {
         try
         {
@@ -420,7 +380,8 @@ public sealed class AssessmentDraftGenerationService
                     element,
                     assessmentId,
                     index + 1,
-                    index < expectedTypes.Length ? expectedTypes[index] : null))
+                    index < expectedTypes.Length ? expectedTypes[index] : null,
+                    requiredLanguages))
                 .ToList();
 
             if (tasks.Count != expectedTaskTypes.Count)
@@ -446,7 +407,8 @@ public sealed class AssessmentDraftGenerationService
         JsonElement element,
         Guid assessmentId,
         int sortOrder,
-        string? expectedTaskType)
+        string? expectedTaskType,
+        IReadOnlyCollection<string> requiredLanguages)
     {
         var title = RequiredString(element, "title");
         var taskType = NormalizeTaskType(RequiredString(element, "task_type"));
@@ -458,13 +420,21 @@ public sealed class AssessmentDraftGenerationService
         var verificationMode = NormalizeVerificationMode(OptionalString(element, "verification_mode"), taskType);
         var difficulty = NormalizeDifficulty(OptionalString(element, "difficulty"));
         var starterCode = RequiredNestedStringDictionary(element, "starter_code");
-        var languageConstraints = NormalizeStudentLanguages(ReadStringArray(element, "language_constraints"), taskType);
+        var returnedLanguages = NormalizeStudentLanguages(ReadStringArray(element, "language_constraints"), taskType);
+        var languageConstraints = requiredLanguages.ToArray();
+        if (!returnedLanguages.ToHashSet().SetEquals(languageConstraints))
+        {
+            throw new AiDraftGenerationException(
+                $"Generated task '{title}' must use exactly the requested languages: {string.Join(", ", languageConstraints)}.",
+                languageConstraints);
+        }
         var questionId = Guid.NewGuid();
         var testCases = RequiredArray(element, "test_cases")
             .Select(ParseTestCase)
             .ToList();
         var problemDescription = RequiredString(element, "problem_description_markdown");
 
+        starterCode = prototypeSource.ApplyCanonicalFiles(starterCode, languageConstraints);
         ValidateTestCodeCoverage(title, languageConstraints, testCases);
         ValidateAdvancedTaskStructure(
             title,
@@ -473,7 +443,6 @@ public sealed class AssessmentDraftGenerationService
             languageConstraints,
             starterCode,
             testCases);
-        starterCode = prototypeSource.ApplyCanonicalFiles(starterCode, languageConstraints);
         var starterMetadata = MergeStarterMetadata(
             starterCode,
             ReadNestedStringDictionary(element, "starter_files_metadata"));

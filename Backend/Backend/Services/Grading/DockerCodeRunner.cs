@@ -4,7 +4,8 @@ namespace Backend.Services.Grading;
 
 internal sealed class DockerCodeRunner : ICodeRunner
 {
-    private static readonly TimeSpan HostTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan HostTimeout = TimeSpan.FromMilliseconds(9500);
+    private static readonly TimeSpan BrowserPreviewHostTimeout = TimeSpan.FromSeconds(5);
     private readonly DockerGraderContainer graderContainer;
     private readonly GradingWorkspace workspace;
     private readonly GradingTestFileFactory testFileFactory;
@@ -51,17 +52,27 @@ internal sealed class DockerCodeRunner : ICodeRunner
         try
         {
             using var run = workspace.CreateRun();
-            testFileFactory.Write(
-                run.HostPath,
-                files,
-                testCode,
-                gradingLanguage,
-                isHtmlWorkspace: language.Equals("html", StringComparison.OrdinalIgnoreCase));
+            var previewEntry = GetBrowserPreviewEntry(testCase, language);
+            if (previewEntry is not null)
+            {
+                testFileFactory.WriteBrowserPreview(run.HostPath, files);
+            }
+            else
+            {
+                testFileFactory.Write(
+                    run.HostPath,
+                    files,
+                    testCode,
+                    gradingLanguage,
+                    isHtmlWorkspace: language.Equals("html", StringComparison.OrdinalIgnoreCase));
+            }
 
             var execution = await graderContainer.ExecuteAsync(
                 run.HostPath,
-                commandFactory.Create(gradingLanguage),
-                HostTimeout,
+                previewEntry is null
+                    ? commandFactory.Create(gradingLanguage)
+                    : commandFactory.CreateBrowserPreview(previewEntry),
+                previewEntry is null ? HostTimeout : BrowserPreviewHostTimeout,
                 cancellationToken);
             var output = workspace.ReadActualOutput(run) ?? execution.Stdout;
 
@@ -93,6 +104,47 @@ internal sealed class DockerCodeRunner : ICodeRunner
                    ? testCode.GetValueOrDefault("html")
                    : null)
                ?? string.Empty;
+    }
+
+    private static string? GetBrowserPreviewEntry(TestCase testCase, string language)
+    {
+        if (!language.Equals("html", StringComparison.OrdinalIgnoreCase)
+            && !language.Equals("javascript", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var adminMetadata = JsonDocumentSerializer.Deserialize(
+            testCase.AdminMetadataJson,
+            new Dictionary<string, string>());
+        if (!string.Equals(
+                adminMetadata.GetValueOrDefault("source"),
+                "browser_ui_preview_run",
+                StringComparison.Ordinal)
+            || !string.Equals(
+                adminMetadata.GetValueOrDefault("synthetic"),
+                "true",
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(
+                adminMetadata.GetValueOrDefault("execution_profile"),
+                "browser_preview_packager",
+                StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var publicMetadata = JsonDocumentSerializer.Deserialize(
+            testCase.PublicMetadataJson,
+            new Dictionary<string, string>());
+        var previewEntry = publicMetadata.GetValueOrDefault("preview_entry");
+        if (string.IsNullOrWhiteSpace(previewEntry)
+            || !previewEntry.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            || !Path.GetFileName(previewEntry).Equals(previewEntry, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return previewEntry;
     }
 
     private static string BuildStderr(DockerExecResult execution)

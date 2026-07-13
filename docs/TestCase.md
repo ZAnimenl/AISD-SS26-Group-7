@@ -32,6 +32,19 @@ the active requirements. It does not replace automated test files.
 - AI-generated assessment drafts request enough provider output tokens for
   structured JSON and return an actionable truncation error instead of a raw JSON
   parse failure when the provider cuts off output.
+- JavaScript-only REST API and bug-fix generation preserves the requested
+  language, merges canonical JavaScript backend modules before starter-file
+  validation, and requires JavaScript code in every public and hidden test.
+- REST API and bug-fix blueprint generation defaults to Python and JavaScript,
+  and both languages receive seven canonical backend modules.
+- Admin and student language option lists omit TypeScript while legacy backend
+  grading/parsing code remains compatible with existing TypeScript records.
+- The grader setup exposes global `JSDOM`, preloads IndexedDB, normalizes a full
+  `fake-indexeddb` module assignment, and includes `jest-fetch-mock` in the
+  versioned sandbox image.
+- Multi-question generation observes more than one and no more than two
+  concurrent draft pipelines, preserves requested task order and score totals,
+  and returns no partial graph after a sibling failure.
 - The administrator create-assessment page does not show shared prototype
   reference or shared prototype version inputs.
 
@@ -101,8 +114,8 @@ the active requirements. It does not replace automated test files.
 - Existing workspace state with disallowed selected-language or file-language
   values is normalized before autosave, run, submit, or AI requests.
 - Autosave persists selected language, active file, file contents, and version.
-- Browser preview renders sandbox-produced HTML or a no-output state, never
-  sample task content.
+- Browser preview renders sandbox-produced HTML or a terminal status-specific
+  timeout/runtime/infrastructure/invalid-output state, never sample task content.
 - Workspace task navigation, AI assistant, and output panels can be collapsed,
   expanded, and resized without sending extra backend state.
 - Output panel headers and bodies use opaque readable surfaces so sandbox logs
@@ -133,6 +146,7 @@ the active requirements. It does not replace automated test files.
 - Warm canonical browser-preview runs complete in under ten seconds on
   supported local development hardware, while an unfinished cold image warmup
   returns a retryable unavailable result within the readiness wait bound.
+- The synthetic HTML preview selects the trusted lightweight packager only through administrator metadata, inlines local CSS/JavaScript, rejects nested submitted paths, and completes within its five-second warm host bound.
 - Concurrent sandbox checks use separate ephemeral containers, cannot list or
   read sibling check workspaces, and leave no run container after completion or
   timeout.
@@ -353,10 +367,10 @@ the active requirements. It does not replace automated test files.
 - Student assessment listings expose the configured assessment expiration.
 - Starting an attempt after assessment expiration returns `ASSESSMENT_EXPIRED`.
 - A late-started attempt expires at the assessment deadline when that deadline occurs before the configured duration.
-- Expired assessments expose review navigation for submitted work and no start, continue, or repeat-attempt action.
+- Past-deadline assessments expose review navigation for submitted work and no start, continue, or repeat-attempt action, while their assessment status is `closed`.
 - Student dashboard and assessment-list pages place active assessments whose
   schedule is currently open in the Active assessments section; not-yet-open,
-  expired, closed, archived, and otherwise unavailable assessments appear in
+  past-deadline, closed, archived, and otherwise unavailable assessments appear in
   Other assessments.
 - Shared dropdown option lists render at viewport level and open upward when the lower viewport space would clip options.
 - Draft generation retries advanced-concern validation with exact task-type vocabulary and supports up to five attempts before failing.

@@ -347,7 +347,7 @@ export default function NewAssessmentPage() {
                 </label>
                 <label className="grid gap-2 text-sm text-white/60">
                   Status
-                  <CustomDropdown ariaLabel="Status" value={assessmentStatus} onChange={setAssessmentStatus} options={["draft", "active", "expired", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} />
+                  <CustomDropdown ariaLabel="Status" value={assessmentStatus} onChange={setAssessmentStatus} options={["draft", "active", "closed", "archived"].map((value) => ({ value: value as AssessmentStatus, label: value }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-white/60">
                   AI assistance

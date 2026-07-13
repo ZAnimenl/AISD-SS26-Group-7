@@ -2,9 +2,8 @@ namespace Backend.Services.Grading;
 
 internal sealed class GraderCommandFactory
 {
-    // 15s gives HTML tests room to load index.html, wire jsdom, spin up mock
-    // WebSockets, and run assertions without racing the killer. Previously 8s.
-    private const string ExecutionTimeout = "15s";
+    private const string ExecutionTimeout = "9s";
+    private const string BrowserPreviewTimeout = "3s";
 
     public string[] Create(GradingLanguage language)
     {
@@ -19,5 +18,10 @@ internal sealed class GraderCommandFactory
             _ =>
                 ["timeout", ExecutionTimeout, "jest", "--env=jsdom", "--config={}", "--setupFiles", "./jest.setup.js", "--runInBand", "--runTestsByPath", "solution.test.js", "--silent=false", "--no-cache"]
         };
+    }
+
+    public string[] CreateBrowserPreview(string previewEntry)
+    {
+        return ["timeout", BrowserPreviewTimeout, "node", "browser-preview.js", previewEntry];
     }
 }

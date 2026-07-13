@@ -137,6 +137,7 @@
 - Each completed baseline stores two to five administrator-only minimal-input standard steps with public verification actions; it contains no hidden test or grading implementation.
 - The active AI panel shows only that task's observable prompt CpT, prompt TpC, response CpT, response TpC, and context-signal coverage; these inform reference-relative AI Usage scoring only after the task receives a full automated-submission score. It does not expose hidden tests, baseline prompts, or grading implementation.
 - Browser preview uses a sandbox-produced document with local CSS/JavaScript inlined.
+- Browser preview packaging uses the trusted lightweight sandbox profile; a completed run without a preview shows its timeout, runtime, infrastructure, or invalid-output failure instead of an indefinite unavailable placeholder.
 - The preview iframe supports interactive JavaScript, forms, SVG/canvas, dependency diagrams, and locally bundled charts while blocking network and parent access.
 - Non-UI previews show task-specific verification; Console shows public checks, stdout, stderr, errors, and metrics.
 - Failed tests, runtime errors, and sandbox infrastructure failures are visibly distinct.
@@ -183,6 +184,17 @@
   database starter files from the packaged `assessmentPrototype` source.
 - LLM output may add task-specific files and tests but cannot replace canonical
   base files with a newly invented application.
+- Generated REST API and bug-fix tasks support the administrator-required
+  JavaScript language with canonical Node/Express starter modules and executable
+  JavaScript test code, without requiring student dependency installation.
+- New REST API and bug-fix drafts select Python and JavaScript by default, with
+  seven canonical backend modules for each; TypeScript is not offered as a new
+  admin or student language option.
+- Browser-task checks can use platform-provided global `JSDOM`, IndexedDB, and
+  fetch mocks inside the isolated grader without dependency installation or
+  `JSDOM is not defined` failures.
+- Multi-question AI drafts use bounded parallel provider work with deterministic
+  task ordering and no partial persistence when one question fails.
 - Backend startup supports SQLite for local development and PostgreSQL for explicit external database deployment.
 - Backend startup failures produce CLI repair guidance for local SQLite regeneration, external database configuration, Docker sandbox permission, and missing-runtime failures.
 - Backend startup seeds or repairs only the configured seed administrator and does not create demo student or demo assessment content.
@@ -238,6 +250,7 @@
   browser preview and public checks, complete within ten seconds on supported
   local development hardware; cold grader warmup returns a quick retryable
   unavailable result instead of holding the student request for minutes.
+- Generated public checks have a bounded command deadline below the host guard, so hanging code returns a terminal result rather than leaving Run pending.
 - Each sandbox check runs in an ephemeral container that can access only its
   own generated workspace and is removed after success, failure, or timeout.
 - AI workspace assistance is documented in `docs/design/ai-agent-workspace-context.md`.

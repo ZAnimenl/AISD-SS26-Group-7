@@ -117,13 +117,15 @@ feedback, and report review.
 
 ## Canonical assessment prototype
 
-`assessmentPrototype/` is the source-only canonical Todo application used for assessment task contracts. It contains browser-safe HTML/CSS/JavaScript plus FastAPI, Peewee, and SQLite source. It is not imported into the Next.js frontend or normal ASP.NET backend and runs only through sandbox assessment execution.
+`assessmentPrototype/` is the source-only canonical Todo application used for assessment task contracts. It contains browser-safe HTML/CSS/JavaScript, a FastAPI/Peewee backend, a Node/Express backend contract for JavaScript REST and bug-fix tasks, and SQLite source. Python and JavaScript backend generation each inject seven canonical modules, including schema validation and environment configuration. New REST and bug-fix drafts select Python and JavaScript by default; TypeScript remains legacy runtime compatibility and is not a selectable new-task language. The prototype is not imported into the Next.js frontend or normal ASP.NET backend and runs only through sandbox assessment execution.
 
 Generated tasks must be focused extensions of the canonical Todo entity (`id`, `title`, `description`, `completed`), REST routes, and module layout. The base application may not be regenerated as another framework or product.
 
 ## Preview boundary
 
-For browser-preview tasks, the sandbox public preview check reads the submitted HTML and inlines local CSS and JavaScript into a bounded `preview_document`. Module 2 renders that document in a unique-origin iframe with scripts/forms enabled and CSP blocking network, parent access, navigation, plugins, and nested frames. Non-UI tasks retain task-specific verification views and the console separates assertion failures, runtime errors, and sandbox infrastructure failures.
+For browser-preview tasks, a trusted lightweight profile in the network-disabled sandbox reads the submitted HTML and inlines local CSS and JavaScript into a bounded `preview_document` without starting Jest or executing student JavaScript during packaging. Public checks remain isolated and concurrent, with a nine-second command deadline below the 9.5-second host guard; generated JSDOM/IndexedDB compatibility shims load only for checks that reference them. Module 2 renders the document in a unique-origin iframe with scripts/forms enabled and CSP blocking network, parent access, navigation, plugins, and nested frames. A run that produces no document shows a terminal timeout, runtime, infrastructure, or invalid-output state rather than an indefinite placeholder. Non-UI tasks retain task-specific verification views and the console separates assertion failures, runtime errors, and sandbox infrastructure failures.
+
+Generated browser checks execute with platform-provided jsdom, IndexedDB, and fetch-mock dependencies inside the versioned grader image. The Jest setup exposes `JSDOM` and normalizes legacy `fake-indexeddb` module assignments without moving untrusted execution into the web API process.
 
 ## Submission freeze
 

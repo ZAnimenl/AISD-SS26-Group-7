@@ -37,11 +37,11 @@ export function isAssessmentAvailableNow(assessment: ScheduledAssessment) {
 }
 
 /** Derive the badge status shown in listings. An assessment marked "active" in the
- *  DB is really scheduled until starts_at and really expired past expires_at. */
+ *  DB is really scheduled until starts_at and closed past expires_at. */
 export function effectiveAssessmentStatus(assessment: ScheduledAssessment) {
   if (assessment.status === "active") {
     if (hasAssessmentExpired(assessment.expires_at)) {
-      return "expired";
+      return "closed";
     }
     if (!hasAssessmentStarted(assessment.starts_at)) {
       return "scheduled";

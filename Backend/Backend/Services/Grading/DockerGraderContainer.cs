@@ -8,7 +8,7 @@ namespace Backend.Services.Grading;
 internal sealed class DockerGraderContainer
 {
     private const string ImageRepository = "ojsharp-grader";
-    private const string ImageVersionTag = "python-js-ts-v8";
+    private const string ImageVersionTag = "python-js-ts-v9";
     private const string ImageTag = ImageRepository + ":" + ImageVersionTag;
     private const string ContainerWorkspace = "/workspace";
     private const string DefaultUnixEndpoint = "unix:///var/run/docker.sock";

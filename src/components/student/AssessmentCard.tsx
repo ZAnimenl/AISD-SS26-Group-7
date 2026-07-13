@@ -35,7 +35,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
             <h2 className="text-xl font-semibold text-white">{assessment.title}</h2>
             <p className="mt-2 text-sm leading-6 text-white/55">{assessment.description}</p>
           </div>
-          <StatusBadge status={assessment.attempt_status ?? effectiveAssessmentStatus(assessment)} />
+          <StatusBadge status={effectiveAssessmentStatus(assessment)} />
         </div>
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/50">
           <span className="badge"><Clock size={13} /> {assessment.duration_minutes} min</span>
@@ -50,7 +50,7 @@ export function AssessmentCard({ assessment }: { assessment: Assessment }) {
           />
         </div>
         <div className="mt-5 flex items-center justify-between">
-          <p className="text-xs text-white/40">{hasStarted ? `${assessmentExpired ? "Expired" : "Expires"} ${formatAssessmentExpiry(assessment.expires_at)}` : `Opens ${formatAssessmentStart(assessment.starts_at)}`}</p>
+          <p className="text-xs text-white/40">{hasStarted ? `${assessmentExpired ? "Closed" : "Expires"} ${formatAssessmentExpiry(assessment.expires_at)}` : `Opens ${formatAssessmentStart(assessment.starts_at)}`}</p>
           <div className="flex flex-wrap justify-end gap-2">
             {hasSubmittedResult && canStartAttempt ? (
               <Link className="btn-secondary" href={`/student/assessments/${assessment.assessment_id}/review`}>

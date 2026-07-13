@@ -3,7 +3,6 @@ import type { Language, TaskType } from "@/lib/types";
 export const STUDENT_LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
   { value: "python", label: "Python" },
   { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
   { value: "html", label: "HTML" },
   { value: "sql", label: "SQL" }
 ];

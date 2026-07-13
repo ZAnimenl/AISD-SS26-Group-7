@@ -1,6 +1,6 @@
 export type Role = "student" | "administrator";
 export type Language = "python" | "javascript" | "typescript" | "html" | "sql";
-export type AssessmentStatus = "draft" | "active" | "expired" | "closed" | "archived";
+export type AssessmentStatus = "draft" | "active" | "closed" | "archived";
 export type AttemptStatus = "not_started" | "active" | "expired" | "submitted" | "closed";
 export type ExecutionStatus = "queued" | "running" | "passed" | "failed" | "runtime_error" | "time_limit_exceeded" | "memory_limit_exceeded" | "internal_error";
 export type SubmissionStatus = ExecutionStatus | "submitted" | "not_submitted";

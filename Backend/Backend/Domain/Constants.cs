@@ -4,7 +4,6 @@ public static class AssessmentStatuses
 {
     public const string Draft = "draft";
     public const string Active = "active";
-    public const string Expired = "expired";
     public const string Closed = "closed";
     public const string Archived = "archived";
 }

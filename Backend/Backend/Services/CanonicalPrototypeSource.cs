@@ -16,6 +16,16 @@ public sealed class CanonicalPrototypeSource
                 "backend/schemas.py",
                 "backend/config/environment.py"
             ],
+            ["javascript"] =
+            [
+                "backend-js/server.js",
+                "backend-js/models.js",
+                "backend-js/repositories.js",
+                "backend-js/services.js",
+                "backend-js/controllers.js",
+                "backend-js/schemas.js",
+                "backend-js/environment.js"
+            ],
             ["sql"] = ["database/schema.sql", "database/seed.sql", "database/solution.sql"]
         };
 

@@ -87,7 +87,7 @@ export default function StudentDashboardPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {otherAssessments.slice(0, 2).map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}
             {otherAssessments.length === 0 ? (
-              <section className="panel text-sm text-white/55 lg:col-span-2">No scheduled or expired assessments.</section>
+              <section className="panel text-sm text-white/55 lg:col-span-2">No scheduled or closed assessments.</section>
             ) : null}
           </div>
         </div>

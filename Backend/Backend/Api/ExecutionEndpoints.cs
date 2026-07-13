@@ -236,6 +236,15 @@ public static class ExecutionEndpoints
               expect(html).toContain('<');
             });
             """;
+        var publicMetadata = new Dictionary<string, string>
+        {
+            ["student_visible"] = "true",
+            ["preview_output"] = "html"
+        };
+        if (htmlPreviewEntry is not null)
+        {
+            publicMetadata["preview_entry"] = htmlPreviewEntry;
+        }
 
         return new TestCase
         {
@@ -264,15 +273,12 @@ public static class ExecutionEndpoints
                 ["html"] = javascriptTestCode
             }),
             AuthoringSource = question.AuthoringSource,
-            PublicMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
-            {
-                ["student_visible"] = "true",
-                ["preview_output"] = "html"
-            }),
+            PublicMetadataJson = JsonDocumentSerializer.Serialize(publicMetadata),
             AdminMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
             {
                 ["synthetic"] = "true",
-                ["source"] = "browser_ui_preview_run"
+                ["source"] = "browser_ui_preview_run",
+                ["execution_profile"] = "browser_preview_packager"
             }),
             TraceabilityMetadataJson = JsonDocumentSerializer.Serialize(new Dictionary<string, string>
             {

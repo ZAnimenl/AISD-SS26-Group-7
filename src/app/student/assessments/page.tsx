@@ -61,7 +61,7 @@ function AssessmentGroups({ assessments }: { assessments: Assessment[] }) {
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {other.map((assessment) => <AssessmentCard key={assessment.assessment_id} assessment={assessment} />)}
           {other.length === 0 ? (
-            <div className="panel text-sm text-white/55 lg:col-span-2 xl:col-span-3">No scheduled or expired assessments.</div>
+            <div className="panel text-sm text-white/55 lg:col-span-2 xl:col-span-3">No scheduled or closed assessments.</div>
           ) : null}
         </div>
       </section>

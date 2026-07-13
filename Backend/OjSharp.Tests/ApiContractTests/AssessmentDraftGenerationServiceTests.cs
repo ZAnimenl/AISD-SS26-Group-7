@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -318,7 +319,7 @@ public sealed class AssessmentDraftGenerationServiceTests
     }
 
     [Fact]
-    public async Task Generate_question_draft_rejects_single_file_tasks()
+    public async Task Generate_question_draft_merges_canonical_files_before_starter_file_validation()
     {
         var handler = new CapturingHandler(OpenAiResponse(AdvancedSqlTaskContent(
             starterFiles: new Dictionary<string, string>
@@ -327,18 +328,23 @@ public sealed class AssessmentDraftGenerationServiceTests
             })));
         var service = CreateDraftService(handler);
 
-        var exception = await Assert.ThrowsAsync<AiDraftGenerationException>(() =>
-            service.GenerateQuestionDraftAsync(
-                Guid.NewGuid(),
-                new GenerateQuestionDraftRequest(
-                    TaskTypes.DatabaseQuerySchema,
-                    "hard",
-                    ["sql"]),
-                sharedPrototypeReference: null,
-                sortOrder: 1,
-                CancellationToken.None));
+        var question = await service.GenerateQuestionDraftAsync(
+            Guid.NewGuid(),
+            new GenerateQuestionDraftRequest(
+                TaskTypes.DatabaseQuerySchema,
+                "hard",
+                ["sql"]),
+            sharedPrototypeReference: null,
+            sortOrder: 1,
+            CancellationToken.None);
 
-        Assert.Contains("at least 3 non-empty starter files", exception.Message);
+        var starterCode = JsonDocumentSerializer.DeserializeStarterCode(question.StarterCodeJson);
+        Assert.Contains("schema.sql", starterCode["sql"].Keys);
+        Assert.Contains("seed.sql", starterCode["sql"].Keys);
+        Assert.Contains("solution.sql", starterCode["sql"].Keys);
+        Assert.Contains(
+            "at least 2 editable starter files for every supported language",
+            ReadSystemPrompt(handler.CapturedBodies.First()));
     }
 
     [Fact]
@@ -702,6 +708,17 @@ public sealed class AssessmentDraftGenerationServiceTests
             .Last();
     }
 
+    private static string ReadSystemPrompt(string requestBody)
+    {
+        using var document = JsonDocument.Parse(requestBody);
+        return document.RootElement
+            .GetProperty("messages")
+            .EnumerateArray()
+            .Single(message => message.GetProperty("role").GetString() == "system")
+            .GetProperty("content")
+            .GetString() ?? "";
+    }
+
     private static string AdvancedSqlTaskContent(
         Dictionary<string, string> starterFiles,
         string? description = null,
@@ -877,6 +894,7 @@ public sealed class AssessmentDraftGenerationServiceTests
         }
 
         public string CapturedBody { get; private set; } = "";
+        public ConcurrentQueue<string> CapturedBodies { get; } = new();
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -885,6 +903,7 @@ public sealed class AssessmentDraftGenerationServiceTests
             CapturedBody = request.Content is null
                 ? ""
                 : await request.Content.ReadAsStringAsync(cancellationToken);
+            CapturedBodies.Enqueue(CapturedBody);
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

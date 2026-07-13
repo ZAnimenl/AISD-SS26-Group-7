@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getAssessment, getWorkspace, isAuthenticationError, startAssessment } from "@/lib/api";
 import { getLanguageLabel, normalizeStudentLanguageConstraints } from "@/lib/languages";
 import type { Assessment } from "@/lib/types";
-import { formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted } from "@/lib/assessmentSchedule";
+import { effectiveAssessmentStatus, formatAssessmentExpiry, formatAssessmentStart, hasAssessmentExpired, hasAssessmentStarted } from "@/lib/assessmentSchedule";
 
 function formatQuestionLanguages(question: Assessment["questions"][number]) {
   return normalizeStudentLanguageConstraints(question.language_constraints, question.task_type)
@@ -82,30 +82,20 @@ export default function AssessmentStartPage() {
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="panel">
           <div className="relative">
-            <StatusBadge status={assessment.status} />
+            <StatusBadge status={effectiveAssessmentStatus(assessment)} />
             <p className="mt-5 max-w-3xl text-lg leading-8 text-white/65">{assessment.description}</p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Clock size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.duration_minutes} min</p><p className="text-sm text-white/45">Duration</p></div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><CalendarClock size={20} className="text-cyanGlow" /><p className="mt-3 text-base font-semibold">{formatAssessmentStart(assessment.starts_at)}</p><p className="text-sm text-white/45">Start time</p></div>
-              <div className={`rounded-2xl border p-4 ${assessmentExpired ? "border-pinkGlow/25 bg-pinkGlow/[0.06]" : "border-cyanGlow/20 bg-cyanGlow/[0.05]"}`}>
-                <CalendarClock size={20} className={assessmentExpired ? "text-pinkGlow" : "text-cyanGlow"} />
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 xl:col-span-2"><Clock size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.duration_minutes} min</p><p className="text-sm text-white/45">Duration</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 xl:col-span-2"><Sparkles size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.ai_enabled ? "On" : "Off"}</p><p className="text-sm text-white/45">AI assistance</p></div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:col-span-2 xl:col-span-2"><Sparkles size={20} className="text-purpleGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.questions.length || assessment.question_count}</p><p className="text-sm text-white/45">Questions</p></div>
+              <div className="rounded-2xl border border-cyanGlow/25 bg-cyanGlow/[0.06] p-4 xl:col-span-3"><CalendarClock size={20} className="text-cyanGlow" /><p className="mt-3 text-base font-semibold">{formatAssessmentStart(assessment.starts_at)}</p><p className="text-sm font-medium text-cyanGlow/75">Start time</p></div>
+              <div className={`rounded-2xl border p-4 xl:col-span-3 ${assessmentExpired ? "border-pinkGlow/25 bg-pinkGlow/[0.06]" : "border-purpleGlow/30 bg-purpleGlow/[0.08]"}`}>
+                <CalendarClock size={20} className={assessmentExpired ? "text-pinkGlow" : "text-purpleGlow"} />
                 <p className="mt-3 text-base font-semibold">{formatAssessmentExpiry(assessment.expires_at)}</p>
-                <p className={`text-sm font-medium ${assessmentExpired ? "text-pinkGlow/80" : "text-cyanGlow/75"}`}>
-                  {assessmentExpired ? "Expired" : "Available until"}
+                <p className={`text-sm font-medium ${assessmentExpired ? "text-pinkGlow/80" : "text-purpleGlow/80"}`}>
+                  {assessmentExpired ? "Closed" : "Available until"}
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-purpleGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.questions.length || assessment.question_count}</p><p className="text-sm text-white/45">Questions</p></div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Sparkles size={20} className="text-cyanGlow" /><p className="mt-3 text-2xl font-semibold">{assessment.ai_enabled ? "On" : "Off"}</p><p className="text-sm text-white/45">AI assistance</p></div>
-            </div>
-            <div className={`mt-5 rounded-2xl border px-4 py-3 ${assessmentExpired ? "border-pinkGlow/25 bg-pinkGlow/[0.06]" : "border-cyanGlow/20 bg-cyanGlow/[0.04]"}`}>
-              <p className="text-sm font-medium text-white/80">
-                Assessment availability: <span className={assessmentExpired ? "text-pinkGlow" : "text-cyanGlow"}>{formatAssessmentExpiry(assessment.expires_at)}</span>
-              </p>
-              <p className="mt-1 text-xs leading-5 text-white/45">
-                {assessmentExpired
-                  ? "This assessment is now review-only. New attempts and continued editing are unavailable."
-                  : "You can work normally until this time. Afterward, the assessment becomes review-only."}
-              </p>
             </div>
             {canStartAttempt ? (
               <button className="btn-primary mt-8" onClick={openWorkspace} disabled={isStarting}>
@@ -117,10 +107,10 @@ export default function AssessmentStartPage() {
                 <p className="text-sm text-white/50">
                   {assessmentExpired
                     ? assessment.attempt_status === "submitted"
-                      ? "This assessment has expired. You can review your submitted result, but cannot start another attempt."
-                      : "This assessment has expired. New attempts and continued work are unavailable."
+                      ? "This assessment is closed. You can review your submitted result, but cannot start another attempt."
+                      : "This assessment is closed. New attempts and continued work are unavailable."
                     : attemptExpired
-                    ? "This assessment attempt has expired and cannot be started again."
+                    ? "This assessment attempt is closed and cannot be started again."
                     : !hasStarted
                     ? `This assessment opens ${formatAssessmentStart(assessment.starts_at)}.`
                     : "This assessment is not open for new attempts."}

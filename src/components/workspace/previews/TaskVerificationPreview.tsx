@@ -77,18 +77,48 @@ function buildPreviewDocument(sandboxDocument: string) {
   return `<!doctype html><html><head>${securityHead}</head><body>${sandboxDocument}</body></html>`;
 }
 
-function BrowserPreviewFrame({ runResult }: {
+function BrowserPreviewFrame({ runResult, runState }: {
   runResult: RunResult | null;
+  runState: "idle" | "running";
 }) {
   const htmlOutput = runResult?.preview_document ?? null;
 
   if (!htmlOutput) {
+    const failureCopy = runState === "running"
+      ? {
+          title: "Preparing preview...",
+          detail: "The isolated browser preview is being packaged. This should finish within 10 seconds."
+        }
+      : runResult?.status === "time_limit_exceeded"
+        ? {
+            title: "Preview timed out",
+            detail: "The sandbox stopped the run at its time limit. Check the console and run again after fixing the reported code."
+          }
+        : runResult?.status === "runtime_error"
+          ? {
+              title: "Preview runtime error",
+              detail: "The sandbox could not build the browser preview. The console contains the exact runtime error."
+            }
+          : runResult?.status === "internal_error"
+            ? {
+                title: "Preview sandbox unavailable",
+                detail: "The isolated runner is still starting or unavailable. Retry the run shortly."
+              }
+            : runResult
+              ? {
+                  title: "Preview failed",
+                  detail: "The sandbox did not produce valid browser HTML. Check the console for the failed preview check."
+                }
+              : {
+                  title: "Run to open the preview",
+                  detail: "The isolated runner will package the browser UI when you select Run."
+                };
     return (
       <div className="grid h-[170px] place-items-center rounded-xl border border-white/10 bg-slate-950 px-6 text-center xl:h-[190px]">
         <div>
-          <p className="text-sm font-semibold text-white">Preview not available yet</p>
+          <p className="text-sm font-semibold text-white">{failureCopy.title}</p>
           <p className="mt-2 text-xs leading-5 text-white/50">
-            Run must return browser HTML before this panel can render a preview.
+            {failureCopy.detail}
           </p>
         </div>
       </div>
@@ -151,7 +181,7 @@ export function TaskVerificationPreview({ question, runResult, runState }: TaskV
         ) : null}
 
         {isBrowserPreview ? (
-          <BrowserPreviewFrame runResult={runResult} />
+          <BrowserPreviewFrame runResult={runResult} runState={runState} />
         ) : (
           <div className="rounded-xl border border-white/10 bg-[#0e1726] p-4">
             <div className="flex items-start gap-3">

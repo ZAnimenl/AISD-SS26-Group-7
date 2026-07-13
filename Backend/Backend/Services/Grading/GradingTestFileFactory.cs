@@ -2,6 +2,68 @@ namespace Backend.Services.Grading;
 
 internal sealed class GradingTestFileFactory
 {
+    public void WriteBrowserPreview(string directory, Dictionary<string, string> files)
+    {
+        foreach (var (fileName, content) in files)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)
+                || !Path.GetFileName(fileName).Equals(fileName, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Browser preview files must use safe workspace basenames.");
+            }
+
+            File.WriteAllText(Path.Combine(directory, fileName), content);
+        }
+
+        File.WriteAllText(
+            Path.Combine(directory, "browser-preview.js"),
+            """
+            const fs = require('fs');
+            const path = require('path');
+
+            const previewEntry = process.argv[2] ?? '';
+            if (path.basename(previewEntry) !== previewEntry || !previewEntry.toLowerCase().endsWith('.html')) {
+              console.error('Invalid browser preview entry.');
+              process.exit(2);
+            }
+
+            function isSafeLocalAsset(assetPath, extension) {
+              return !/^(?:https?:|data:|\/\/)/i.test(assetPath)
+                && path.basename(assetPath) === assetPath
+                && assetPath.toLowerCase().endsWith(extension);
+            }
+
+            function inlineLocalAssets(html) {
+              const withStyles = html.replace(/<link\s+[^>]*href=["']([^"']+)["'][^>]*>/gi, (_match, href) => {
+                if (!isSafeLocalAsset(href, '.css') || !fs.existsSync(href)) {
+                  return '';
+                }
+                return '<style data-sandbox-inline="' + href + '">' + fs.readFileSync(href, 'utf8') + '</style>';
+              });
+              return withStyles.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (_match, src) => {
+                if (!isSafeLocalAsset(src, '.js') || !fs.existsSync(src)) {
+                  return '';
+                }
+                return '<script data-sandbox-inline="' + src + '">' + fs.readFileSync(src, 'utf8') + '<\/script>';
+              });
+            }
+
+            if (!fs.existsSync(previewEntry)) {
+              console.error('Browser preview entry was not found.');
+              process.exit(2);
+            }
+
+            const html = inlineLocalAssets(fs.readFileSync(previewEntry, 'utf8'));
+            if (!/<\/?[a-z][\s\S]*>/i.test(html)
+                || /<(?:script|link)\s+[^>]*(?:src|href)=["']https?:/i.test(html)) {
+              console.error('Browser preview HTML is invalid or contains remote assets.');
+              process.exit(2);
+            }
+
+            fs.writeFileSync('actual.txt', html, 'utf8');
+            """);
+    }
+
     public void Write(
         string directory,
         Dictionary<string, string> files,
@@ -17,7 +79,7 @@ internal sealed class GradingTestFileFactory
 
         if (language == GradingLanguage.JavaScript || language == GradingLanguage.TypeScript || language == GradingLanguage.Sql)
         {
-            WriteJestSetup(directory);
+            WriteJestSetup(directory, testCode, isHtmlWorkspace);
             File.WriteAllText(
                 Path.Combine(directory, "solution.test.js"),
                 language == GradingLanguage.Sql
@@ -626,17 +688,48 @@ internal sealed class GradingTestFileFactory
         """;
     }
 
-    private static void WriteJestSetup(string directory)
+    private static void WriteJestSetup(string directory, string testCode, bool isHtmlWorkspace)
     {
+        var requiresGeneratedBrowserDependencies = isHtmlWorkspace
+            && System.Text.RegularExpressions.Regex.IsMatch(
+                testCode,
+                @"\b(?:JSDOM|indexedDB|fake-indexeddb|jest-fetch-mock)\b",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        var generatedBrowserDependencySetup = requiresGeneratedBrowserDependencies
+            ? """
+              const v8 = require('v8');
+              global.structuredClone ??= (value) => v8.deserialize(v8.serialize(value));
+
+              const { JSDOM } = require('jsdom');
+              require('fake-indexeddb/auto');
+              global.JSDOM ??= JSDOM;
+
+              // Some generated checks assign the complete fake-indexeddb module to
+              // global.indexedDB. Normalize that package object back to its factory.
+              const ojSharpNormalizeIndexedDb = (value) => value?.indexedDB ?? value;
+              let ojSharpIndexedDb = ojSharpNormalizeIndexedDb(global.indexedDB);
+              Object.defineProperty(global, 'indexedDB', {
+                configurable: true,
+                enumerable: true,
+                get: () => ojSharpIndexedDb,
+                set: (value) => {
+                  ojSharpIndexedDb = ojSharpNormalizeIndexedDb(value);
+                }
+              });
+              """
+            : string.Empty;
         File.WriteAllText(
             Path.Combine(directory, "jest.setup.js"),
-            """
+            $$"""
             const { TextDecoder, TextEncoder } = require('util');
-            const fs = require('fs');
-            const path = require('path');
 
             global.TextDecoder ??= TextDecoder;
             global.TextEncoder ??= TextEncoder;
+
+            const fs = require('fs');
+            const path = require('path');
+
+            {{generatedBrowserDependencySetup}}
 
             if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.getContext?.__ojSharpMock) {
               const context = {

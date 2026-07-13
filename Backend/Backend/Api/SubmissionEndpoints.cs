@@ -107,7 +107,7 @@ public static class SubmissionEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
-            var runnerFiles = workspaceFiles.ToDictionary(entry => entry.Key, entry => entry.Value.Content);
+            var runnerFiles = GetSelectedLanguageFiles(workspaceFiles, selectedLanguage);
             var result = await evaluationService.EvaluateAsync(
                 Guid.NewGuid(),
                 tests,
@@ -191,6 +191,16 @@ public static class SubmissionEndpoints
         }
 
         return addedStates;
+    }
+
+    internal static Dictionary<string, string> GetSelectedLanguageFiles(
+        IReadOnlyDictionary<string, WorkspaceFileDto> workspaceFiles,
+        string selectedLanguage)
+    {
+        var normalizedSelectedLanguage = AssessmentPolicy.NormalizeLanguage(selectedLanguage);
+        return workspaceFiles
+            .Where(entry => AssessmentPolicy.NormalizeLanguage(entry.Value.Language) == normalizedSelectedLanguage)
+            .ToDictionary(entry => entry.Key, entry => entry.Value.Content);
     }
 
     internal static void CompleteSession(
