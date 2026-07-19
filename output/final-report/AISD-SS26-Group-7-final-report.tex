@@ -43,10 +43,11 @@
   \par\vspace{0.45em}%
   {\small\textbf{Video~\thevideo:} #1\par}%
 }
+\newcommand{\videofigurewidth}{0.95\linewidth}
 \newcommand{\embeddedvideo}[4][!htbp]{%
   \begin{figure}[#1]
     \centering
-    \href{\videoonlinebase#2}{\includegraphics[width=0.95\linewidth]{#3}}
+    \href{\videoonlinebase#2}{\includegraphics[width=\videofigurewidth]{#3}}
     \videocaption{#4}
   \end{figure}%
 }
@@ -190,9 +191,9 @@ Administrators create, edit, and remove assignments from the assessment section.
 
 Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. AI can produce a first draft, but it never publishes the task. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. Video~\ref{vid:admin-creation} shows the full process.
 
-\embeddedvideo{Admin_AssessmentCreation.mp4}{\figpath/video-admin-assessment-creation.jpg}{Administrator assessment creation: define the basics, generate and review questions, and configure delivery.\label{vid:admin-creation}}
-
 The assessment list gives administrators one place to inspect existing tasks, change their settings, or remove assignments that are no longer needed.
+
+\embeddedvideo[H]{Admin_AssessmentCreation.mp4}{\figpath/video-admin-assessment-creation.jpg}{Administrator assessment creation: define the basics, generate and review questions, and configure delivery.\label{vid:admin-creation}}
 
 \subsubsection{User and Role Management}
 
@@ -252,6 +253,11 @@ After signing in, students see which assessments are available, in progress, or 
 
 The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. Starting from this page creates the attempt. Video~\ref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
 
+\begingroup
+\renewcommand{\videofigurewidth}{0.76\linewidth}
+\embeddedvideo[H]{User_Assessment.mp4}{\figpath/video-user-assessment.jpg}{Student assessment workflow from opening an assessment through workspace activity, submission, and reflection.\label{vid:student-assessment}}
+\endgroup
+
 \subsubsection{Assessment Workspace}
 
 The workspace should feel familiar to anyone who has used an IDE. Its compact layout is divided into five areas:
@@ -265,8 +271,6 @@ The workspace should feel familiar to anyone who has used an IDE. Its compact la
 \end{itemize}
 
 Code is never executed in the browser. Both Run and Submit call assessment-scoped backend APIs, where the active attempt is resolved from the signed-in user and assessment ID. If the backend cannot reach Docker, final submission is disabled and the workspace explains why; it does not show a successful grade that was never produced.
-
-\embeddedvideo{User_Assessment.mp4}{\figpath/video-user-assessment.jpg}{Student assessment workflow from opening an assessment through workspace activity, submission, and reflection.\label{vid:student-assessment}}
 
 \subsubsection{AI Assistance and Reflection}
 
