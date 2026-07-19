@@ -17,6 +17,9 @@
   urlcolor=blue
 }
 
+\newcommand{\figureref}[1]{\hyperref[#1]{Figure~\ref*{#1}}}
+\newcommand{\tableref}[1]{\hyperref[#1]{Table~\ref*{#1}}}
+
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.65em}
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.2em,topsep=0.2em}
@@ -113,7 +116,7 @@
 
 \subsection{Purpose of the Platform}
 
-We built the platform as a \textbf{browser-based coding assessment system for practical software development tasks}. Figure~\ref{fig:user-guide-flow} shows what each role does. Administrators prepare and publish assessments, manage accounts, and review results. Students solve the tasks in an IDE-like workspace, use the built-in AI assistant when it is available, submit their work, and briefly explain how they used the AI.
+We built the platform as a \textbf{browser-based coding assessment system for practical software development tasks}. \figureref{fig:user-guide-flow} shows what each role does. Administrators prepare and publish assessments, manage accounts, and review results. Students solve the tasks in an IDE-like workspace, use the built-in AI assistant when it is available, submit their work, and briefly explain how they used the AI.
 
 For now, the project is intended for local demonstrations and course evaluation. It will not be hosted until we have combined the User Acceptance Testing (UAT) findings with the course feedback, made the resulting changes, and tested the revised version. The instructions below therefore describe the local setup.
 
@@ -302,7 +305,7 @@ The working MVP covers:
 
 \subsection{Overall Architecture}
 
-Figure~\ref{fig:arch-clean} gives the high-level architecture. Students and administrators use the same Next.js web application, which calls an ASP.NET Core API. The backend is the system of record for authentication, assessments, workspace state, AI integration, grading, reports, and database access. The browser never connects directly to an external service.
+\figureref{fig:arch-clean} gives the high-level architecture. Students and administrators use the same Next.js web application, which calls an ASP.NET Core API. The backend is the system of record for authentication, assessments, workspace state, AI integration, grading, reports, and database access. The browser never connects directly to an external service.
 
 \begin{figure}[H]
   \centering
@@ -312,7 +315,7 @@ Figure~\ref{fig:arch-clean} gives the high-level architecture. Students and admi
 \end{figure}
 
 \newpage
-Figure~\ref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a central API client with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and all DeepSeek requests pass through the backend AI service.
+\figureref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a central API client with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and all DeepSeek requests pass through the backend AI service.
 
 \begin{figure}[H]
   \centering
@@ -333,7 +336,7 @@ The AI layer has three jobs: help students in the workspace, prepare draft tasks
   \label{fig:ai-clean}
 \end{figure}
 
-Figure~\ref{fig:ai-clean} shows the common path behind all three jobs. Every request first reaches a backend endpoint, where the user and role are checked and a safe context is assembled. The backend then selects the right workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, score, or draft. The colored bands make the boundary clear: student and administrator requests differ at the edges, but both rely on the same backend-controlled provider and persistence layers.
+\figureref{fig:ai-clean} shows the common path behind all three jobs. Every request first reaches a backend endpoint, where the user and role are checked and a safe context is assembled. The backend then selects the right workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, score, or draft. The colored bands make the boundary clear: student and administrator requests differ at the edges, but both rely on the same backend-controlled provider and persistence layers.
 
 \begin{figure}[H]
   \centering
@@ -342,7 +345,7 @@ Figure~\ref{fig:ai-clean} shows the common path behind all three jobs. Every req
   \label{fig:ai-student}
 \end{figure}
 
-Figure~\ref{fig:ai-student} follows a student request in detail. The browser sends the selected language, active and visible files, message, and latest public run result. It does not decide which attempt owns the request; the backend derives that from the authenticated student and assessment. Hidden tests, grading logic, provider keys, and server-only prompts are removed before the provider call. Only the markdown response and safe workspace actions return to the browser, while the interaction and token use are stored for later review.
+\figureref{fig:ai-student} follows a student request in detail. The browser sends the selected language, active and visible files, message, and latest public run result. It does not decide which attempt owns the request; the backend derives that from the authenticated student and assessment. Hidden tests, grading logic, provider keys, and server-only prompts are removed before the provider call. Only the markdown response and safe workspace actions return to the browser, while the interaction and token use are stored for later review.
 
 \begin{figure}[H]
   \centering
@@ -351,7 +354,7 @@ Figure~\ref{fig:ai-student} follows a student request in detail. The browser sen
   \label{fig:ai-admin}
 \end{figure}
 
-Figure~\ref{fig:ai-admin} follows the two administrator paths. Draft generation starts with a role check and a constrained prompt, then stores the returned questions, starter files, tests, and metadata for human review. AI-usage grading instead loads the student's submission, transcript, token use, and reflection. It may call the provider before saving the score, summary, confidence, and supporting details.
+\figureref{fig:ai-admin} follows the two administrator paths. Draft generation starts with a role check and a constrained prompt, then stores the returned questions, starter files, tests, and metadata for human review. AI-usage grading instead loads the student's submission, transcript, token use, and reflection. It may call the provider before saving the score, summary, confidence, and supporting details.
 
 \subsection{Workflow Implementation and Trade-offs}
 
@@ -500,7 +503,7 @@ The repository also includes \texttt{mcp-code-analyzer}, a lightweight MCP serve
 
 AI was most useful when we had already defined the problem. It helped draft endpoint tests, compare frontend expectations with backend contracts, trace failed startup paths, flag integration risks, and prepare first versions of documentation. Codex was especially helpful for repository-wide checks because it could inspect the code, run commands, and follow the module boundaries at the same time.
 
-Generated code was never considered finished on arrival. Figure~\ref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. Table~\ref{tab:ai-modules} makes those four ownership areas explicit.
+Generated code was never considered finished on arrival. \figureref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. \tableref{tab:ai-modules} makes those four ownership areas explicit.
 
 \begin{table}[H]
 \centering
