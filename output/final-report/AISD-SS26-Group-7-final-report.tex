@@ -311,6 +311,7 @@ Figure~\ref{fig:arch-clean} gives the high-level architecture. Students and admi
   \label{fig:arch-clean}
 \end{figure}
 
+\newpage
 Figure~\ref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a central API client with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and all DeepSeek requests pass through the backend AI service.
 
 \begin{figure}[H]
