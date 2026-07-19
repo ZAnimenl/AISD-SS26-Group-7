@@ -498,7 +498,27 @@ The repository also includes \texttt{mcp-code-analyzer}, a lightweight MCP serve
 
 AI was most useful when we had already defined the problem. It helped draft endpoint tests, compare frontend expectations with backend contracts, trace failed startup paths, flag integration risks, and prepare first versions of documentation. Codex was especially helpful for repository-wide checks because it could inspect the code, run commands, and follow the module boundaries at the same time.
 
-Generated code was never considered finished on arrival. Figure~\ref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. To make that routing concrete, we used four ownership areas. \textbf{\mbox{Module~1}, Identity and Assessment Management} handled authentication, roles, users, assessments, attempts, and persistence. \textbf{\mbox{Module~2}, Frontend IDE} handled the Next.js pages, dashboards, browser workspace, and API clients. \textbf{\mbox{Module~3}, Sandbox Execution} handled isolated run and submit flows, public and hidden tests, and grading. \textbf{\mbox{Module~4}, AI and Telemetry} handled the assistant proxy, prompt handling, interaction logs, token accounting, reflection, and AI-usage scoring. If a task crossed a boundary, one module still owned the change while a full-stack integration review checked the handoff.
+Generated code was never considered finished on arrival. Figure~\ref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. Table~\ref{tab:ai-modules} makes those four ownership areas explicit.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\linewidth}{>{\centering\arraybackslash}p{0.09\linewidth}>{\raggedright\arraybackslash}p{0.28\linewidth}>{\raggedright\arraybackslash}X}
+\toprule
+Module & Ownership area & Main responsibilities \\
+\midrule
+1 & \textbf{Identity and Assessment Management} & Authentication, roles, users, assessments, attempts, and persistence. \\
+2 & \textbf{Frontend IDE} & Next.js pages, dashboards, browser workspace, and API clients. \\
+3 & \textbf{Sandbox Execution} & Isolated run and submit flows, public and hidden tests, and grading. \\
+4 & \textbf{AI and Telemetry} & Assistant proxy, prompt handling, interaction logs, token accounting, reflection, and AI-usage scoring. \\
+\bottomrule
+\end{tabularx}
+\caption{Ownership and responsibilities of the four development modules.}
+\label{tab:ai-modules}
+\end{table}
+
+If a task crossed a boundary, one module still owned the change while a full-stack integration review checked the handoff.
 
 \begin{figure}[H]
   \centering
