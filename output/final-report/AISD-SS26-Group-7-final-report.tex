@@ -21,12 +21,35 @@
 \setlength{\parskip}{0.65em}
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.2em,topsep=0.2em}
 \setlist[enumerate]{leftmargin=1.6em,itemsep=0.25em,topsep=0.25em}
-\newcommand{\figpath}{figures}
-\newcommand{\phase}[1]{\cellcolor{blue!18}\textbf{#1}}
-\newcommand{\thinphase}{\cellcolor{blue!10}}
-\newcommand{\done}{\cellcolor{green!16}}
 \definecolor{TUMBlue}{RGB}{0,101,189}
 \definecolor{TUMBlueDark}{RGB}{0,82,147}
+\definecolor{AIPrompt}{RGB}{0,101,189}
+\definecolor{AIEfficiency}{RGB}{0,153,145}
+\definecolor{AICritical}{RGB}{112,78,170}
+\definecolor{AIReflection}{RGB}{220,105,30}
+\newcommand{\figpath}{figures}
+\newcommand{\phase}{\cellcolor{TUMBlue!42}}
+\newcommand{\thinphase}{\cellcolor{TUMBlue!14}}
+\newcommand{\flowlabel}[2]{\parbox[c][7.5mm][c]{19mm}{\raggedleft\scriptsize\bfseries\textcolor{#1}{#2}}}
+\newcommand{\lanestep}[2]{\begingroup\setlength{\fboxsep}{1.8pt}\fcolorbox{#1}{#1!8}{\parbox[c][7.5mm][c]{20mm}{\centering\scriptsize\bfseries #2}}\endgroup}
+\newcommand{\adminstep}[1]{\lanestep{TUMBlue}{#1}}
+\newcommand{\studentstep}[1]{\lanestep{AIEfficiency}{#1}}
+\newcommand{\flowarrow}[1]{\textcolor{#1}{\(\rightarrow\)}}
+\newcommand{\videoonlinebase}{https://raw.githubusercontent.com/ZAnimenl/AISD-SS26-Group-7/main/output/final-report/media}
+\newcounter{video}
+\renewcommand{\thevideo}{\arabic{video}}
+\newcommand{\videocaption}[1]{%
+  \refstepcounter{video}%
+  \par\vspace{0.45em}%
+  {\small\textbf{Video~\thevideo:} #1\par}%
+}
+\newcommand{\embeddedvideo}[4][!htbp]{%
+  \begin{figure}[#1]
+    \centering
+    \href{\videoonlinebase/#2}{\includegraphics[width=0.95\linewidth]{#3}}
+    \videocaption{#4}
+  \end{figure}%
+}
 
 \begin{document}
 
@@ -48,7 +71,7 @@
   \begin{tabular}{rl}
     Group: & AISD-SS26 Group 7 \\
     Repository: & \href{https://github.com/ZAnimenl/AISD-SS26-Group-7.git}{github.com/ZAnimenl/AISD-SS26-Group-7.git} \\
-    Report date: & July 2026 \\
+    Report date: & 13 July 2026 \\
   \end{tabular}
   \vfill
   \begin{tabular}{ll}
@@ -69,15 +92,33 @@
 
 \section{User Guide}
 
+\begin{figure}[!htbp]
+  \centering
+  \flowlabel{TUMBlueDark}{Admin}\hspace{1mm}
+  \adminstep{Sign in}\hspace{0.7mm}\flowarrow{TUMBlueDark}\hspace{0.7mm}
+  \adminstep{Create assessment}\hspace{0.7mm}\flowarrow{TUMBlueDark}\hspace{0.7mm}
+  \adminstep{Review and publish}\hspace{0.7mm}\flowarrow{TUMBlueDark}\hspace{0.7mm}
+  \adminstep{Manage users}\hspace{0.7mm}\flowarrow{TUMBlueDark}\hspace{0.7mm}
+  \adminstep{Inspect reports}\\[3mm]
+  \flowlabel{AIEfficiency!80!black}{Student}\hspace{1mm}
+  \studentstep{Sign in}\hspace{0.7mm}\flowarrow{AIEfficiency!80!black}\hspace{0.7mm}
+  \studentstep{Open assessment}\hspace{0.7mm}\flowarrow{AIEfficiency!80!black}\hspace{0.7mm}
+  \studentstep{Edit and run}\hspace{0.7mm}\flowarrow{AIEfficiency!80!black}\hspace{0.7mm}
+  \studentstep{Use AI and verify}\hspace{0.7mm}\flowarrow{AIEfficiency!80!black}\hspace{0.7mm}
+  \studentstep{Submit and reflect}
+  \caption{Core administrator and student processes covered by the User Guide.}
+  \label{fig:user-guide-flow}
+\end{figure}
+
 \subsection{Purpose of the Platform}
 
-The platform is a browser-based coding assessment system for practical software development tasks. It supports two main user groups. Administrators create assessments, review and edit AI-generated task drafts, manage users, and inspect results. Students register or sign in, start assigned assessments, work in an IDE-like browser workspace, use a bounded AI assistant, submit their work, and complete a short reflection on their AI usage.
+We built the platform as a \textbf{browser-based coding assessment system for practical software development tasks}. Figure~\ref{fig:user-guide-flow} shows what each role does. Administrators prepare and publish assessments, manage accounts, and review results. Students solve the tasks in an IDE-like workspace, use the built-in AI assistant when it is available, submit their work, and briefly explain how they used the AI.
 
-The system is currently intended for local demonstration and course evaluation. The team plans to move it from localhost to an online deployment in late July. Until then, all setup steps below assume a local development environment.
+For now, the project is intended for local demonstrations and course evaluation. It will not be hosted until we have combined the User Acceptance Testing (UAT) findings with the course feedback, made the resulting changes, and tested the revised version. The instructions below therefore describe the local setup.
 
 \subsection{Local Setup}
 
-The local setup follows the project README and is intentionally kept to one main command. A new user should install Node.js 20 or newer, npm, the .NET SDK compatible with the backend solution, and optionally a Docker-compatible runtime for code execution and final submission.
+Getting the project running locally takes one main command. Before starting, install Node.js 20 or newer, npm, and a .NET SDK that is compatible with the backend solution. A Docker-compatible runtime is optional for browsing the application, but required for running code and grading final submissions.
 
 \begin{enumerate}
   \item Clone the repository:
@@ -85,6 +126,12 @@ The local setup follows the project README and is intentionally kept to one main
 git clone https://github.com/ZAnimenl/AISD-SS26-Group-7.git
 cd AISD-SS26-Group-7
   \end{verbatim}
+  \item Create or edit \texttt{.env.local} in the repository root before starting the application. If necessary, copy \texttt{.env.example} first. Then add the AI provider settings:
+  \begin{verbatim}
+Deepseek__ApiKey=<your-deepseek-api-key>
+Deepseek__Enabled=true
+  \end{verbatim}
+  Keep the real API key only in \texttt{.env.local}; never commit it to the repository.
   \item Start the full local application:
   \begin{verbatim}
 npm run dev
@@ -99,20 +146,20 @@ http://localhost:5140/api/v1
   \end{verbatim}
 \end{enumerate}
 
-The startup script prepares a local SQLite database under \texttt{.local-data/}, loads \texttt{.env.local}, restores dependencies when needed, starts the backend, waits for the health endpoint, and then starts the Next.js frontend. Docker is only required for real run/submit grading. Without Docker, the app still starts, but the workspace explains that final submit is unavailable until the sandbox runtime can be reached.
+The startup script handles the rest: it prepares the SQLite database in \texttt{.local-data/}, loads \texttt{.env.local}, restores missing dependencies, starts the backend, waits for its health check, and then launches the Next.js frontend. The application still opens when Docker is unavailable. In that case, the workspace clearly disables final submission until it can reach the sandbox runtime.
 
 \subsection{Signing In}
 
-For local demonstrations, the login page provides a development-only ``Use local admin'' button. It fills the default administrator credentials:
+For a local demo, click the \textbf{development-only ``Use local admin'' button} on the login page. It fills in these default credentials:
 
 \begin{verbatim}
 admin@example.com
 Admin123!
 \end{verbatim}
 
-This local admin account is seeded or repaired by the backend on startup. Other administrator accounts should be created from inside the existing administrator account, using the role-management page. This avoids uncontrolled administrator registration.
+The backend creates or repairs this account during startup. Once signed in, the local administrator can create additional administrator accounts from the role-management page. There is no public administrator registration, which prevents users from assigning themselves elevated access.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.95\linewidth]{\figpath/demo-login.png}
   \caption{Local login screen with Google sign-in, student registration, and local admin shortcut.}
@@ -122,9 +169,9 @@ This local admin account is seeded or repaired by the backend on startup. Other 
 
 \subsubsection{Dashboard}
 
-After signing in as an administrator, the dashboard gives a quick overview of the platform: number of assessments, student accounts, submissions, AI interaction volume, and recent submissions. It is the fastest place to check whether the platform is populated and whether recent student activity has been recorded.
+The administrator dashboard is a quick health check for the platform. It shows the number of assessments, student accounts, submissions, and AI interactions, together with recent student activity.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.95\linewidth]{\figpath/demo-admin-dashboard.png}
   \caption{Administrator dashboard with assessment, student, submission, and AI activity summary.}
@@ -132,7 +179,7 @@ After signing in as an administrator, the dashboard gives a quick overview of th
 
 \subsubsection{Creating and Managing Assessments}
 
-Administrators use the assessment section to create, edit, and delete assignments. An assessment has a title, description, duration, availability window, publication status, AI-enabled flag, and one or more practical questions. The current task categories are:
+Administrators create, edit, and remove assignments from the assessment section. Each assessment has a title, description, duration, availability window, publication status, AI setting, and one or more practical questions. Four task categories are currently supported:
 
 \begin{itemize}
   \item frontend UI extension,
@@ -141,23 +188,17 @@ Administrators use the assessment section to create, edit, and delete assignment
   \item bug fixing in existing code.
 \end{itemize}
 
-The create flow is split into steps so that administrators first define the assessment, then generate or review questions, and finally confirm delivery settings. AI-generated drafts are treated as drafts: the administrator is expected to review the task text, starter files, visible and hidden tests, metadata, and scoring configuration before publishing.
+Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. AI can produce a first draft, but it never publishes the task. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. Video~\ref{vid:admin-creation} shows the full process.
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-admin-create-basics.png}
-  \vspace{2mm}
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-admin-create-review.png}
-  \caption{Assessment creation flow: define basics, generate/review questions, then configure delivery.}
-\end{figure}
+\embeddedvideo{Admin_AssessmentCreation.mp4}{\figpath/video-admin-assessment-creation.jpg}{Administrator assessment creation: define the basics, generate and review questions, and configure delivery.\label{vid:admin-creation}}
 
-Existing assessments appear in the assessment list. From there, an administrator can inspect details, update task settings, and delete assignments that should no longer be used.
+The assessment list gives administrators one place to inspect existing tasks, change their settings, or remove assignments that are no longer needed.
 
 \subsubsection{User and Role Management}
 
-The users page is where administrators create accounts and assign roles. Student self-registration is available for students, but administrator accounts are intentionally created by an existing admin. This keeps role escalation under administrative control.
+Administrators create accounts and assign roles from the users page. Students may \textbf{register themselves}, but a new \textbf{administrator account must be created by an existing administrator}. This small restriction keeps role escalation under administrative control.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.95\linewidth]{\figpath/demo-admin-users.png}
   \caption{Administrator user management page with role assignment.}
@@ -165,51 +206,55 @@ The users page is where administrators create accounts and assign roles. Student
 
 \subsubsection{Reports and Scoring}
 
-The reports page is one of the main outcomes of the project. It separates functional correctness from AI usage, so a student's code quality and AI behavior can be discussed independently. For AI-enabled assessments, the final score is based on both the functional score and the AI usage score. For AI-disabled assessments, the functional score is used on its own.
+Reports deliberately separate \textbf{functional correctness} from \textbf{AI usage}. This lets an administrator discuss the quality of the submitted code without mixing it with the way the student used AI. When AI is enabled, both scores contribute to the final result; otherwise, the functional score stands on its own.
 
-The report view shows assessment-level summaries and supports drill-down into student evidence. The evidence includes prompts, responses, interaction type, token usage, per-task metrics, suggestion decisions, reflection text, grading status, confidence, and administrator retry status when grading needs to be rerun.
+An administrator can start with an assessment summary and then open the evidence for an individual student. That evidence includes prompts and responses, interaction types, token use, per-task metrics, decisions on suggestions, the final reflection, grading status, confidence, and any administrator retry status.
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-admin-reports.png}
-  \caption{Administrator reports page with final, functional, and AI-usage score summaries.}
-\end{figure}
+\embeddedvideo[H]{Admin_AssessmentReport.mp4}{\figpath/video-admin-assessment-report.jpg}{Administrator report review with final, functional, and AI-usage score details.\label{vid:admin-report}}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.92\linewidth]{\figpath/report-scoring-contract.pdf}
-  \caption{Assessment report scoring contract: functional correctness and AI usage are scored independently.}
+  \begin{minipage}[c]{0.34\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{\figpath/ai-usage-score-pie.png}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.62\linewidth}
+    \small
+    \textcolor{AIPrompt}{\rule{2.6mm}{2.6mm}}\enspace\textbf{Prompt quality and context (30 points)}\\[-0.1em]
+    Relevant, specific prompts with useful task context and iterative refinement.\par\vspace{0.35em}
+    \textcolor{AIEfficiency}{\rule{2.6mm}{2.6mm}}\enspace\textbf{Token and interaction efficiency (40 points)}\\[-0.1em]
+    Productive progress with limited repetition, unnecessary regeneration, or retry cycles.\par\vspace{0.35em}
+    \textcolor{AICritical}{\rule{2.6mm}{2.6mm}}\enspace\textbf{Critical evaluation and adaptation (20 points)}\\[-0.1em]
+    Verification, selective acceptance, correction or rejection, and independent judgment.\par\vspace{0.35em}
+    \textcolor{AIReflection}{\rule{2.6mm}{2.6mm}}\enspace\textbf{Reflection quality and consistency (10 points)}\\[-0.1em]
+    A clear final reflection that is consistent with the recorded work and AI interactions.
+  \end{minipage}
+  \caption{Composition of the 100-point AI usage score.}
 \end{figure}
 
 \subsection{Student Workflow}
 
 \subsubsection{Registration and Login}
 
-Students can sign in with a normal email/password account or use Google OAuth when configured. Email registration follows a verification-code flow: the student enters account details, receives a code, verifies it, and then completes account creation. In local development, email delivery can expose a development fallback code so that demonstrations are not blocked by SMTP configuration.
+Students can sign in with email and password or, when configured, with Google OAuth. Email registration uses a \textbf{verification code}: the student enters the account details, receives the code, and confirms it to finish registration. Local development can expose a fallback code so an SMTP problem does not block a demonstration.
 
 \subsubsection{Dashboard and Assessment List}
 
-After login, students see a dashboard with available, in-progress, and completed assessments. The assessment list shows status, duration, start and expiry dates, question count, and whether AI assistance is enabled.
+After signing in, students see which assessments are available, in progress, or complete. The list also shows the duration, availability dates, number of questions, and whether AI assistance is enabled.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-student-dashboard.png}
+  \includegraphics[width=0.85\linewidth]{\figpath/demo-student-dashboard.png}
   \caption{Student dashboard showing available assessments, recent activity, and score preview.}
 \end{figure}
 
 \subsubsection{Starting an Assessment}
 
-Before entering the workspace, the student sees the start page. This page confirms the assessment title, description, duration, availability window, number of questions, and whether AI assistance is enabled. The student starts an attempt from this page.
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-student-start.png}
-  \caption{Student start page before opening an assessment attempt.}
-\end{figure}
+The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. Starting from this page creates the attempt. Video~\ref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
 
 \subsubsection{Assessment Workspace}
 
-The workspace is the main student experience. It is designed like a compact IDE:
+The workspace should feel familiar to anyone who has used an IDE. Its compact layout is divided into five areas:
 
 \begin{itemize}
   \item The left side contains the task panel and problem statement.
@@ -219,31 +264,27 @@ The workspace is the main student experience. It is designed like a compact IDE:
   \item The bottom output panel contains preview and console tabs for run feedback.
 \end{itemize}
 
-The frontend does not execute student code locally. Run and submit go through backend assessment-scoped APIs, and the backend resolves the active attempt from the authenticated user and assessment ID. In the screenshot below, Docker was not reachable on the local machine, so the app correctly disables final submission and explains the dependency instead of pretending that grading worked.
+Code is never executed in the browser. Both Run and Submit call assessment-scoped backend APIs, where the active attempt is resolved from the signed-in user and assessment ID. If the backend cannot reach Docker, final submission is disabled and the workspace explains why; it does not show a successful grade that was never produced.
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.95\linewidth]{\figpath/demo-student-workspace.png}
-  \caption{Student workspace with task panel, Monaco editor, AI assistant area, and output panel.}
-\end{figure}
+\embeddedvideo{User_Assessment.mp4}{\figpath/video-user-assessment.jpg}{Student assessment workflow from opening an assessment through workspace activity, submission, and reflection.\label{vid:student-assessment}}
 
 \subsubsection{AI Assistance and Reflection}
 
-When AI is enabled, students can ask for code suggestions, explanations, or debugging help. The assistant receives only visible task context, visible workspace files, selected language, active file, and public run output. Hidden tests, grading implementation, provider keys, and server-side prompts remain on the backend.
+When an assessment allows AI, students can ask for suggestions, explanations, or debugging help. The assistant sees the visible task, workspace files, selected language, active file, and public run output. Hidden tests, grading code, provider keys, and server-only prompts stay on the backend.
 
-After submission, students complete a short reflection of at most 100 words. The reflection asks how the AI assistant was used, which suggestion helped and how it was verified, and which suggestion was rejected, corrected, or unhelpful. The reflection has a backend-owned timer and is included in AI usage grading.
+Submission is followed by a reflection of no more than 100 words. Students describe how they used the assistant, name one useful suggestion and how they checked it, and note something they rejected, corrected, or found unhelpful. A backend-controlled timer keeps this step consistent, and the response becomes part of the AI-usage grade.
 
 \subsubsection{Results}
 
-After the assessment is submitted and any required AI-usage grading is complete, students can review results. The student result page shows functional score, AI usage score when applicable, final score, reflection status, and a summary of feedback. Administrators see a richer version in reports, including evidence and retry controls.
+Once submission and any AI-usage grading are complete, students can view their functional score, AI-usage score when applicable, final score, reflection status, and feedback summary. The administrator report adds the underlying evidence and controls for retrying a failed grade.
 
 \section{Technical Documentation}
 
 \subsection{System Overview}
 
-The project addresses a practical problem in modern software-engineering education: students increasingly use AI tools while solving development tasks, but many assessment systems still grade only final code output. Our platform grades the submitted code and also records how the embedded AI assistant was used. The goal is not to punish AI use. Instead, the system makes AI usage visible, auditable, and assessable as part of a realistic development workflow.
+Coding education now faces a mismatch: students use AI in everyday development, while many assessments still look only at the final code. Our platform records both sides of the work. It grades the submitted program and keeps an auditable history of how the built-in assistant was used. The aim is not to penalize AI use, but to assess it as part of a realistic development process.
 
-The scope of the implemented MVP includes:
+The working MVP covers:
 
 \begin{itemize}
   \item administrator-managed assessments, questions, test cases, and users,
@@ -257,7 +298,7 @@ The scope of the implemented MVP includes:
 
 \subsection{Overall Architecture}
 
-The clean architecture view in Figure~\ref{fig:arch-clean} shows the main deployment shape. Students and administrators interact with a Next.js web application. The frontend sends API requests to an ASP.NET Core backend. The backend owns authentication, assessment state, workspace persistence, AI integration, grading, reporting, and database access. External services are connected only through the backend.
+Figure~\ref{fig:arch-clean} gives the high-level architecture. Students and administrators use the same Next.js web application, which calls an ASP.NET Core API. The backend is the system of record for authentication, assessments, workspace state, AI integration, grading, reports, and database access. The browser never connects directly to an external service.
 
 \begin{figure}[H]
   \centering
@@ -266,7 +307,7 @@ The clean architecture view in Figure~\ref{fig:arch-clean} shows the main deploy
   \label{fig:arch-clean}
 \end{figure}
 
-The detailed view in Figure~\ref{fig:arch-detailed} expands the internal services. The frontend contains student/admin pages, a coding workspace, and a central frontend API client. The backend is split into functional endpoint groups and services: auth and roles, assessment service, attempt service, workspace service, execution and grading, reporting, and AI service. Persistent state is stored through EF Core. Code execution is isolated through a Docker code runner. AI completion calls go through the backend AI service and then to the DeepSeek provider.
+Figure~\ref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a central API client with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and all DeepSeek requests pass through the backend AI service.
 
 \begin{figure}[H]
   \centering
@@ -277,9 +318,7 @@ The detailed view in Figure~\ref{fig:arch-detailed} expands the internal service
 
 \subsection{AI Architecture}
 
-The AI layer has three responsibilities. First, it provides student assistance in the workspace. Second, it supports administrators by generating assessment or question drafts for review. Third, it grades AI usage after submission using interaction logs, token data, events, execution history, and the student's reflection.
-
-The clean AI workflow is shown in Figure~\ref{fig:ai-clean}. Both student and administrator actions enter through backend endpoints. The backend authenticates the user, checks the role, builds a safe context, selects the correct AI workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, scores, or draft content in the database.
+The AI layer has three jobs: help students in the workspace, prepare draft tasks for administrators, and grade AI usage after submission from the recorded conversation, token data, execution history, and reflection.
 
 \begin{figure}[H]
   \centering
@@ -288,7 +327,7 @@ The clean AI workflow is shown in Figure~\ref{fig:ai-clean}. Both student and ad
   \label{fig:ai-clean}
 \end{figure}
 
-The student detailed workflow in Figure~\ref{fig:ai-student} shows the security boundary. The frontend sends the selected language, active file, visible files, message, and last public run result. The backend resolves the active attempt from the authenticated student and assessment ID. It does not trust or accept frontend-owned session IDs. The AI assistant service excludes hidden tests, grading logic, provider keys, and server-only prompts before calling the completion service. After the response is parsed, the backend stores the interaction and token usage, and the frontend displays the markdown answer and safe workspace actions.
+Figure~\ref{fig:ai-clean} shows the common path behind all three jobs. Every request first reaches a backend endpoint, where the user and role are checked and a safe context is assembled. The backend then selects the right workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, score, or draft. The colored bands make the boundary clear: student and administrator requests differ at the edges, but both rely on the same backend-controlled provider and persistence layers.
 
 \begin{figure}[H]
   \centering
@@ -297,7 +336,7 @@ The student detailed workflow in Figure~\ref{fig:ai-student} shows the security 
   \label{fig:ai-student}
 \end{figure}
 
-The admin detailed workflow in Figure~\ref{fig:ai-admin} shows two administrative AI flows. In the draft-generation flow, the admin requests an assessment or question draft. The backend validates the administrator role, builds a prompt from prototype, task type, difficulty, and language constraints, calls the provider through the completion service, parses the draft, and stores questions, starter files, test cases, and metadata for administrator review. In the reporting flow, the admin can request or retry AI-usage grading. The grading service loads submissions, transcripts, token usage, and reflection data, optionally calls the provider, and stores the score, summary, confidence, and details.
+Figure~\ref{fig:ai-student} follows a student request in detail. The browser sends the selected language, active and visible files, message, and latest public run result. It does not decide which attempt owns the request; the backend derives that from the authenticated student and assessment. Hidden tests, grading logic, provider keys, and server-only prompts are removed before the provider call. Only the markdown response and safe workspace actions return to the browser, while the interaction and token use are stored for later review.
 
 \begin{figure}[H]
   \centering
@@ -306,11 +345,13 @@ The admin detailed workflow in Figure~\ref{fig:ai-admin} shows two administrativ
   \label{fig:ai-admin}
 \end{figure}
 
+Figure~\ref{fig:ai-admin} follows the two administrator paths. Draft generation starts with a role check and a constrained prompt, then stores the returned questions, starter files, tests, and metadata for human review. AI-usage grading instead loads the student's submission, transcript, token use, and reflection. It may call the provider before saving the score, summary, confidence, and supporting details.
+
 \subsection{Workflow Implementation and Trade-offs}
 
-We chose a backend-owned AI workflow because it keeps sensitive material out of the browser. This made the implementation more complex than a direct frontend-to-provider call, but it gave us stronger control over role checks, prompt construction, token tracking, logging, and failure handling.
+We deliberately kept every AI call behind the backend. A direct browser-to-provider connection would have been simpler, but it would also have exposed more state and reduced our control over roles, prompts, logging, token accounting, and failures.
 
-The main advantages are:
+This choice gave us several practical benefits:
 
 \begin{itemize}
   \item hidden tests and grading details never enter the student UI,
@@ -320,7 +361,7 @@ The main advantages are:
   \item AI usage grading has access to a full attempt history rather than a single prompt.
 \end{itemize}
 
-The main costs are:
+It also created extra work:
 
 \begin{itemize}
   \item more backend contract work is needed for every frontend AI feature,
@@ -331,7 +372,7 @@ The main costs are:
 
 \subsection{Evaluation of the System}
 
-The system was evaluated through static checks, backend contract tests, startup tests, production build checks, and manual browser walkthroughs. The latest verification pass for this report produced the following results:
+We checked the final report version with static analysis, backend contract tests, startup tests, a production build, and manual browser walkthroughs. The table below records the latest automated results.
 
 \begin{table}[H]
 \centering
@@ -349,15 +390,15 @@ Check & Purpose & Result \\
 \caption{Verification checks used for the final report state.}
 \end{table}
 
-One practical limitation remains for local demonstrations: Docker was configured but unreachable on the machine used for screenshots, so run/submit was disabled in the workspace. This is the intended fail-closed behavior. The platform starts and can be explored locally, but real code execution requires a reachable Docker-compatible runtime.
+One limitation affected the screenshots: Docker was configured on the demo machine but could not be reached, so the workspace disabled Run and Submit. That is the intended fail-closed behavior. Everything else can still be explored locally, but real code execution needs a reachable Docker-compatible runtime.
 
 \section{Project Management}
 
 \subsection{Project Vision}
 
-Our vision was to build an assessment platform that reflects how coding is now done in practice. Students should be able to solve realistic software tasks in the browser, use an embedded AI assistant, and still be assessed fairly. Administrators should be able to create tasks, review AI-generated drafts, manage students, and inspect both code correctness and AI usage.
+We started with a simple question: how can a coding assessment acknowledge AI without losing sight of the student's own work? Our answer was a browser-based environment where students solve realistic tasks with a recorded assistant, while administrators can review both code correctness and AI use. The same platform also had to support task creation, draft review, user management, and reporting.
 
-The key deliverables were:
+From that vision, we set five concrete deliverables:
 
 \begin{itemize}
   \item a working Next.js frontend with student and administrator workflows,
@@ -367,7 +408,7 @@ The key deliverables were:
   \item documentation, diagrams, startup tooling, and verification tests.
 \end{itemize}
 
-The boundaries were also important. We did not try to build a full LMS, a production-scale proctoring system, or a public deployment during the main project window. Deployment is planned as a follow-up in late July.
+We also agreed on what not to build. A full learning-management system, production-scale proctoring, and public hosting were outside the project window. The next stage will be driven by evidence: we will combine the UAT findings with the formal course feedback, address the most important issues, test the revision, and deploy only when that version is ready.
 
 \subsection{Team Roles and Contributions}
 
@@ -389,86 +430,102 @@ Zhenkai Lin & PM and AI Engineer & Project coordination, AI architecture, agent 
 
 \subsection{Coordination}
 
-The team worked from mid-April to early July. We coordinated mainly through bi-weekly WhatsApp meetings, with extra asynchronous discussion when a technical decision or integration issue needed faster attention. The project manager kept the scope moving, while implementation work was divided around the main modules: frontend, backend, sandbox/evaluation, AI, QA, and documentation.
+The team worked from mid-April to early July. A WhatsApp meeting every two weeks provided the regular rhythm, while urgent integration questions were handled asynchronously. The project manager tracked scope and dependencies; implementation was split across the frontend, backend, sandbox and evaluation, AI, QA, and documentation.
 
 \subsection{Timeline}
 
-The following Gantt-style timeline summarizes the project phases. The phases are shown as evenly distributed because the work overlapped in practice: frontend and backend development informed each other, AI integration started before the rest of the platform was completely finished, and testing continued throughout the final month.
+The Gantt separates periods of concentrated work from lighter overlap and handover. The streams are intentionally not sequential: frontend and backend decisions influenced each other, AI integration began before the rest of the platform was complete, and testing continued through the final polish.
 
 \begin{table}[H]
 \centering
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{p{35mm}cccccccccccc}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{>{\raggedright\arraybackslash}p{34mm}*{12}{>{\centering\arraybackslash}p{8.5mm}}}
 \toprule
-Phase & Apr W3 & Apr W4 & May W1 & May W2 & May W3 & May W4 & Jun W1 & Jun W2 & Jun W3 & Jun W4 & Jul W1 & Jul W2 \\
+\rowcolor{TUMBlue!9}
+\textbf{Phase} & \multicolumn{2}{c}{\textbf{April}} & \multicolumn{4}{c}{\textbf{May}} & \multicolumn{4}{c}{\textbf{June}} & \multicolumn{2}{c}{\textbf{July}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-7}\cmidrule(lr){8-11}\cmidrule(lr){12-13}
+\rowcolor{black!4}
+& W3 & W4 & W1 & W2 & W3 & W4 & W1 & W2 & W3 & W4 & W1 & W2 \\
 \midrule
-Planning and scope & \phase{} & \phase{} & \thinphase & & & & & & & & & \\
-Backend development & & \thinphase & \phase{} & \phase{} & \phase{} & \thinphase & & & & & & \\
-Frontend development & & & \thinphase & \phase{} & \phase{} & \phase{} & \thinphase & & & & & \\
-AI integration & & & & & \thinphase & \phase{} & \phase{} & \phase{} & \thinphase & & & \\
-Testing and stabilization & & & & & & & \thinphase & \phase{} & \phase{} & \phase{} & \thinphase & \\
-Final polish and report & & & & & & & & & \thinphase & \phase{} & \phase{} & \phase{} \\
+Planning and scope & \phase & \phase & \thinphase & & & & & & & & & \\
+Backend development & & \thinphase & \phase & \phase & \phase & \thinphase & & & & & & \\
+Frontend development & & & \thinphase & \phase & \phase & \phase & \thinphase & & & & & \\
+AI integration & & & & & \thinphase & \phase & \phase & \phase & \thinphase & & & \\
+Testing and stabilization & & & & & & & \thinphase & \phase & \phase & \phase & \thinphase & \\
+Final polish and report & & & & & & & & & \thinphase & \phase & \phase & \phase \\
 \bottomrule
 \end{tabular}
+\vspace{0.45em}
+
+{\footnotesize
+\colorbox{TUMBlue!42}{\phantom{\rule{8mm}{2mm}}}\;Main effort
+\hspace{1.5em}
+\colorbox{TUMBlue!14}{\phantom{\rule{8mm}{2mm}}}\;Overlap or handover
 }
-\caption{Project timeline from mid-April to early July.}
+\caption{Project Gantt from mid-April to early July.}
 \end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{\figpath/github-commit-activity.png}
+\caption{Weekly commit activity from the first repository record on 23 April to 13 July 2026. Live source: \href{https://github.com/ZAnimenl/AISD-SS26-Group-7/graphs/commit-activity}{GitHub commit activity}.}
+\label{fig:github-commit-activity}
+\end{figure}
 
 \subsection{Current Progress and Future Plans}
 
-At the time of this report, the main local MVP is functional. Authentication, role-based navigation, assessment management, student workspace, AI assistance architecture, reporting, and scoring documentation are implemented. The local startup path is stable, and the main checks pass.
+At the report cutoff, the local MVP is working. Authentication, role-based navigation, assessment management, the student workspace, AI assistance, reporting, and the scoring model are all implemented. The one-command startup is stable, and the main checks pass.
 
-The next planned step is deployment in late July. That requires moving from localhost to a hosted setup, configuring production secrets, setting \texttt{NEXT\_PUBLIC\_API\_BASE\_URL}, choosing a production database, providing a reachable sandbox runtime, and rotating/removing any private development-only OAuth or SMTP values before public release.
+The next planned step is not immediate deployment. We will first combine the UAT findings with the formal course feedback, choose the highest-priority changes, and revise the project. The next test round will focus on AI reliability, interface clarity, onboarding, performance, and assessment fairness. Only then will we prepare a hosted release. That work still includes production secrets, a production database, a reachable sandbox runtime, and the removal or rotation of development-only OAuth and SMTP values.
 
 \section{AI Usage}
 
 \subsection{AI Tooling Inventory}
 
-AI was used both as a product feature and as a development aid. The product itself integrates DeepSeek through a backend AI completion service for student assistance, administrator draft generation, and AI-usage grading. During development, team members used Codex and Claude for coding support, planning, debugging, documentation, and review.
+We used AI in two distinct ways. Inside the product, DeepSeek powers student assistance, administrator draft generation, and AI-usage grading through a backend completion service. During development, the team used Codex and Claude for planning, coding support, debugging, documentation, and review.
 
-We also created an agent-oriented development harness inside the repository. The active \texttt{AGENTS.md} file acts as a central orchestration guide. It defines the mission, module boundaries, security rules, state-machine-first discipline, testing expectations, and review procedure. The \texttt{.agents/skills/} folder contains reusable role checklists such as module routing, frontend IDE work, backend assessment work, sandbox execution work, AI telemetry work, full-stack integration, strict code review, and handoff summaries.
+To make that support more consistent, we added an agent-oriented development harness to the repository. Its \texttt{AGENTS.md} file sets out the project goal, module boundaries, security rules, state-machine discipline, testing expectations, and review process. Reusable checklists in \path{.agents/skills/} cover routing, frontend IDE work, backend assessments, sandbox execution, AI telemetry, full-stack integration, code review, and handover.
 
-The repository also contains \texttt{mcp-code-analyzer}, a lightweight MCP server used as an advisory requirements-compliance scanner. Its purpose was not to prove correctness automatically, but to give agents and developers another structured review signal against \texttt{SPEC.md} and project heuristics.
+The repository also includes \texttt{mcp-code-analyzer}, a lightweight MCP server that checks changes against \texttt{SPEC.md} and a set of project heuristics. We treated its output as a review aid, not as proof that the code was correct.
 
 \subsection{AI in Coding}
 
-AI helped most when the task was already well bounded. Examples include drafting endpoint tests, comparing frontend API expectations with backend contracts, explaining failing startup paths, finding likely integration risks, and producing first-pass documentation. Codex was particularly useful for repository-wide inspection because it could read the codebase, run checks, and keep the current module boundary in mind.
+AI was most useful when we had already defined the problem. It helped draft endpoint tests, compare frontend expectations with backend contracts, trace failed startup paths, flag integration risks, and prepare first versions of documentation. Codex was especially helpful for repository-wide checks because it could inspect the code, run commands, and follow the module boundaries at the same time.
 
-We did not treat generated code as finished work. The practical workflow was:
+Generated code was never considered finished on arrival. Figure~\ref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it.
 
-\begin{enumerate}
-  \item describe the task against \texttt{SPEC.md} and the relevant module,
-  \item let the agent inspect local files before editing,
-  \item make a small implementation change,
-  \item run targeted tests or type checks,
-  \item review the diff manually,
-  \item update documentation when behavior or contracts changed.
-\end{enumerate}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.88\linewidth]{figures/ai-development-orchestration.pdf}
+  \caption{Closed-loop orchestration of specification-driven, AI-assisted development.}
+  \label{fig:ai-development-orchestration}
+\end{figure}
 
-This was especially important for AI and sandbox code. A plausible-looking AI response is not enough for this project, because hidden tests, provider calls, token accounting, and attempt ownership are security-sensitive.
+That discipline mattered most around AI and sandbox code. Something that merely looks plausible can still leak a hidden test, miscount tokens, call the wrong provider path, or attach work to the wrong attempt.
 
 \subsection{AI in Individual Planning}
 
-Team members used AI differently depending on their role:
+Each role used AI for a different kind of problem:
 
 \begin{itemize}
-  \item The frontend work used AI to break down pages, state flows, loading/error states, and API adapter changes.
-  \item The backend work used AI to reason about endpoint contracts, EF Core persistence, session ownership, and report aggregation.
-  \item QA used AI to turn requirements into checklists and to identify regression tests around startup, scoring, and session behavior.
-  \item UI/UX work used AI to explore workflow diagrams and simplify complex technical flows into readable visuals.
-  \item PM and AI engineering used AI to refine scope, organize module boundaries, design the agent harness, and document how AI should be used safely.
+  \item Frontend work used it to break pages into state flows, loading and error cases, and API adapter changes.
+  \item Backend work used it to reason through endpoint contracts, EF Core persistence, attempt ownership, and report aggregation.
+  \item QA turned requirements into checklists and identified regression cases around startup, scoring, and session behavior.
+  \item UI/UX work explored workflow diagrams and translated dense technical processes into readable visuals.
+  \item Project management and AI engineering used it to refine scope, organize module boundaries, design the agent harness, and document safe use.
 \end{itemize}
 
 \subsection{AI in Team Planning}
 
-The strongest improvement came after we made the AI workflow itself explicit. Instead of asking an assistant to ``fix the project,'' we routed work through documented modules. The agent was expected to identify the goal, context, constraints, and done condition; choose the right module; keep unrelated modules untouched; and finish with review.
+Our results improved once we stopped giving broad requests such as ``fix the project.'' Every AI-assisted task had to state the goal, relevant context, constraints, and definition of done. It was then routed to one documented module, with unrelated areas left alone, and ended with a review.
 
-This mattered because the project had four major modules: identity/assessment management, frontend workspace, sandboxed execution, and AI telemetry/assistance. Once these boundaries were written down, AI help became less random. Prompts became more specific, generated plans were easier to challenge, and hallucinated changes were easier to reject.
+The project has four major areas: identity and assessment management, the frontend workspace, sandboxed execution, and AI telemetry and assistance. Writing those boundaries down made the output less unpredictable. Prompts became more specific, plans were easier to question, and irrelevant or invented changes stood out sooner.
 
 \subsection{Prompt Engineering Strategies}
 
-Our most effective prompt strategy was not a single clever prompt. It was context management. We gave the AI:
+The most effective prompt technique was not clever wording; it was careful context. For each task, we supplied:
 
 \begin{itemize}
   \item the active specification priority,
@@ -479,22 +536,94 @@ Our most effective prompt strategy was not a single clever prompt. It was contex
   \item the rule that hidden tests, AI keys, and session ownership must remain backend-side.
 \end{itemize}
 
-The local skill chain also helped. A task could start with routing, move to one primary coder skill, use companion skills only for boundary checks, and finish with strict review. This reduced the tendency for AI to over-edit or solve a frontend issue by changing backend behavior without a reason.
+The local skill chain reinforced the same habit. A task started with routing, used one primary coding skill, called companion skills only for boundary checks, and finished with a strict review. This reduced over-editing and made it less likely that a frontend problem would be ``solved'' by changing backend behavior without justification.
 
 \subsection{Lessons Learned}
 
-The biggest lesson was that AI speeds up exploration more than it removes engineering work. Early in the project, while parts of the system still used mock objects and placeholder behavior, AI sometimes hallucinated around the boundary between mock and real artifacts. This became worse when the codebase and documentation disagreed. After we spent a long night updating the docs, aligning the codebase, and strengthening the agent instructions, the situation improved significantly.
+Our clearest lesson was that AI speeds up exploration; it does not remove the engineering work. Early on, some modules still mixed mock objects with real behavior, and the AI occasionally invented connections between them. Out-of-date documentation made this worse. After a long evening spent aligning the code and documentation and tightening the agent instructions, the suggestions became noticeably more reliable.
 
-We also learned that verification cost is real. AI can produce a working-looking endpoint, UI state, or prompt quickly, but the team still has to check whether it respects auth, persistence, hidden-test boundaries, and failure behavior. Our practice changed from ``generate then inspect'' to ``define constraints, generate a small change, test, then review.'' That slower loop produced better results.
+Verification still took real time. An endpoint, UI state, or prompt could look complete while violating authentication, persistence, hidden-test boundaries, or failure handling. We therefore moved from ``generate, then inspect'' to a smaller loop: set the constraints, make one limited change, run the relevant checks, and review it. The loop felt slower but produced far fewer surprises.
 
-For presentation material and this report, GenAI was also used, but not blindly. AI helped draft and organize language, while the team provided the project details, corrected tone, selected diagrams, and planned manual review before submission.
+We used GenAI for presentation material and early report drafts as well. The team supplied the evidence, corrected the tone and technical details, chose the diagrams, and reviewed the final material before submission.
+
+\clearpage
+\section{User Acceptance Testing}
+
+\subsection{Case Study and Method}
+
+We ran the UAT in person with \textbf{15 students}. Every participant had passed \textbf{INHN0001} (Introduction to Informatics), where the coding assessments did not allow AI assistance. Their average self-rated programming experience was \textbf{3.8 out of 5}. All results in this report are anonymous.
+
+This participant group was selected deliberately. Having completed a conventional coding assessment, the students already knew what it meant to solve a programming task and demonstrate their own ability under exam conditions. They had also experienced the restriction of working without AI, even though AI-assisted development is becoming common outside the classroom. This made them a useful group for judging whether recorded, limited AI support could make an assessment feel more realistic without hiding individual competence or weakening fairness.
+
+Each participant opened an assessment, edited and ran code, used the assistant, submitted the work, and completed the reflection. They then answered a nine-question survey. All 15 finished the survey, and \textbf{eight suggested future improvements}. We did not record task duration, device type, moderator interventions, or run-check history, so the results should be read as evidence from a pilot rather than a controlled study or production-readiness test.
+
+\subsection{Results}
+
+All 15 students reached the end of the workflow: \textbf{10 without help} and \textbf{five with minor help}. Ease of use averaged \textbf{4.53 out of 5}, AI usefulness \textbf{4.0 out of 5}, and the overall platform rating \textbf{4.67 out of 5}. The averages do not tell the whole story. Eight students encountered an important problem, and the AI usefulness responses included three ratings of 2 and two ratings of 3. Everyone supported another classroom test, although \textbf{eight wanted minor changes and four wanted major changes beforehand}.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[c]{0.44\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\figpath/uat-main-workflow.png}
+\end{minipage}\hfill
+\begin{minipage}[c][0.347\textwidth][s]{0.44\linewidth}
+  \centering
+  \vspace*{\fill}
+  \includegraphics[width=\linewidth]{\figpath/uat-ease-of-use-supplied.png}\par
+  \vspace*{\fill}
+  {\scriptsize\sffamily\bfseries\color[HTML]{20252B} Ease of use -- average 4.53 / 5\par}
+  \vspace*{4.6pt}
+\end{minipage}
+
+\vspace{0.15em}
+
+\begin{minipage}[c]{0.44\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\figpath/uat-ai-usefulness.png}
+\end{minipage}\hfill
+\begin{minipage}[c][0.347\textwidth][s]{0.44\linewidth}
+  \centering
+  \vspace*{\fill}
+  \includegraphics[width=\linewidth]{\figpath/uat-overall-rating-supplied.png}\par
+  \vspace*{\fill}
+  {\scriptsize\sffamily\bfseries\color[HTML]{20252B} Overall platform rating -- average 4.67 / 5\par}
+  \vspace*{4.6pt}
+\end{minipage}
+\caption{UAT summary for workflow completion, ease of use, AI usefulness, and overall platform rating.}
+\label{fig:uat-summary-visuals}
+\end{figure}
+
+\clearpage
+\subsection{Feedback and Outcome}
+
+Eight participants left written recommendations. We assigned each comment to one primary theme.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.23\linewidth}>{\raggedright\arraybackslash}p{0.32\linewidth}>{\raggedright\arraybackslash}X}
+\toprule
+Theme & What participants reported & Future direction \\
+\midrule
+UI and visual hierarchy (3) & Less AI-heavy, clearer priority, less clutter, and a more professional interface. & Enterprise-level polish and stronger visual hierarchy. \\
+AI reliability and transparency (3) & Show actual code changes; repeated help sometimes did not improve code or pass run checks. & Use run-check context, summarize changes, detect non-progress, and state uncertainty. \\
+Onboarding (1) & Shorter instructions with a simple example. & Add a brief worked example before the assessment. \\
+Performance (1) & Faster loading. & Measure and profile slow workspace operations. \\
+\bottomrule
+\end{tabularx}
+\caption{Themes in the eight written recommendations.}
+\label{tab:uat-feedback}
+\end{table}
+
+These recommendations had not yet been implemented at the report cutoff. AI reliability is the most urgent issue: the positive average masks several cases where repeated assistance still did not help the code pass its run checks. Visual polish was the other recurring concern, followed by clearer onboarding and faster loading. We will combine these findings with the formal course feedback when planning the revision that precedes deployment.
+
+We therefore interpret the outcome as \textbf{conditional acceptance for further classroom testing}. All participants wanted testing to continue, but 12 of 15 asked for changes first. This pilot cannot establish production or enterprise readiness. A larger follow-up should record task time, run-check outcomes, AI retries, error recovery, and moderator help so that improvements can be measured rather than inferred from ratings alone.
 
 \section{Acknowledgement of GenAI Usage}
 
-GenAI was used throughout the project as both an implemented system feature and a development-support tool. The submitted platform includes AI-assisted student help, administrator task draft generation, transcript and token logging, and AI-usage grading. During development, team members used tools such as Codex and Claude for planning, coding support, debugging, testing ideas, documentation, and diagram/report drafting.
+GenAI formed part of both the product and our development process. The submitted platform uses it for student assistance, administrator task drafts, and AI-usage grading, while also recording transcripts and token use. The team used Codex and Claude during planning, coding, debugging, test design, documentation, and the preparation of diagrams and report drafts.
 
-The team did not use GenAI as an unreviewed substitute for engineering judgment. We maintained a repository-level \texttt{AGENTS.md} guide and local skills to make AI assistance more controlled, SPEC-driven, and module-aware. Outputs were reviewed through tests, code review, manual browser checks, and human discussion.
-
-For this final report, we first ran a QA session with AI to clarify the report requirements, team roles, project-management details, desired tone, diagrams, user-guide scope, and AI-usage acknowledgement. Only after that clarification was the report drafted. The generated report text and structure are intended for human review and revision by the team before final submission.
+For the report, AI first helped structure a Q\&A about the vision, roles, project management, diagrams, and scope. It later helped organize material and improve selected wording. The team supplied the evidence and UAT data, chose what belonged in the report, revised the text and figures, and reviewed the finished document. Responsibility for the content, accuracy, interpretation, and submission remains with the team.
 
 \end{document}

@@ -267,6 +267,17 @@
 - The local checkout contains the latest fetched `origin/main` content before local task changes.
 - The working tree has no unintentional local modifications.
 
+## Report Video Playback
+
+- Each final-report video poster exposes a standard public HTTPS MP4 link for
+  browser PDF viewers.
+- The generated report preserves one matching Acrobat RichMedia annotation for
+  each browser video link.
+- The offline report package contains the PDF, a native HTML5 video gallery,
+  all three H.264/AAC MP4 files, and their poster images.
+- The offline gallery uses only packaged relative paths and does not require an
+  internet connection after extraction.
+
 ## Language
 
 - Project-facing source files, documentation files, and tracked file names use English.
