@@ -19,6 +19,7 @@
 
 \newcommand{\figureref}[1]{\hyperref[#1]{Figure~\ref*{#1}}}
 \newcommand{\tableref}[1]{\hyperref[#1]{Table~\ref*{#1}}}
+\newcommand{\videoref}[1]{\hyperref[#1]{Video~\ref*{#1}}}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.65em}
@@ -41,17 +42,18 @@
 \newcommand{\videoonlinebase}{https://cdn.jsdelivr.net/gh/ZAnimenl/AISD-SS26-Group-7@519ee8f2b33b415d9c20c77f35316cac6ff1a863/output/final-report/media/}
 \newcounter{video}
 \renewcommand{\thevideo}{\arabic{video}}
-\newcommand{\videocaption}[1]{%
+\newcommand{\videocaption}[3]{%
   \refstepcounter{video}%
+  \label{#3}%
   \par\vspace{0.45em}%
-  {\small\textbf{Video~\thevideo:} #1\par}%
+  {\small\href{\videoonlinebase#1?source=caption}{\textcolor{black}{\textbf{Video~\thevideo:} #2}}\par}%
 }
 \newcommand{\videofigurewidth}{0.95\linewidth}
-\newcommand{\embeddedvideo}[4][!htbp]{%
+\newcommand{\embeddedvideo}[5][!htbp]{%
   \begin{figure}[#1]
     \centering
     \href{\videoonlinebase#2}{\includegraphics[width=\videofigurewidth]{#3}}
-    \videocaption{#4}
+    \videocaption{#2}{#4}{#5}
   \end{figure}%
 }
 
@@ -192,11 +194,11 @@ Administrators create, edit, and remove assignments from the assessment section.
   \item bug fixing in existing code.
 \end{itemize}
 
-Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. AI can produce a first draft, but it never publishes the task. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. Video~\ref{vid:admin-creation} shows the full process.
+Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. AI can produce a first draft, but it never publishes the task. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. \videoref{vid:admin-creation} shows the full process.
 
 The assessment list gives administrators one place to inspect existing tasks, change their settings, or remove assignments that are no longer needed.
 
-\embeddedvideo[H]{Admin_AssessmentCreation.mp4}{\figpath/video-admin-assessment-creation.jpg}{Administrator assessment creation: define the basics, generate and review questions, and configure delivery.\label{vid:admin-creation}}
+\embeddedvideo[H]{Admin_AssessmentCreation.mp4}{\figpath/video-admin-assessment-creation.jpg}{Administrator assessment creation: define the basics, generate and review questions, and configure delivery.}{vid:admin-creation}
 
 \subsubsection{User and Role Management}
 
@@ -214,7 +216,7 @@ Reports deliberately separate \textbf{functional correctness} from \textbf{AI us
 
 An administrator can start with an assessment summary and then open the evidence for an individual student. That evidence includes prompts and responses, interaction types, token use, per-task metrics, decisions on suggestions, the final reflection, grading status, confidence, and any administrator retry status.
 
-\embeddedvideo[H]{Admin_AssessmentReport.mp4}{\figpath/video-admin-assessment-report.jpg}{Administrator report review with final, functional, and AI-usage score details.\label{vid:admin-report}}
+\embeddedvideo[H]{Admin_AssessmentReport.mp4}{\figpath/video-admin-assessment-report.jpg}{Administrator report review with final, functional, and AI-usage score details.}{vid:admin-report}
 
 \begin{figure}[H]
   \centering
@@ -254,11 +256,11 @@ After signing in, students see which assessments are available, in progress, or 
 
 \subsubsection{Starting an Assessment}
 
-The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. Starting from this page creates the attempt. Video~\ref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
+The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. Starting from this page creates the attempt. \videoref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
 
 \begingroup
 \renewcommand{\videofigurewidth}{0.76\linewidth}
-\embeddedvideo[H]{User_Assessment.mp4}{\figpath/video-user-assessment.jpg}{Student assessment workflow from opening an assessment through workspace activity, submission, and reflection.\label{vid:student-assessment}}
+\embeddedvideo[H]{User_Assessment.mp4}{\figpath/video-user-assessment.jpg}{Student assessment workflow from opening an assessment through workspace activity, submission, and reflection.}{vid:student-assessment}
 \endgroup
 
 \subsubsection{Assessment Workspace}
