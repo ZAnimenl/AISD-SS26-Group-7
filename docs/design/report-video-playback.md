@@ -15,16 +15,18 @@ portable way to reach each video.
 | HTTPS links only | Reliable while online | No | Small PDF, but no offline fallback. |
 | HTTPS links plus embedded media and an offline HTML package | Reliable while online | Yes | Publishes the demo MP4s and provides a larger Acrobat PDF. |
 
-The third option is used. Each poster keeps a standard HTTPS link to an MP4 in
-this public repository. The generated PDF also places an Acrobat RichMedia
-annotation over the same rectangle. The offline ZIP contains the PDF, a native
-HTML5 video gallery, the three MP4s, and their poster images.
+The third option is used. Each poster keeps a standard HTTPS link to an
+immutable jsDelivr URL backed by the GitHub commit that contains the matching
+MP4. The CDN serves the file as `video/mp4`, so browsers open their native video
+player. The generated PDF also places an Acrobat RichMedia annotation over the
+same rectangle. The offline ZIP contains the PDF, a native HTML5 video gallery,
+the three MP4s, and their poster images.
 
 ## State Machine
 
 | State | Event | Guard | Next state | Side effect or failure path |
 | --- | --- | --- | --- | --- |
-| Report open in a browser PDF viewer | Reader selects a poster | Internet is available | Hosted video open | Browser requests the H.264/AAC MP4 over HTTPS. |
+| Report open in a browser PDF viewer | Reader selects a poster | Internet is available | Hosted video open | Browser opens the selected H.264/AAC MP4 in its native video player. |
 | Report open in a browser PDF viewer | Reader selects a poster | Internet is unavailable | Link unavailable | Reader can use the extracted offline package instead. |
 | Report open in Acrobat | Reader selects a poster | RichMedia is supported and trusted | Embedded playback | Acrobat reads the MP4 stored in the PDF. |
 | Offline gallery open | Reader selects Play | Relative MP4 exists beside the gallery | Local playback | The browser uses its native HTML5 video controls. |
@@ -48,7 +50,7 @@ data or deployment state needs migration.
 ## Primitive Acceptance Criteria
 
 - Selecting any of the three posters in a browser PDF viewer opens a distinct
-  public HTTPS MP4 URL.
+  public HTTPS player URL for the matching MP4.
 - The three browser Link annotations and three Acrobat RichMedia annotations
   occupy the same poster rectangles in the generated PDF.
 - The public files are MP4 videos encoded as H.264 video with AAC audio.

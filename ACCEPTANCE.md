@@ -269,8 +269,8 @@
 
 ## Report Video Playback
 
-- Each final-report video poster exposes a standard public HTTPS MP4 link for
-  browser PDF viewers.
+- Each final-report video poster exposes a standard public HTTPS player link
+  for browser PDF viewers and selects the matching MP4.
 - The generated report preserves one matching Acrobat RichMedia annotation for
   each browser video link.
 - The offline report package contains the PDF, a native HTML5 video gallery,

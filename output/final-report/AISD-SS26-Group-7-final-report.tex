@@ -35,7 +35,7 @@
 \newcommand{\adminstep}[1]{\lanestep{TUMBlue}{#1}}
 \newcommand{\studentstep}[1]{\lanestep{AIEfficiency}{#1}}
 \newcommand{\flowarrow}[1]{\textcolor{#1}{\(\rightarrow\)}}
-\newcommand{\videoonlinebase}{https://raw.githubusercontent.com/ZAnimenl/AISD-SS26-Group-7/main/output/final-report/media}
+\newcommand{\videoonlinebase}{https://cdn.jsdelivr.net/gh/ZAnimenl/AISD-SS26-Group-7@519ee8f2b33b415d9c20c77f35316cac6ff1a863/output/final-report/media/}
 \newcounter{video}
 \renewcommand{\thevideo}{\arabic{video}}
 \newcommand{\videocaption}[1]{%
@@ -46,7 +46,7 @@
 \newcommand{\embeddedvideo}[4][!htbp]{%
   \begin{figure}[#1]
     \centering
-    \href{\videoonlinebase/#2}{\includegraphics[width=0.95\linewidth]{#3}}
+    \href{\videoonlinebase#2}{\includegraphics[width=0.95\linewidth]{#3}}
     \videocaption{#4}
   \end{figure}%
 }

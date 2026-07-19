@@ -22,8 +22,9 @@ from pypdf.generic import (
 
 ROOT = Path(__file__).resolve().parents[1]
 ONLINE_VIDEO_BASE = (
-    "https://raw.githubusercontent.com/ZAnimenl/AISD-SS26-Group-7/"
-    "main/output/final-report/media"
+    "https://cdn.jsdelivr.net/gh/ZAnimenl/AISD-SS26-Group-7@"
+    "519ee8f2b33b415d9c20c77f35316cac6ff1a863/"
+    "output/final-report/media/"
 )
 VIDEO_ASSETS = {
     "Admin_AssessmentCreation.mp4": (
@@ -40,7 +41,7 @@ VIDEO_ASSETS = {
     ),
 }
 VIDEO_URLS = {
-    filename: f"{ONLINE_VIDEO_BASE}/{filename}" for filename in VIDEO_ASSETS
+    filename: f"{ONLINE_VIDEO_BASE}{filename}" for filename in VIDEO_ASSETS
 }
 
 

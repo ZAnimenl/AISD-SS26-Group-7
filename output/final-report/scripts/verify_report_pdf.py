@@ -14,11 +14,12 @@ EXPECTED_VIDEOS = {
     "User_Assessment.mp4",
 }
 ONLINE_VIDEO_BASE = (
-    "https://raw.githubusercontent.com/ZAnimenl/AISD-SS26-Group-7/"
-    "main/output/final-report/media"
+    "https://cdn.jsdelivr.net/gh/ZAnimenl/AISD-SS26-Group-7@"
+    "519ee8f2b33b415d9c20c77f35316cac6ff1a863/"
+    "output/final-report/media/"
 )
 EXPECTED_VIDEO_URLS = {
-    f"{ONLINE_VIDEO_BASE}/{filename}" for filename in EXPECTED_VIDEOS
+    f"{ONLINE_VIDEO_BASE}{filename}" for filename in EXPECTED_VIDEOS
 }
 ROOT = Path(__file__).resolve().parents[1]
 
