@@ -138,6 +138,8 @@ Deepseek__ApiKey=<your-deepseek-api-key>
 Deepseek__Enabled=true
   \end{verbatim}
   \textbf{Keep the real API key only in \texttt{.env.local}; never commit it to the repository.}
+
+  \textbf{Other providers.} The one-command setup currently supports \textbf{DeepSeek}; OpenAI or Gemini keys are not direct replacements. Another provider can be added behind the backend API, but it needs its own tested adapter and configuration; the frontend does not need to change.
   \item Start the full local application:
   \begin{verbatim}
 npm run dev
@@ -575,7 +577,7 @@ Our clearest lesson was that \textbf{AI speeds up exploration; it does not remov
 
 \textbf{Verification still took real time}. An endpoint, UI state, or prompt could look complete while violating authentication, persistence, hidden-test boundaries, or failure handling. We therefore moved from ``generate, then inspect'' to a \textbf{smaller loop}: set the constraints, make one limited change, run the relevant checks, and review it. The loop felt slower but produced far fewer surprises.
 
-We used GenAI for presentation material and early report drafts as well. The \textbf{team supplied the evidence}, corrected the tone and technical details, chose the diagrams, and \textbf{reviewed the final material} before submission.
+The harness work also changed how we think about AI-assisted engineering. \textbf{Clear module ownership, bounded task scopes, explicit acceptance checks, and mandatory review} made the output easier to reproduce, challenge, and hand over. These controls matter more than any single model and would remain useful if the underlying provider changed.
 
 \clearpage
 \section{User Acceptance Testing}
