@@ -536,7 +536,7 @@ If a task crossed a boundary, \textbf{one module still owned the change} while a
   \label{fig:ai-development-orchestration}
 \end{figure}
 
-Figure 13 also captures our harness for AI-assisted coding: specifications, module routing, acceptance checks, tool feedback, and human review surrounded every generated change. This was especially important for AI and sandbox code, where plausible output can still leak a hidden test, miscount tokens, call the wrong provider path, or attach work to the wrong attempt.
+Figure 13 also captures our harness for AI-assisted coding: specifications, module routing, acceptance checks, tool feedback, and human review surrounded every generated change. In practice, this kept the process human in the loop: AI could propose, inspect, and accelerate work, but the team still reviewed the evidence and made the final decision before accepting a change.
 
 \subsection{AI in Individual Planning}
 
