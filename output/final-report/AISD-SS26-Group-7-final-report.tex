@@ -120,11 +120,11 @@
 
 We built the platform as a \textbf{browser-based coding assessment system for practical software development tasks}. \figureref{fig:user-guide-flow} shows what each role does. Administrators prepare and publish assessments, manage accounts, and review results. Students solve the tasks in an IDE-like workspace, use the built-in AI assistant when it is available, submit their work, and briefly explain how they used the AI.
 
-For now, the project is intended for local demonstrations and course evaluation. It will not be hosted until we have combined the User Acceptance Testing (UAT) findings with the course feedback, made the resulting changes, and tested the revised version. The instructions below therefore describe the local setup.
+For now, the project is intended for \textbf{local demonstrations and course evaluation}. It will not be hosted until we have combined the \textbf{User Acceptance Testing (UAT) findings with the course feedback}, made the resulting changes, and tested the revised version. The instructions below therefore describe the local setup.
 
 \subsection{Local Setup}
 
-Getting the project running locally takes one main command. Before starting, install Node.js 20 or newer, npm, and a .NET SDK that is compatible with the backend solution. A Docker-compatible runtime is optional for browsing the application, but required for running code and grading final submissions.
+Getting the project running locally takes one main command. Before starting, install \textbf{Node.js 20 or newer, npm, and a compatible .NET SDK}. A Docker-compatible runtime is optional for browsing the application, but \textbf{required for running code and grading final submissions}.
 
 \begin{enumerate}
   \item Clone the repository:
@@ -137,7 +137,7 @@ cd AISD-SS26-Group-7
 Deepseek__ApiKey=<your-deepseek-api-key>
 Deepseek__Enabled=true
   \end{verbatim}
-  Keep the real API key only in \texttt{.env.local}; never commit it to the repository.
+  \textbf{Keep the real API key only in \texttt{.env.local}; never commit it to the repository.}
   \item Start the full local application:
   \begin{verbatim}
 npm run dev
@@ -152,7 +152,7 @@ http://localhost:5140/api/v1
   \end{verbatim}
 \end{enumerate}
 
-The startup script handles the rest: it prepares the SQLite database in \texttt{.local-data/}, loads \texttt{.env.local}, restores missing dependencies, starts the backend, waits for its health check, and then launches the Next.js frontend. The application still opens when Docker is unavailable. In that case, the workspace clearly disables final submission until it can reach the sandbox runtime.
+The \textbf{startup script} handles the rest: it prepares the SQLite database in \texttt{.local-data/}, loads \texttt{.env.local}, restores missing dependencies, starts the backend, waits for its health check, and then launches the Next.js frontend. The application still opens when Docker is unavailable. In that case, the workspace clearly \textbf{disables final submission} until it can reach the sandbox runtime.
 
 \subsection{Signing In}
 
@@ -163,7 +163,7 @@ admin@example.com
 Admin123!
 \end{verbatim}
 
-The backend creates or repairs this account during startup. Once signed in, the local administrator can create additional administrator accounts from the role-management page. There is no public administrator registration, which prevents users from assigning themselves elevated access.
+The backend creates or repairs this account during startup. Once signed in, the local administrator can create additional administrator accounts from the role-management page. There is \textbf{no public administrator registration}, which prevents users from assigning themselves elevated access.
 
 \begin{figure}[!htbp]
   \centering
@@ -175,7 +175,7 @@ The backend creates or repairs this account during startup. Once signed in, the 
 
 \subsubsection{Dashboard}
 
-The administrator dashboard is a quick health check for the platform. It shows the number of assessments, student accounts, submissions, and AI interactions, together with recent student activity.
+The administrator dashboard is a \textbf{quick health check for the platform}. It shows the number of assessments, student accounts, submissions, and AI interactions, together with recent student activity.
 
 \begin{figure}[!htbp]
   \centering
@@ -185,7 +185,7 @@ The administrator dashboard is a quick health check for the platform. It shows t
 
 \subsubsection{Creating and Managing Assessments}
 
-Administrators create, edit, and remove assignments from the assessment section. Each assessment has a title, description, duration, availability window, publication status, AI setting, and one or more practical questions. Four task categories are currently supported:
+Administrators create, edit, and remove assignments from the assessment section. Each assessment has a title, description, duration, availability window, publication status, AI setting, and one or more practical questions. \textbf{Four task categories} are currently supported:
 
 \begin{itemize}
   \item frontend UI extension,
@@ -194,7 +194,7 @@ Administrators create, edit, and remove assignments from the assessment section.
   \item bug fixing in existing code.
 \end{itemize}
 
-Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. AI can produce a first draft, but it never publishes the task. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. \videoref{vid:admin-creation} shows the full process.
+Assessment creation has three steps: define the basics, prepare the questions, and confirm the delivery settings. \textbf{AI can produce a first draft, but it never publishes the task}. An administrator must still check the wording, starter files, visible and hidden tests, metadata, and scoring setup. \videoref{vid:admin-creation} shows the full process.
 
 The assessment list gives administrators one place to inspect existing tasks, change their settings, or remove assignments that are no longer needed.
 
@@ -214,7 +214,7 @@ Administrators create accounts and assign roles from the users page. Students ma
 
 Reports deliberately separate \textbf{functional correctness} from \textbf{AI usage}. This lets an administrator discuss the quality of the submitted code without mixing it with the way the student used AI. When AI is enabled, both scores contribute to the final result; otherwise, the functional score stands on its own.
 
-An administrator can start with an assessment summary and then open the evidence for an individual student. That evidence includes prompts and responses, interaction types, token use, per-task metrics, decisions on suggestions, the final reflection, grading status, confidence, and any administrator retry status.
+An administrator can start with an assessment summary and then open the \textbf{evidence for an individual student}. That evidence includes prompts and responses, interaction types, token use, per-task metrics, decisions on suggestions, the final reflection, grading status, confidence, and any administrator retry status.
 
 \embeddedvideo[H]{Admin_AssessmentReport.mp4}{\figpath/video-admin-assessment-report.jpg}{Administrator report review with final, functional, and AI-usage score details.}{vid:admin-report}
 
@@ -246,7 +246,7 @@ Students can sign in with email and password or, when configured, with Google OA
 
 \subsubsection{Dashboard and Assessment List}
 
-After signing in, students see which assessments are available, in progress, or complete. The list also shows the duration, availability dates, number of questions, and whether AI assistance is enabled.
+After signing in, students see which assessments are \textbf{available, in progress, or complete}. The list also shows the duration, availability dates, number of questions, and \textbf{whether AI assistance is enabled}.
 
 \begin{figure}[!htbp]
   \centering
@@ -256,7 +256,7 @@ After signing in, students see which assessments are available, in progress, or 
 
 \subsubsection{Starting an Assessment}
 
-The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. Starting from this page creates the attempt. \videoref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
+The start page gives students one final overview before the timer begins: title, description, duration, availability window, question count, and AI setting. \textbf{Starting from this page creates the attempt}. \videoref{vid:student-assessment} follows the rest of the journey through the workspace, submission, and reflection.
 
 \begingroup
 \renewcommand{\videofigurewidth}{0.76\linewidth}
@@ -265,7 +265,7 @@ The start page gives students one final overview before the timer begins: title,
 
 \subsubsection{Assessment Workspace}
 
-The workspace should feel familiar to anyone who has used an IDE. Its compact layout is divided into five areas:
+The workspace should feel familiar to anyone who has used an IDE. Its compact layout is divided into \textbf{five areas}:
 
 \begin{itemize}
   \item The left side contains the task panel and problem statement.
@@ -275,23 +275,23 @@ The workspace should feel familiar to anyone who has used an IDE. Its compact la
   \item The bottom output panel contains preview and console tabs for run feedback.
 \end{itemize}
 
-Code is never executed in the browser. Both Run and Submit call assessment-scoped backend APIs, where the active attempt is resolved from the signed-in user and assessment ID. If the backend cannot reach Docker, final submission is disabled and the workspace explains why; it does not show a successful grade that was never produced.
+Code is never executed in the browser. Both \textbf{Run and Submit} call assessment-scoped backend APIs, where the active attempt is resolved from the signed-in user and assessment ID. If the backend cannot reach Docker, \textbf{final submission is disabled} and the workspace explains why; it does not show a successful grade that was never produced.
 
 \subsubsection{AI Assistance and Reflection}
 
-When an assessment allows AI, students can ask for suggestions, explanations, or debugging help. The assistant sees the visible task, workspace files, selected language, active file, and public run output. Hidden tests, grading code, provider keys, and server-only prompts stay on the backend.
+When an assessment allows AI, students can ask for suggestions, explanations, or debugging help. The assistant sees the visible task, workspace files, selected language, active file, and public run output. \textbf{Hidden tests}, grading code, \textbf{provider keys}, and server-only prompts stay on the backend.
 
-Submission is followed by a reflection of no more than 100 words. Students describe how they used the assistant, name one useful suggestion and how they checked it, and note something they rejected, corrected, or found unhelpful. A backend-controlled timer keeps this step consistent, and the response becomes part of the AI-usage grade.
+Submission is followed by a reflection of no more than \textbf{100 words}. Students describe how they used the assistant, name one useful suggestion and how they checked it, and note something they rejected, corrected, or found unhelpful. A backend-controlled timer keeps this step consistent, and the response becomes part of the \textbf{AI-usage grade}.
 
 \subsubsection{Results}
 
-Once submission and any AI-usage grading are complete, students can view their functional score, AI-usage score when applicable, final score, reflection status, and feedback summary. The administrator report adds the underlying evidence and controls for retrying a failed grade.
+Once submission and any AI-usage grading are complete, students can view their \textbf{functional score}, \textbf{AI-usage score} when applicable, \textbf{final score}, reflection status, and feedback summary. \mbox{The administrator} report adds the underlying evidence and controls for retrying a failed grade.
 
 \section{Technical Documentation}
 
 \subsection{System Overview}
 
-Coding education now faces a mismatch: students use AI in everyday development, while many assessments still look only at the final code. Our platform records both sides of the work. It grades the submitted program and keeps an auditable history of how the built-in assistant was used. The aim is not to penalize AI use, but to assess it as part of a realistic development process.
+Coding education now faces a mismatch: students use AI in everyday development, while many assessments still look only at the final code. Our platform \textbf{records both sides of the work}. It grades the submitted program and keeps an \textbf{auditable history} of how the built-in assistant was used. The aim is \textbf{not to penalize AI use}, but to assess it as part of a realistic development process.
 
 The working MVP covers:
 
@@ -307,7 +307,7 @@ The working MVP covers:
 
 \subsection{Overall Architecture}
 
-\figureref{fig:arch-clean} gives the high-level architecture. Students and administrators use the same Next.js web application, which calls an ASP.NET Core API. The backend is the system of record for authentication, assessments, workspace state, AI integration, grading, reports, and database access. The browser never connects directly to an external service.
+\figureref{fig:arch-clean} gives the high-level architecture. Students and administrators use the same Next.js web application, which calls an ASP.NET Core API. The \textbf{backend is the system of record} for authentication, assessments, workspace state, AI integration, grading, reports, and database access. The \textbf{browser never connects directly to an external service}.
 
 \begin{figure}[H]
   \centering
@@ -317,7 +317,7 @@ The working MVP covers:
 \end{figure}
 
 \newpage
-\figureref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a central API client with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and all DeepSeek requests pass through the backend AI service.
+\figureref{fig:arch-detailed} opens up those layers. On the frontend, student and administrator pages share a \textbf{central API client} with the coding workspace. The backend separates authentication and roles, assessments, attempts, workspace persistence, execution and grading, reports, and AI. EF Core handles persistent data, Docker isolates code execution, and \textbf{all DeepSeek requests pass through the backend AI service}.
 
 \begin{figure}[H]
   \centering
@@ -329,7 +329,7 @@ The working MVP covers:
 \clearpage
 \subsection{AI Architecture}
 
-The AI layer has three jobs: help students in the workspace, prepare draft tasks for administrators, and grade AI usage after submission from the recorded conversation, token data, execution history, and reflection.
+The AI layer has three jobs: \textbf{help students in the workspace}, \textbf{prepare draft tasks for administrators}, and \textbf{grade AI usage after submission} from the recorded conversation, token data, execution history, and reflection.
 
 \begin{figure}[H]
   \centering
@@ -338,7 +338,7 @@ The AI layer has three jobs: help students in the workspace, prepare draft tasks
   \label{fig:ai-clean}
 \end{figure}
 
-\figureref{fig:ai-clean} shows the common path behind all three jobs. Every request first reaches a backend endpoint, where the user and role are checked and a safe context is assembled. The backend then selects the right workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, score, or draft. The colored bands make the boundary clear: student and administrator requests differ at the edges, but both rely on the same backend-controlled provider and persistence layers.
+\figureref{fig:ai-clean} shows the common path behind all three jobs. Every request first reaches a backend endpoint, where the \textbf{user and role are checked} and a \textbf{safe context is assembled}. The backend then selects the right workflow, requests a structured completion when needed, and stores the resulting transcript, tokens, events, score, or draft. The colored bands make the boundary clear: student and administrator requests differ at the edges, but both rely on the same \textbf{backend-controlled provider and persistence layers}.
 
 \begin{figure}[H]
   \centering
@@ -347,7 +347,7 @@ The AI layer has three jobs: help students in the workspace, prepare draft tasks
   \label{fig:ai-student}
 \end{figure}
 
-\figureref{fig:ai-student} follows a student request in detail. The browser sends the selected language, active and visible files, message, and latest public run result. It does not decide which attempt owns the request; the backend derives that from the authenticated student and assessment. Hidden tests, grading logic, provider keys, and server-only prompts are removed before the provider call. Only the markdown response and safe workspace actions return to the browser, while the interaction and token use are stored for later review.
+\figureref{fig:ai-student} follows a student request in detail. The browser sends the selected language, active and visible files, message, and latest public run result. It does not decide which attempt owns the request; the \textbf{backend derives that from the authenticated student and assessment}. Hidden tests, grading logic, provider keys, and server-only prompts are \textbf{removed before the provider call}. Only the markdown response and safe workspace actions return to the browser, while the \textbf{interaction and token use are stored} for later review.
 
 \begin{figure}[H]
   \centering
@@ -356,20 +356,20 @@ The AI layer has three jobs: help students in the workspace, prepare draft tasks
   \label{fig:ai-admin}
 \end{figure}
 
-\figureref{fig:ai-admin} follows the two administrator paths. Draft generation starts with a role check and a constrained prompt, then stores the returned questions, starter files, tests, and metadata for human review. AI-usage grading instead loads the student's submission, transcript, token use, and reflection. It may call the provider before saving the score, summary, confidence, and supporting details.
+\figureref{fig:ai-admin} follows the two administrator paths. Draft generation starts with a role check and a constrained prompt, then stores the returned questions, starter files, tests, and metadata for \textbf{human review}. AI-usage grading instead loads the \textbf{student's submission, transcript, token use, and reflection}. It may call the provider before saving the score, summary, confidence, and supporting details.
 
 \subsection{Workflow Implementation and Trade-offs}
 
-We deliberately kept every AI call behind the backend. A direct browser-to-provider connection would have been simpler, but it would also have exposed more state and reduced our control over roles, prompts, logging, token accounting, and failures.
+We deliberately kept \textbf{every AI call behind the backend}. A direct browser-to-provider connection would have been simpler, but it would also have exposed more state and reduced our control over roles, prompts, logging, token accounting, and failures.
 
 This choice gave us several practical benefits:
 
 \begin{itemize}
-  \item hidden tests and grading details never enter the student UI,
-  \item AI provider keys stay server-side,
-  \item every AI interaction can be logged with token usage and semantic tags,
-  \item administrator review remains part of generated task publication,
-  \item AI usage grading has access to a full attempt history rather than a single prompt.
+  \item \textbf{hidden tests and grading details} never enter the student UI,
+  \item \textbf{AI provider keys stay server-side},
+  \item every AI interaction can be \textbf{logged with token usage and semantic tags},
+  \item \textbf{administrator review} remains part of generated task publication,
+  \item AI usage grading has access to a \textbf{full attempt history} rather than a single prompt.
 \end{itemize}
 
 It also created extra work:
@@ -383,7 +383,7 @@ It also created extra work:
 
 \subsection{Evaluation of the System}
 
-We checked the final report version with static analysis, backend contract tests, startup tests, a production build, and manual browser walkthroughs. The table below records the latest automated results.
+We checked the final report version with \textbf{static analysis, backend contract tests, startup tests, a production build, and manual browser walkthroughs}. The table below records the latest automated results.
 
 \begin{table}[H]
 \centering
@@ -401,13 +401,13 @@ Check & Purpose & Result \\
 \caption{Verification checks used for the final report state.}
 \end{table}
 
-One limitation affected the screenshots: Docker was configured on the demo machine but could not be reached, so the workspace disabled Run and Submit. That is the intended fail-closed behavior. Everything else can still be explored locally, but real code execution needs a reachable Docker-compatible runtime.
+One limitation affected the screenshots: Docker was configured on the demo machine but could not be reached, so the workspace disabled Run and Submit. That is the intended \textbf{fail-closed behavior}. Everything else can still be explored locally, but \textbf{real code execution needs a reachable Docker-compatible runtime}.
 
 \section{Project Management}
 
 \subsection{Project Vision}
 
-We started with a simple question: how can a coding assessment acknowledge AI without losing sight of the student's own work? Our answer was a browser-based environment where students solve realistic tasks with a recorded assistant, while administrators can review both code correctness and AI use. The same platform also had to support task creation, draft review, user management, and reporting.
+We started with a simple question: how can a coding assessment \textbf{acknowledge AI without losing sight of the student's own work}? Our answer was a browser-based environment where students solve realistic tasks with a \textbf{recorded assistant}, while administrators can review both \textbf{code correctness and AI use}. The same platform also had to support task creation, draft review, user management, and reporting.
 
 From that vision, we set five concrete deliverables:
 
@@ -419,7 +419,7 @@ From that vision, we set five concrete deliverables:
   \item documentation, diagrams, startup tooling, and verification tests.
 \end{itemize}
 
-We also agreed on what not to build. A full learning-management system, production-scale proctoring, and public hosting were outside the project window. The next stage will be driven by evidence: we will combine the UAT findings with the formal course feedback, address the most important issues, test the revision, and deploy only when that version is ready.
+We also agreed on what not to build. A full learning-management system, production-scale proctoring, and public hosting were \textbf{outside the project window}. The next stage will be \textbf{driven by evidence}: we will combine the UAT findings with the formal course feedback, address the most important issues, test the revision, and deploy only when that version is ready.
 
 \subsection{Team Roles and Contributions}
 
@@ -429,11 +429,11 @@ We also agreed on what not to build. A full learning-management system, producti
 \toprule
 Member & Role & Main contribution \\
 \midrule
-Chang-Ting Zhong & Frontend Engineer & Student/admin pages, workspace UI, API client integration, frontend verification, report preparation. \\
-Guanru Chen & Backend Engineer & ASP.NET Core endpoints, EF Core persistence, assessment/session/submission contracts, backend integration. \\
-Volodymyr Cherednychenko & QA Engineer & Test planning, backend contract tests, verification workflows, quality checks, regression review. \\
-Ren-Yi Huang & UI/UX Designer & Interface structure, visual direction, workflow diagrams, user-facing polish. \\
-Zhenkai Lin & PM and AI Engineer & Project coordination, AI architecture, agent workflow design, AI usage scoring, prompt and harness strategy. \\
+Chang-Ting Zhong & \textbf{Frontend Engineer} & Student/admin pages, workspace UI, API client integration, frontend verification, report preparation. \\
+Guanru Chen & \textbf{Backend Engineer} & ASP.NET Core endpoints, EF Core persistence, assessment/session/submission contracts, backend integration. \\
+Volodymyr Cherednychenko & \textbf{QA Engineer} & Test planning, backend contract tests, verification workflows, quality checks, regression review. \\
+Ren-Yi Huang & \textbf{UI/UX Designer} & Interface structure, visual direction, workflow diagrams, user-facing polish. \\
+Zhenkai Lin & \textbf{PM and AI Engineer} & Project coordination, AI architecture, agent workflow design, AI usage scoring, prompt and harness strategy. \\
 \bottomrule
 \end{tabularx}
 \caption{Team chart and responsibilities.}
@@ -441,11 +441,11 @@ Zhenkai Lin & PM and AI Engineer & Project coordination, AI architecture, agent 
 
 \subsection{Coordination}
 
-The team worked from mid-April to early July. A WhatsApp meeting every two weeks provided the regular rhythm, while urgent integration questions were handled asynchronously. The project manager tracked scope and dependencies; implementation was split across the frontend, backend, sandbox and evaluation, AI, QA, and documentation.
+The team worked from \textbf{mid-April to early July}. A \textbf{WhatsApp meeting every two weeks} provided the regular rhythm, while urgent integration questions were handled asynchronously. The \textbf{project manager tracked scope and dependencies}; implementation was split across the frontend, backend, sandbox and evaluation, AI, QA, and documentation.
 
 \subsection{Timeline}
 
-The Gantt separates periods of concentrated work from lighter overlap and handover. The streams are intentionally not sequential: frontend and backend decisions influenced each other, AI integration began before the rest of the platform was complete, and testing continued through the final polish.
+The Gantt separates periods of concentrated work from lighter overlap and handover. The streams are \textbf{intentionally not sequential}: frontend and backend decisions influenced each other, AI integration began before the rest of the platform was complete, and \textbf{testing continued through the final polish}.
 
 \begin{table}[H]
 \centering
@@ -487,25 +487,25 @@ Final polish and report & & & & & & & & & \thinphase & \phase & \phase & \phase 
 
 \subsection{Current Progress and Future Plans}
 
-At the report cutoff, the local MVP is working. Authentication, role-based navigation, assessment management, the student workspace, AI assistance, reporting, and the scoring model are all implemented. The one-command startup is stable, and the main checks pass.
+At the report cutoff, the \textbf{local MVP is working}. Authentication, role-based navigation, assessment management, the student workspace, AI assistance, reporting, and the scoring model are all implemented. The \textbf{one-command startup is stable}, and the \textbf{main checks pass}.
 
-The next planned step is not immediate deployment. We will first combine the UAT findings with the formal course feedback, choose the highest-priority changes, and revise the project. The next test round will focus on AI reliability, interface clarity, onboarding, performance, and assessment fairness. Only then will we prepare a hosted release. That work still includes production secrets, a production database, a reachable sandbox runtime, and the removal or rotation of development-only OAuth and SMTP values.
+\textbf{The next planned step is not immediate deployment}. We will first combine the UAT findings with the formal course feedback, choose the \textbf{highest-priority changes}, and revise the project. The next test round will focus on AI reliability, interface clarity, onboarding, performance, and assessment fairness. \textbf{Only then will we prepare a hosted release}. That work still includes production secrets, a production database, a reachable sandbox runtime, and the removal or rotation of development-only OAuth and SMTP values.
 
 \section{AI Usage}
 
 \subsection{AI Tooling Inventory}
 
-We used AI in two distinct ways. Inside the product, DeepSeek powers student assistance, administrator draft generation, and AI-usage grading through a backend completion service. During development, the team used Codex and Claude for planning, coding support, debugging, documentation, and review.
+We used AI in \textbf{two distinct ways}. Inside the product, \textbf{DeepSeek} powers student assistance, administrator draft generation, and AI-usage grading through a backend completion service. During development, the team used \textbf{Codex and Claude} for planning, coding support, debugging, documentation, and review.
 
-To make that support more consistent, we added an agent-oriented development harness to the repository. Its \texttt{AGENTS.md} file sets out the project goal, module boundaries, security rules, state-machine discipline, testing expectations, and review process. Reusable checklists in \path{.agents/skills/} cover routing, frontend IDE work, backend assessments, sandbox execution, AI telemetry, full-stack integration, code review, and handover.
+To make that support more consistent, we added an \textbf{agent-oriented development harness} to the repository. Its \texttt{AGENTS.md} file sets out the project goal, module boundaries, security rules, state-machine discipline, testing expectations, and review process. Reusable checklists in \path{.agents/skills/} cover routing, frontend IDE work, backend assessments, sandbox execution, AI telemetry, full-stack integration, code review, and handover.
 
-The repository also includes \texttt{mcp-code-analyzer}, a lightweight MCP server that checks changes against \texttt{SPEC.md} and a set of project heuristics. We treated its output as a review aid, not as proof that the code was correct.
+The repository also includes \texttt{mcp-code-analyzer}, a lightweight MCP server that checks changes against \texttt{SPEC.md} and a set of project heuristics. We treated its output as a \textbf{review aid, not as proof} that the code was correct.
 
 \subsection{AI in Coding}
 
-AI was most useful when we had already defined the problem. It helped draft endpoint tests, compare frontend expectations with backend contracts, trace failed startup paths, flag integration risks, and prepare first versions of documentation. Codex was especially helpful for repository-wide checks because it could inspect the code, run commands, and follow the module boundaries at the same time.
+AI was most useful when we had \textbf{already defined the problem}. It helped draft endpoint tests, compare frontend expectations with backend contracts, trace failed startup paths, flag integration risks, and prepare first versions of documentation. Codex was especially helpful for \textbf{repository-wide checks} because it could inspect the code, run commands, and follow the module boundaries at the same time.
 
-Generated code was never considered finished on arrival. \figureref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. \tableref{tab:ai-modules} makes those four ownership areas explicit.
+\textbf{Generated code was never considered finished on arrival}. \figureref{fig:ai-development-orchestration} shows the loop we used to constrain a task, route it to the right module, verify the result, and decide whether to accept it. \tableref{tab:ai-modules} makes those four ownership areas explicit.
 
 \begin{table}[H]
 \centering
@@ -525,7 +525,7 @@ Module & Ownership area & Main responsibilities \\
 \label{tab:ai-modules}
 \end{table}
 
-If a task crossed a boundary, one module still owned the change while a full-stack integration review checked the handoff.
+If a task crossed a boundary, \textbf{one module still owned the change} while a \textbf{full-stack integration review} checked the handoff.
 
 \begin{figure}[H]
   \centering
@@ -534,29 +534,29 @@ If a task crossed a boundary, one module still owned the change while a full-sta
   \label{fig:ai-development-orchestration}
 \end{figure}
 
-That discipline mattered most around AI and sandbox code. Something that merely looks plausible can still leak a hidden test, miscount tokens, call the wrong provider path, or attach work to the wrong attempt.
+That discipline mattered most around \textbf{AI and sandbox code}. Something that merely \textbf{looks plausible} can still leak a hidden test, miscount tokens, call the wrong provider path, or attach work to the wrong attempt.
 
 \subsection{AI in Individual Planning}
 
 Each role used AI for a different kind of problem:
 
 \begin{itemize}
-  \item Frontend work used it to break pages into state flows, loading and error cases, and API adapter changes.
-  \item Backend work used it to reason through endpoint contracts, EF Core persistence, attempt ownership, and report aggregation.
-  \item QA turned requirements into checklists and identified regression cases around startup, scoring, and session behavior.
-  \item UI/UX work explored workflow diagrams and translated dense technical processes into readable visuals.
-  \item Project management and AI engineering used it to refine scope, organize module boundaries, design the agent harness, and document safe use.
+  \item \textbf{Frontend work} used it to break pages into state flows, loading and error cases, and API adapter changes.
+  \item \textbf{Backend work} used it to reason through endpoint contracts, EF Core persistence, attempt ownership, and report aggregation.
+  \item \textbf{QA} turned requirements into checklists and identified regression cases around startup, scoring, and session behavior.
+  \item \textbf{UI/UX work} explored workflow diagrams and translated dense technical processes into readable visuals.
+  \item \textbf{Project management and AI engineering} used it to refine scope, organize module boundaries, design the agent harness, and document safe use.
 \end{itemize}
 
 \subsection{AI in Team Planning}
 
-Our results improved once we stopped giving broad requests such as ``fix the project.'' Every AI-assisted task had to state the goal, relevant context, constraints, and definition of done. It was then routed to one documented module, with unrelated areas left alone, and ended with a review.
+Our results improved once we stopped giving broad requests such as ``fix the project.'' Every AI-assisted task had to state the \textbf{goal, relevant context, constraints, and definition of done}. It was then routed to \textbf{one documented module}, with unrelated areas left alone, and ended with a review.
 
-The project has four major areas: identity and assessment management, the frontend workspace, sandboxed execution, and AI telemetry and assistance. Writing those boundaries down made the output less unpredictable. Prompts became more specific, plans were easier to question, and irrelevant or invented changes stood out sooner.
+The project has \textbf{four major areas}: identity management, the frontend workspace, sandboxed execution, and AI telemetry and assistance. Writing those boundaries down made the output \textbf{less unpredictable}. Prompts became more specific, plans were easier to question, and irrelevant or invented changes stood out sooner.
 
 \subsection{Prompt Engineering Strategies}
 
-The most effective prompt technique was not clever wording; it was careful context. For each task, we supplied:
+The most effective prompt technique was not clever wording; it was \textbf{careful context}. For each task, we supplied:
 
 \begin{itemize}
   \item the active specification priority,
@@ -564,18 +564,18 @@ The most effective prompt technique was not clever wording; it was careful conte
   \item the acceptance criteria,
   \item the files it should inspect,
   \item the tests it should run,
-  \item the rule that hidden tests, AI keys, and session ownership must remain backend-side.
+  \item the rule that \textbf{hidden tests, AI keys, and session ownership must remain backend-side}.
 \end{itemize}
 
-The local skill chain reinforced the same habit. A task started with routing, used one primary coding skill, called companion skills only for boundary checks, and finished with a strict review. This reduced over-editing and made it less likely that a frontend problem would be ``solved'' by changing backend behavior without justification.
+The local skill chain reinforced the same habit. A task started with routing, used \textbf{one primary coding skill}, called companion skills only for boundary checks, and finished with a \textbf{strict review}. This reduced over-editing and made it less likely that a frontend problem would be ``solved'' by changing backend behavior without justification.
 
 \subsection{Lessons Learned}
 
-Our clearest lesson was that AI speeds up exploration; it does not remove the engineering work. Early on, some modules still mixed mock objects with real behavior, and the AI occasionally invented connections between them. Out-of-date documentation made this worse. After a long evening spent aligning the code and documentation and tightening the agent instructions, the suggestions became noticeably more reliable.
+Our clearest lesson was that \textbf{AI speeds up exploration; it does not remove the engineering work}. Early on, some modules still mixed mock objects with real behavior, and the AI occasionally invented connections between them. Out-of-date documentation made this worse. After a long evening spent \textbf{aligning the code and documentation} and tightening the agent instructions, the suggestions became noticeably more reliable.
 
-Verification still took real time. An endpoint, UI state, or prompt could look complete while violating authentication, persistence, hidden-test boundaries, or failure handling. We therefore moved from ``generate, then inspect'' to a smaller loop: set the constraints, make one limited change, run the relevant checks, and review it. The loop felt slower but produced far fewer surprises.
+\textbf{Verification still took real time}. An endpoint, UI state, or prompt could look complete while violating authentication, persistence, hidden-test boundaries, or failure handling. We therefore moved from ``generate, then inspect'' to a \textbf{smaller loop}: set the constraints, make one limited change, run the relevant checks, and review it. The loop felt slower but produced far fewer surprises.
 
-We used GenAI for presentation material and early report drafts as well. The team supplied the evidence, corrected the tone and technical details, chose the diagrams, and reviewed the final material before submission.
+We used GenAI for presentation material and early report drafts as well. The \textbf{team supplied the evidence}, corrected the tone and technical details, chose the diagrams, and \textbf{reviewed the final material} before submission.
 
 \clearpage
 \section{User Acceptance Testing}
@@ -584,13 +584,13 @@ We used GenAI for presentation material and early report drafts as well. The tea
 
 We ran the UAT in person with \textbf{15 students}. Every participant had passed \textbf{INHN0001} \textbf{(Introduction to Informatics)}, where the coding assessments did not allow AI assistance. Their average self-rated programming experience was \textbf{3.8 out of 5}. All results in this report are anonymous.
 
-This participant group was selected deliberately. Having completed a conventional coding assessment, the students already knew what it meant to solve a programming task and demonstrate their own ability under exam conditions. They had also experienced the restriction of working without AI, even though AI-assisted development is becoming common outside the classroom. This made them a useful group for judging whether recorded, limited AI support could make an assessment feel more realistic without hiding individual competence or weakening fairness.
+This participant group was selected deliberately. Having completed a \textbf{conventional coding assessment}, the students already knew what it meant to solve a programming task and demonstrate their own ability under exam conditions. They had also experienced the restriction of \textbf{working without AI}, even though AI-assisted development is becoming common outside the classroom. This made them a useful group for judging whether \textbf{recorded, limited AI support} could make an assessment feel more realistic without hiding individual competence or weakening fairness.
 
-Each participant opened an assessment, edited and ran code, used the assistant, submitted the work, and completed the reflection. They then answered a nine-question survey. All 15 finished the survey, and \textbf{eight suggested future improvements}. We did not record task duration, device type, moderator interventions, or run-check history, so the results should be read as evidence from a pilot rather than a controlled study or production-readiness test.
+Each participant opened an assessment, edited and ran code, used the assistant, submitted the work, and completed the reflection. They then answered a nine-question survey. All 15 finished the survey, and \textbf{eight suggested future improvements}. We did not record task duration, device type, moderator interventions, or run-check history, so the results should be read as \textbf{evidence from a pilot} rather than a controlled study or production-readiness test.
 
 \subsection{Results}
 
-All 15 students reached the end of the workflow: \textbf{10 without help} and \textbf{five with minor help}. Ease of use averaged \textbf{4.53 out of 5}, AI usefulness \textbf{4.0 out of 5}, and the overall platform rating \textbf{4.67 out of 5}. The averages do not tell the whole story. Eight students encountered an important problem, and the AI usefulness responses included three ratings of 2 and two ratings of 3. Everyone supported another classroom test, although \textbf{eight wanted minor changes and four wanted major changes beforehand}.
+All 15 students reached the end of the workflow: \textbf{10 without help} and \textbf{five with minor help}. Ease of use averaged \textbf{4.53 out of 5}, AI usefulness \textbf{4.0 out of 5}, and the overall platform rating \textbf{4.67 out of 5}. \textbf{The averages do not tell the whole story}. \textbf{Eight students encountered an important problem}, and the AI usefulness responses included three ratings of 2 and two ratings of 3. Everyone supported another classroom test, although \textbf{eight wanted minor changes and four wanted major changes beforehand}.
 
 \begin{figure}[H]
 \centering
@@ -630,7 +630,7 @@ All 15 students reached the end of the workflow: \textbf{10 without help} and \t
 
 \subsection{Feedback and Outcome}
 
-Eight participants left written recommendations. We assigned each comment to one primary theme.
+\textbf{Eight participants left written recommendations}. We assigned each comment to one primary theme.
 
 \begin{table}[H]
 \centering
@@ -639,24 +639,24 @@ Eight participants left written recommendations. We assigned each comment to one
 \toprule
 Theme & What participants reported & Future direction \\
 \midrule
-UI and visual hierarchy (3) & Less AI-heavy, clearer priority, less clutter, and a more professional interface. & Enterprise-level polish and stronger visual hierarchy. \\
-AI reliability and transparency (3) & Show actual code changes; repeated help sometimes did not improve code or pass run checks. & Use run-check context, summarize changes, detect non-progress, and state uncertainty. \\
-Onboarding (1) & Shorter instructions with a simple example. & Add a brief worked example before the assessment. \\
-Performance (1) & Faster loading. & Measure and profile slow workspace operations. \\
+\textbf{UI and visual hierarchy (3)} & Less AI-heavy, clearer priority, less clutter, and a more professional interface. & Enterprise-level polish and stronger visual hierarchy. \\
+\textbf{AI reliability and transparency (3)} & Show actual code changes; repeated help sometimes did not improve code or pass run checks. & Use run-check context, summarize changes, detect non-progress, and state uncertainty. \\
+\textbf{Onboarding (1)} & Shorter instructions with a simple example. & Add a brief worked example before the assessment. \\
+\textbf{Performance (1)} & Faster loading. & Measure and profile slow workspace operations. \\
 \bottomrule
 \end{tabularx}
 \caption{Themes in the eight written recommendations.}
 \label{tab:uat-feedback}
 \end{table}
 
-These recommendations had not yet been implemented at the report cutoff. AI reliability is the most urgent issue: the positive average masks several cases where repeated assistance still did not help the code pass its run checks. Visual polish was the other recurring concern, followed by clearer onboarding and faster loading. We will combine these findings with the formal course feedback when planning the revision that precedes deployment.
+These recommendations had not yet been implemented at the report cutoff. \textbf{AI reliability is the most urgent issue}: the positive average masks several cases where repeated assistance still did not help the code pass its run checks. \textbf{Visual polish} was the other recurring concern, followed by clearer onboarding and faster loading. We will \textbf{combine these findings with the formal course feedback} when planning the revision that precedes deployment.
 
-We therefore interpret the outcome as \textbf{conditional acceptance for further classroom testing}. All participants wanted testing to continue, but 12 of 15 asked for changes first. This pilot cannot establish production or enterprise readiness. A larger follow-up should record task time, run-check outcomes, AI retries, error recovery, and moderator help so that improvements can be measured rather than inferred from ratings alone.
+We therefore interpret the outcome as \textbf{conditional acceptance for further classroom testing}. All participants wanted testing to continue, but \textbf{12 of 15 asked for changes first}. This pilot \textbf{cannot establish production or enterprise readiness}. A larger follow-up should record task time, run-check outcomes, AI retries, error recovery, and moderator help so that improvements can be measured rather than inferred from ratings alone.
 
 \section{Acknowledgement of GenAI Usage}
 
-GenAI formed part of both the product and our development process. The submitted platform uses it for student assistance, administrator task drafts, and AI-usage grading, while also recording transcripts and token use. The team used Codex and Claude during planning, coding, debugging, test design, documentation, and the preparation of diagrams and report drafts.
+GenAI formed part of both the product and our development process. The submitted platform uses it for \textbf{student assistance, administrator task drafts, and AI-usage grading}, while also \textbf{recording transcripts and token use}. The team used Codex and Claude during planning, coding, debugging, test design, documentation, and the preparation of diagrams and report drafts.
 
-For the report, AI first helped structure a Q\&A about the vision, roles, project management, diagrams, and scope. It later helped organize material and improve selected wording. The team supplied the evidence and UAT data, chose what belonged in the report, revised the text and figures, and reviewed the finished document. Responsibility for the content, accuracy, interpretation, and submission remains with the team.
+For the report, AI first helped structure a Q\&A about the vision, roles, project management, diagrams, and scope. It later helped organize material and improve selected wording. The \textbf{team supplied the evidence and UAT data}, chose what belonged in the report, revised the text and figures, and reviewed the finished document. \textbf{Responsibility for the content, accuracy, interpretation, and submission remains with the team}.
 
 \end{document}
