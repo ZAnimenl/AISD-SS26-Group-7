@@ -1,11 +1,32 @@
+# JavaScript dependencies and build output
 node_modules/
 .next/
 out/
 dist/
 coverage/
 *.tsbuildinfo
+
+# Local environment and secret overrides
 .env*
 !.env.example
+**/appsettings.Local.json
+
+# .NET build and user-specific files
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# IDE and editor settings
+.idea/
+**/.idea/
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Package manager and development logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -13,7 +34,10 @@ backend-dev*.log
 dev-session*.log
 backend-only-session*.log
 frontend-session*.log
+
+# Local runtime data
 tmp/
 .local-data/
 
-.vercel
+# Deployment tooling
+.vercel/
